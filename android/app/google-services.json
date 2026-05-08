@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "889846550832",
+    "project_id": "dscvr-9d362",
+    "storage_bucket": "dscvr-9d362.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:889846550832:android:78466cde099de41183b8f5",
+        "android_client_info": {
+          "package_name": "com.example.dscvr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-IgpAMhrCftV6BdN3_LW2i3ZSxD8BP-E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
