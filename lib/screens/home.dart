@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dscvr/models/auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -32,9 +33,7 @@ class HomePage extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Color(0xFF111111),
-            body: Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+            body: Center(child: CircularProgressIndicator(color: Colors.white)),
           );
         }
 
@@ -55,24 +54,22 @@ class HomePage extends StatelessWidget {
         if (data == null || !data.exists) {
           return Scaffold(
             backgroundColor: const Color(0xFF111111),
-            body: Center(
-              child: CircularProgressIndicator()
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
         // Fix 5: Use typed map access with a fallback instead of raw [] on
         // DocumentSnapshot, which throws if the field is missing.
         final userData = data.data()!;
-        final displayName =
-            userData['displayName'] as String? ?? 'there';
+        final id = userData['id'] as String? ?? 'there';
+        final displayName = userData['displayName'] as String? ?? 'there';
 
         return Scaffold(
           backgroundColor: const Color(0xFF111111),
           appBar: AppBar(
             backgroundColor: Colors.black,
             title: Text(
-              'DSCVR',
+              userId,
               style: GoogleFonts.spaceGrotesk(color: Colors.white),
             ),
             actions: [
@@ -85,14 +82,65 @@ class HomePage extends StatelessWidget {
               ),
             ],
           ),
-          body: Center(
-            child: Text(
-              'Welcome $displayName',
-              style: GoogleFonts.spaceGrotesk(
-                color: Colors.white,
-                fontSize: 24,
-              ),
-            ),
+          body: FutureBuilder<ListResult>(
+            future: FirebaseStorage.instanceFor(bucket: 'gs://dscvr-9d362.firebasestorage.app')
+                .ref('users')
+                .child(userId) // or .child('users/$userId')
+                .listAll(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
+              }
+
+              if (snapshot.hasError) {
+                print(snapshot.error);
+                return Center(
+                  child: Text(
+                    "Error: ${snapshot.error}",
+                    style: GoogleFonts.spaceGrotesk(color: Colors.white),
+                  ),
+                );
+              }
+
+              if (!snapshot.hasData || snapshot.data!.items.isEmpty) {
+                return Center(
+                  child: Text(
+                    "No photos found",
+                    style: GoogleFonts.spaceGrotesk(color: Colors.white),
+                  ),
+                );
+              }
+
+              final files = snapshot.data!.items;
+
+              return ListView.builder(
+                itemCount: files.length,
+                itemBuilder: (context, index) {
+                  final ref = files[index];
+
+                  return FutureBuilder<String>(
+                    future: ref.getDownloadURL(),
+                    builder: (context, urlSnapshot) {
+                      if (!urlSnapshot.hasData) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final imageUrl = urlSnapshot.data!;
+
+                      return Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(imageUrl, fit: BoxFit.cover),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
           ),
         );
       },
