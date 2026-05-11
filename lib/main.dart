@@ -1,9 +1,11 @@
 import 'package:dscvr/models/auth.dart';
 import 'package:dscvr/screens/home.dart';
 import 'package:dscvr/screens/login.dart';
+import 'package:dscvr/screens/recents_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'firebase_options.dart';
 
@@ -49,7 +51,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'DSCVR',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(primarySwatch: Colors.blue, textTheme: GoogleFonts.spaceGroteskTextTheme()),
       home: StreamBuilder<DSCVRUser>(
         stream: _userStream,
         builder: (context, snapshot) {
@@ -69,7 +71,8 @@ class _MyAppState extends State<MyApp> {
 
           // Signed in
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            return HomePage(userId: snapshot.data!.id);
+            //return HomePage(userId: snapshot.data!.id);
+            return RecentsPage(userId: snapshot.data!.id, displayName: snapshot.data!.displayName);
           }
 
           // Signed out
