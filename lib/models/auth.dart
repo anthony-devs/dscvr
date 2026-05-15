@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 //import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 enum ReaderTheme { warm, cool, sepia }
 
@@ -146,9 +147,7 @@ class DSCVRUser {
 
 class DSCVRAuth {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  //final GoogleSignIn _googleSignIn = GoogleSignIn(
-    //scopes: ['email', 'profile'],
-  //);
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
  
   // ─── Stream ────────────────────────────────────────────────────────────────
@@ -194,13 +193,13 @@ class DSCVRAuth {
   // ─── Sign in ───────────────────────────────────────────────────────────────
  
   /// Signs in with Google. Creates a Firestore user doc on first sign-in.
-  /* Future<DSCVRUser> signInWithGoogle() async {
+   Future<DSCVRUser> signInWithGoogle() async {
     final googleUser = await _googleSignIn.authenticate();
     if (googleUser == null) throw DSCVRAuthException('Google sign-in cancelled');
  
     final googleAuth = await googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
+      accessToken: googleAuth.idToken,
       idToken: googleAuth.idToken,
     );
  
@@ -220,7 +219,7 @@ class DSCVRAuth {
     }
  
     return await fetchUser(firebaseUser.uid) ?? DSCVRUser.empty();
-  } */
+  } 
  
   /// Signs in with email and password.
   Future<DSCVRUser> signInWithEmail({
@@ -324,7 +323,7 @@ class DSCVRAuth {
   Future<void> signOut() async {
     await Future.wait([
       _auth.signOut(),
-      //_googleSignIn.signOut(),
+      _googleSignIn.signOut(),
     ]);
   }
  

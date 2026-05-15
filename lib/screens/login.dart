@@ -57,7 +57,7 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _googleSignIn() async {
     setState(() => _loading = true);
     try {
-      // await _auth.signInWithGoogle();
+       await _auth.signInWithGoogle();
       // Same pattern — auth state change handles navigation automatically.
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;

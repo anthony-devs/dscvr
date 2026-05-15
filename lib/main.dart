@@ -51,7 +51,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'DSCVR',
-      theme: ThemeData(primarySwatch: Colors.blue, textTheme: GoogleFonts.spaceGroteskTextTheme()),
+      theme: ThemeData(primarySwatch: Colors.purple, textTheme: GoogleFonts.spaceGroteskTextTheme()),
       home: StreamBuilder<DSCVRUser>(
         stream: _userStream,
         builder: (context, snapshot) {

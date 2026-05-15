@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -153,6 +154,17 @@ class DSCVRDrawer extends StatelessWidget {
               icon: Icons.psychology_outlined,
               onTap: () {
                 Navigator.pop(context);
+                // Navigate to Pinda AI
+              },
+            ),
+
+            SizedBox(height: 124),
+
+            _DrawerItem(
+              label: 'Sign Out',
+              icon: Icons.logout,
+              onTap: () {
+                FirebaseAuth.instance.signOut();
                 // Navigate to Pinda AI
               },
             ),

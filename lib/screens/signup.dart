@@ -59,7 +59,7 @@ class _SignupPageState extends State<SignupPage> {
   Future<void> _googleSignIn() async {
     setState(() => _loading = true);
     try {
-      //await _auth.signInWithGoogle();
+      await _auth.signInWithGoogle();
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
