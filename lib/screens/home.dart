@@ -201,11 +201,10 @@ class MaterialCard extends StatelessWidget {
                         size: 28,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    //const SizedBox(height: 4),
                     
                     // File name
-                    Expanded(
-                      child: Text(
+                    Text(
                         _getCleanFileName(fileName),
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 14,
@@ -216,7 +215,6 @@ class MaterialCard extends StatelessWidget {
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
                     
                     const SizedBox(height: 8),
                     

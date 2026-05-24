@@ -158,8 +158,10 @@ class DSCVRDrawer extends StatelessWidget {
               },
             ),
 
-            SizedBox(height: 124),
+            
 
+            const Spacer(),
+            // ------------Log Out-----------
             _DrawerItem(
               label: 'Sign Out',
               icon: Icons.logout,
@@ -168,8 +170,6 @@ class DSCVRDrawer extends StatelessWidget {
                 // Navigate to Pinda AI
               },
             ),
-
-            const Spacer(),
 
             // ─── Donate section ────────────────────────────────────────
             Container(

@@ -26,6 +26,24 @@ class _RecentsPageState extends State<RecentsPage> {
   bool materialsExpanded = false;
   bool notesExpanded = true; // Notes open by default
 
+  late Future<ListResult> _filesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFiles();
+  }
+
+  void _loadFiles() {
+    _filesFuture = FirebaseStorage.instanceFor(
+      bucket: 'gs://dscvr-9d362.firebasestorage.app',
+    ).ref('users').child(widget.userId).listAll();
+  }
+
+  Future<void> _onRefresh() async {
+    setState(() => _loadFiles());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -61,61 +79,55 @@ class _RecentsPageState extends State<RecentsPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        children: [
-          // ─── Topics ────────────────────────────────────────────────
-          _SectionHeader(
-            title: 'Topics',
-            isExpanded: topicsExpanded,
-            onTap: () => setState(() => topicsExpanded = !topicsExpanded),
-          ),
-          if (topicsExpanded)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      body: FutureBuilder(
+        future: _filesFuture,
+        builder: (context, asyncSnapshot) {
+          if (asyncSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (asyncSnapshot.hasError) {
+            return Center(
               child: Text(
-                'No topics yet',
-                style: GoogleFonts.spaceGrotesk(
-                  color: Colors.black45,
-                  fontSize: 14,
-                ),
+                asyncSnapshot.error.toString(),
+                style: const TextStyle(color: Colors.deepOrange),
               ),
-            ),
+            );
+          }
 
-          // ─── Materials ─────────────────────────────────────────────
-          _SectionHeader(
-            title: 'Materials',
-            isExpanded: materialsExpanded,
-            onTap: () => setState(() => materialsExpanded = !materialsExpanded),
-          ),
-          if (materialsExpanded)
-            FutureBuilder<ListResult>(
-              future: FirebaseStorage.instanceFor(
-                bucket: 'gs://dscvr-9d362.firebasestorage.app',
-              ).ref('users').child(widget.userId).listAll(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+          final files = asyncSnapshot.data!.items;
 
-                if (!snapshot.hasData || snapshot.data!.items.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No materials yet',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: Colors.black45,
-                        fontSize: 14,
-                      ),
+          return RefreshIndicator(
+            onRefresh: _onRefresh,
+            child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            children: [
+              // ─── Topics ────────────────────────────────────────────────
+              _SectionHeader(
+                title: 'Topics',
+                isExpanded: topicsExpanded,
+                onTap: () => setState(() => topicsExpanded = !topicsExpanded),
+              ),
+              if (topicsExpanded)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'No topics yet',
+                    style: GoogleFonts.spaceGrotesk(
+                      color: Colors.black45,
+                      fontSize: 14,
                     ),
-                  );
-                }
+                  ),
+                ),
 
-                final files = snapshot.data!.items;
-                return GridView.builder(
+              // ─── Materials ─────────────────────────────────────────────
+              _SectionHeader(
+                title: 'Materials',
+                isExpanded: materialsExpanded,
+                onTap: () => setState(() => materialsExpanded = !materialsExpanded),
+              ),
+              if (materialsExpanded)
+                GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -130,43 +142,44 @@ class _RecentsPageState extends State<RecentsPage> {
                     final ref = files[index];
                     return _MaterialCard(fileRef: ref);
                   },
-                );
-              },
-            ),
+                ),
 
-          // ─── Notes ─────────────────────────────────────────────────
-          _SectionHeader(
-            title: 'Notes',
-            isExpanded: notesExpanded,
-            onTap: () => setState(() => notesExpanded = !notesExpanded),
-          ),
-          if (notesExpanded) ...[
-            // Notes grid
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.75,
+              // ─── Notes ─────────────────────────────────────────────────
+              _SectionHeader(
+                title: 'Notes',
+                isExpanded: notesExpanded,
+                onTap: () => setState(() => notesExpanded = !notesExpanded),
               ),
-              itemCount: 4,
-              itemBuilder: (context, index) {
-                return NoteCard(
-                  title: 'LMExplainer: Grounding Knowledge and Explaining Language Models',
-                  category: 'Knowledge graphs',
-                  authors: 'Zichen chen, Jianda Chen, Yuanyuan Chen, Han Yu, Ambuj K Sign, Misha Sra',
-                  color: NoteColors.random(index),
-                  onTap: () {
-                    // Open note detail
+              if (notesExpanded) ...[
+                // Notes grid
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.75,
+                  ),
+                  itemCount: 4,
+                  itemBuilder: (context, index) {
+                    return NoteCard(
+                      title: 'LMExplainer: Grounding Knowledge and Explaining Language Models',
+                      category: 'Knowledge graphs',
+                      authors: 'Zichen chen, Jianda Chen, Yuanyuan Chen, Han Yu, Ambuj K Sign, Misha Sra',
+                      color: NoteColors.random(index),
+                      onTap: () {
+                        // Open note detail
+                      },
+                    );
                   },
-                );
-              },
-            ),
-          ],
-        ],
+                ),
+              ],
+            ],
+          ),         // end ListView
+          );         // end RefreshIndicator
+        },
       ),
     );
   }
