@@ -1,3 +1,4 @@
+import 'package:dscvr/models/file.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 //import 'package:google_sign_in/google_sign_in.dart';
@@ -17,6 +18,7 @@ class DSCVRUser {
   final String email;
   final String? avatarUrl;
   final String? bio;
+  final List<Note>? notes;
 
   // Preferences
   final bool darkMode;
@@ -26,6 +28,8 @@ class DSCVRUser {
   // Pinda AI
   final bool savePindaHistory;
   final PindaStyle pindaStyle;
+
+  
 
   // Metadata
   final DateTime createdAt;
@@ -41,7 +45,9 @@ class DSCVRUser {
     this.fontSize = FontSize.medium,
     this.savePindaHistory = true,
     this.pindaStyle = PindaStyle.detailed,
+    this.notes,
     required this.createdAt,
+
   });
 
   bool get isEmpty => id.isEmpty;
@@ -115,6 +121,7 @@ class DSCVRUser {
         email: map['email'] ?? '',
         avatarUrl: map['avatarUrl'],
         bio: map['bio'],
+        notes: map['notes'].forEach((key, value) => Note.fromMap(value),),
         darkMode: map['darkMode'] ?? false,
         readerTheme: ReaderTheme.values.firstWhere(
           (e) => e.name == map['readerTheme'],

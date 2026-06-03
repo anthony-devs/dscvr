@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dscvr/models/file.dart';
 import 'package:dscvr/screens/components/dscvr_drawer.dart';
 import 'package:dscvr/screens/components/note_card.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-
 
 class RecentsPage extends StatefulWidget {
   final String userId;
@@ -24,9 +26,10 @@ class RecentsPage extends StatefulWidget {
 class _RecentsPageState extends State<RecentsPage> {
   bool topicsExpanded = false;
   bool materialsExpanded = false;
-  bool notesExpanded = true; // Notes open by default
+  bool notesExpanded = true;
 
   late Future<ListResult> _filesFuture;
+  late Stream<List<Note>> _notesStream;
 
   @override
   void initState() {
@@ -38,6 +41,20 @@ class _RecentsPageState extends State<RecentsPage> {
     _filesFuture = FirebaseStorage.instanceFor(
       bucket: 'gs://dscvr-9d362.firebasestorage.app',
     ).ref('users').child(widget.userId).listAll();
+
+    _notesStream = FirebaseFirestore.instance
+        .collection("users")
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .snapshots()
+        .map((snapshot) {
+      final data = snapshot.data();
+      if (data == null || !data.containsKey('notes')) return <Note>[];
+
+      final notesMap = data['notes'] as Map<String, dynamic>;
+      return notesMap.values
+          .map((e) => Note.fromMap(e as Map<String, dynamic>))
+          .toList();
+    });
   }
 
   Future<void> _onRefresh() async {
@@ -73,13 +90,11 @@ class _RecentsPageState extends State<RecentsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search, color: Colors.black),
-            onPressed: () {
-              // Open search
-            },
+            onPressed: () {},
           ),
         ],
       ),
-      body: FutureBuilder(
+      body: FutureBuilder<ListResult>(
         future: _filesFuture,
         builder: (context, asyncSnapshot) {
           if (asyncSnapshot.connectionState == ConnectionState.waiting) {
@@ -100,85 +115,129 @@ class _RecentsPageState extends State<RecentsPage> {
           return RefreshIndicator(
             onRefresh: _onRefresh,
             child: ListView(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: [
-              // ─── Topics ────────────────────────────────────────────────
-              _SectionHeader(
-                title: 'Topics',
-                isExpanded: topicsExpanded,
-                onTap: () => setState(() => topicsExpanded = !topicsExpanded),
-              ),
-              if (topicsExpanded)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'No topics yet',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: Colors.black45,
-                      fontSize: 14,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              children: [
+                // ─── Topics ──────────────────────────────────────────────
+                _SectionHeader(
+                  title: 'Topics',
+                  isExpanded: topicsExpanded,
+                  onTap: () =>
+                      setState(() => topicsExpanded = !topicsExpanded),
+                ),
+                if (topicsExpanded)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    child: Text(
+                      'No topics yet',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: Colors.black45,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
 
-              // ─── Materials ─────────────────────────────────────────────
-              _SectionHeader(
-                title: 'Materials',
-                isExpanded: materialsExpanded,
-                onTap: () => setState(() => materialsExpanded = !materialsExpanded),
-              ),
-              if (materialsExpanded)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.85,
-                  ),
-                  itemCount: files.length > 4 ? 4 : files.length,
-                  itemBuilder: (context, index) {
-                    final ref = files[index];
-                    return _MaterialCard(fileRef: ref);
-                  },
+                // ─── Materials ───────────────────────────────────────────
+                _SectionHeader(
+                  title: 'Materials',
+                  isExpanded: materialsExpanded,
+                  onTap: () =>
+                      setState(() => materialsExpanded = !materialsExpanded),
                 ),
+                if (materialsExpanded)
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: files.length > 4 ? 4 : files.length,
+                    itemBuilder: (context, index) {
+                      final ref = files[index];
+                      return _MaterialCard(fileRef: ref);
+                    },
+                  ),
 
-              // ─── Notes ─────────────────────────────────────────────────
-              _SectionHeader(
-                title: 'Notes',
-                isExpanded: notesExpanded,
-                onTap: () => setState(() => notesExpanded = !notesExpanded),
-              ),
-              if (notesExpanded) ...[
-                // Notes grid
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemCount: 4,
-                  itemBuilder: (context, index) {
-                    return NoteCard(
-                      title: 'LMExplainer: Grounding Knowledge and Explaining Language Models',
-                      category: 'Knowledge graphs',
-                      authors: 'Zichen chen, Jianda Chen, Yuanyuan Chen, Han Yu, Ambuj K Sign, Misha Sra',
-                      color: NoteColors.random(index),
-                      onTap: () {
-                        // Open note detail
-                      },
-                    );
-                  },
+                // ─── Notes ───────────────────────────────────────────────
+                _SectionHeader(
+                  title: 'Notes',
+                  isExpanded: notesExpanded,
+                  onTap: () =>
+                      setState(() => notesExpanded = !notesExpanded),
                 ),
+                if (notesExpanded)
+                  StreamBuilder<List<Note>>(
+                    stream: _notesStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            snapshot.error.toString(),
+                            style:
+                                const TextStyle(color: Colors.deepOrange),
+                          ),
+                        );
+                      }
+
+                      final notes = snapshot.data ?? [];
+
+                      if (notes.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          child: Text(
+                            'No notes yet',
+                            style: GoogleFonts.spaceGrotesk(
+                              color: Colors.black45,
+                              fontSize: 14,
+                            ),
+                          ),
+                        );
+                      }
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.75,
+                        ),
+                        itemCount: notes.length,
+                        itemBuilder: (context, index) {
+                          final note = notes[index];
+                          return NoteCard(
+                            title: note.title,
+                            category: note.tags?.join(', ') ?? 'Untagged',
+                            authors: note.owner,
+                            color: NoteColors.random(index),
+                            onTap: () {},
+                          );
+                        },
+                      );
+                    },
+                  ),
               ],
-            ],
-          ),         // end ListView
-          );         // end RefreshIndicator
+            ),
+          );
         },
       ),
     );
@@ -214,7 +273,9 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
             Icon(
-              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              isExpanded
+                  ? Icons.keyboard_arrow_up
+                  : Icons.keyboard_arrow_down,
               color: Colors.black54,
             ),
           ],
@@ -232,9 +293,9 @@ class _MaterialCard extends StatelessWidget {
   IconData _getFileIcon(String name) {
     final ext = name.toLowerCase();
     if (ext.endsWith('.pdf')) return Icons.picture_as_pdf;
-    if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png')) {
-      return Icons.image;
-    }
+    if (ext.endsWith('.jpg') ||
+        ext.endsWith('.jpeg') ||
+        ext.endsWith('.png')) return Icons.image;
     if (ext.endsWith('.txt')) return Icons.description;
     return Icons.insert_drive_file;
   }
@@ -242,9 +303,9 @@ class _MaterialCard extends StatelessWidget {
   Color _getFileIconColor(String name) {
     final ext = name.toLowerCase();
     if (ext.endsWith('.pdf')) return const Color(0xFFE53935);
-    if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png')) {
-      return const Color(0xFF43A047);
-    }
+    if (ext.endsWith('.jpg') ||
+        ext.endsWith('.jpeg') ||
+        ext.endsWith('.png')) return const Color(0xFF43A047);
     if (ext.endsWith('.txt')) return const Color(0xFF1E88E5);
     return const Color(0xFF757575);
   }
