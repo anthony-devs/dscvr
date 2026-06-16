@@ -71,8 +71,8 @@ class _MyAppState extends State<MyApp> {
 
           // Signed in
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            //return HomePage(userId: snapshot.data!.id);
-            return RecentsPage(userId: snapshot.data!.id, displayName: snapshot.data!.displayName);
+            return HomePage(userId: snapshot.data!.id);
+            //return RecentsPage(userId: snapshot.data!.id, displayName: snapshot.data!.displayName);
           }
 
           // Signed out
