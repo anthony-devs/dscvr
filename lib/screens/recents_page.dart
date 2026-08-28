@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -82,6 +83,15 @@ class _RecentsPageState extends State<RecentsPage> {
       drawer: DSCVRDrawer(
         displayName: widget.displayName,
         avatarUrl: widget.avatarUrl,
+        currentDestination: DrawerDestination.recents,
+        onNavigate: (destination) {
+          // Wire to your router, e.g.:
+          // Navigator.pushReplacementNamed(context, destination.name);
+        },
+        onSignOut: () {
+          // Keeps Firebase out of the drawer widget itself.
+          FirebaseAuth.instance.signOut();
+        },
       ),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
