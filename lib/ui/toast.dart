@@ -277,8 +277,8 @@ class _ToastViewState extends State<_ToastView> with TickerProviderStateMixin {
     final c = context.colors;
     final d = widget.data;
     // Pills are always dark: ink on light theme, raised charcoal on dark.
-    final bg = c.isDark ? const Color(0xFF2B2724) : const Color(0xFF1E1A17);
-    const fg = Color(0xFFF7F2EC);
+    final bg = c.isDark ? const Color(0xFF252630) : const Color(0xFF1A1B26);
+    const fg = Color(0xFFF2F3F8);
     final accent = _accent(c);
 
     final pill = MouseRegion(

@@ -1,4 +1,5 @@
 import 'package:dscvr/models/file.dart';
+import 'package:dscvr/models/subscription.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -34,7 +35,8 @@ class DSCVRUser {
   final bool savePindaHistory;
   final PindaStyle pindaStyle;
 
-  
+  // Subscription
+  final Subscription subscription;
 
   // Metadata
   final DateTime createdAt;
@@ -50,13 +52,14 @@ class DSCVRUser {
     this.fontSize = FontSize.medium,
     this.savePindaHistory = true,
     this.pindaStyle = PindaStyle.detailed,
+    Subscription? subscription,
     this.notes,
     this.handle,
     this.role = 'Researcher',
     this.interests = const [],
     this.onboarded = false,
     required this.createdAt,
-  });
+  }) : subscription = subscription ?? Subscription.free();
 
   String get firstName {
     final t = displayName.trim();
@@ -107,6 +110,7 @@ class DSCVRUser {
     FontSize? fontSize,
     bool? savePindaHistory,
     PindaStyle? pindaStyle,
+    Subscription? subscription,
     String? handle,
     String? role,
     List<String>? interests,
@@ -123,6 +127,7 @@ class DSCVRUser {
         fontSize: fontSize ?? this.fontSize,
         savePindaHistory: savePindaHistory ?? this.savePindaHistory,
         pindaStyle: pindaStyle ?? this.pindaStyle,
+        subscription: subscription ?? this.subscription,
         handle: handle ?? this.handle,
         role: role ?? this.role,
         interests: interests ?? this.interests,
@@ -145,6 +150,7 @@ class DSCVRUser {
         'role': role,
         'interests': interests,
         'onboarded': onboarded,
+        'subscription': subscription.toMap(),
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -170,6 +176,9 @@ class DSCVRUser {
           (e) => e.name == map['fontSize'],
           orElse: () => FontSize.medium,
         ),
+        subscription: map['subscription'] is Map
+            ? Subscription.fromMap((map['subscription'] as Map).cast<String, dynamic>())
+            : Subscription.free(),
         savePindaHistory: map['savePindaHistory'] ?? true,
         pindaStyle: PindaStyle.values.firstWhere(
           (e) => e.name == map['pindaStyle'],

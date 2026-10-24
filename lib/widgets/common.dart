@@ -224,9 +224,10 @@ class EmptyState extends StatelessWidget {
 
 /// Serif page title with an optional edit affordance, as in the reference.
 class PageTitle extends StatelessWidget {
-  const PageTitle(this.title, {super.key, this.onEdit, this.leading});
+  const PageTitle(this.title, {super.key, this.onEdit, this.onShare, this.leading});
   final String title;
   final VoidCallback? onEdit;
+  final VoidCallback? onShare;
   final Widget? leading;
 
   @override
@@ -240,6 +241,7 @@ class PageTitle extends StatelessWidget {
         ?leading,
         Text(title, style: style),
         if (onEdit != null) RoundIconButton(icon: Ic.edit, tooltip: 'Edit', onTap: onEdit!),
+        if (onShare != null) RoundIconButton(icon: Ic.share, tooltip: 'Share', onTap: onShare!),
       ],
     );
   }

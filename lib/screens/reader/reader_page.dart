@@ -8,6 +8,7 @@ import 'package:dscvr/screens/library/item_actions.dart';
 import 'package:dscvr/screens/pinda/pinda_chat.dart';
 import 'package:dscvr/screens/reader/notes_panel.dart';
 import 'package:dscvr/screens/reader/note_editor.dart';
+import 'package:dscvr/screens/reader/parliament_panel.dart';
 import 'package:dscvr/state/pinda_controller.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
@@ -22,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum _Pane { read, notes, pinda }
+enum _Pane { read, notes, pinda, parliament }
 
 /// Opens a single material: the content on the left, Pinda and margin
 /// notes on the right (wide screens) or as tabs (phones).
@@ -37,6 +38,7 @@ class ReaderPage extends StatefulWidget {
 class _ReaderPageState extends State<ReaderPage> {
   PindaController? _pinda;
   final _chatKey = GlobalKey<PindaChatState>();
+  final _parliamentKey = GlobalKey<ParliamentPanelState>();
   _Pane _mobilePane = _Pane.read;
   _Pane _sidePane = _Pane.pinda;
   bool _sideOpen = true;
@@ -83,6 +85,17 @@ class _ReaderPageState extends State<ReaderPage> {
     if (saved && mounted) toast(context, 'Note added', description: 'Find it in the Notes panel.');
   }
 
+  void _factCheck(String passage) {
+    setState(() {
+      _sideOpen = true;
+      _sidePane = _Pane.parliament;
+      _mobilePane = _Pane.parliament;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _parliamentKey.currentState?.prefill(passage.trim());
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final maybeLib = Services.of(context).library;
@@ -108,13 +121,18 @@ class _ReaderPageState extends State<ReaderPage> {
         }
         _markOpened(item);
         final pinda = _pindaFor(item);
-        final content = _ReaderContent(item: item, onAsk: _askAbout, onNote: _noteFrom);
+        final content = _ReaderContent(item: item, onAsk: _askAbout, onNote: _noteFrom, onFactCheck: _factCheck);
 
+        final parliamentPanel = ParliamentPanel(
+          key: _parliamentKey,
+          materialContext: item.summary.isNotEmpty ? item.summary : null,
+        );
         final side = _SidePanel(
           item: item,
           pane: _sidePane,
           onPane: (p) => setState(() => _sidePane = p),
           chat: PindaChat(key: _chatKey, controller: pinda, compact: true),
+          parliament: parliamentPanel,
         );
 
         if (context.isCompact) {
@@ -130,6 +148,7 @@ class _ReaderPageState extends State<ReaderPage> {
                   content,
                   NotesPanel(item: item),
                   PindaChat(key: _chatKey, controller: pinda, compact: true),
+                  parliamentPanel,
                 ],
               ),
             ),
@@ -144,6 +163,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       (_Pane.read, 'Read', Ic.book),
                       (_Pane.notes, 'Notes', Ic.notebook),
                       (_Pane.pinda, 'Pinda', Ic.pinda),
+                      (_Pane.parliament, 'Check', Ic.scale),
                     ],
                     value: _mobilePane,
                     expand: true,
@@ -259,34 +279,43 @@ class _ReaderPageState extends State<ReaderPage> {
 }
 
 class _SidePanel extends StatelessWidget {
-  const _SidePanel({required this.item, required this.pane, required this.onPane, required this.chat});
+  const _SidePanel({required this.item, required this.pane, required this.onPane, required this.chat, required this.parliament});
   final LibraryItem item;
   final _Pane pane;
   final ValueChanged<_Pane> onPane;
   final Widget chat;
+  final Widget parliament;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final activePaneIndex = switch (pane) {
+      _Pane.notes => 1,
+      _Pane.parliament => 2,
+      _ => 0,
+    };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
         child: Row(children: [
-          Segmented<_Pane>(
-            options: [
-              (_Pane.pinda, 'Pinda', Ic.pinda),
-              (_Pane.notes, item.noteCount > 0 ? 'Notes  ${item.noteCount}' : 'Notes', Ic.notebook),
-            ],
-            value: pane == _Pane.read ? _Pane.pinda : pane,
-            onChanged: onPane,
+          Expanded(
+            child: Segmented<_Pane>(
+              options: [
+                (_Pane.pinda, 'Pinda', Ic.pinda),
+                (_Pane.notes, item.noteCount > 0 ? 'Notes  ${item.noteCount}' : 'Notes', Ic.notebook),
+                (_Pane.parliament, 'Check', Ic.scale),
+              ],
+              value: pane == _Pane.read ? _Pane.pinda : pane,
+              onChanged: onPane,
+            ),
           ),
         ]),
       ),
       Divider(color: c.line, height: 1),
       Expanded(
         child: IndexedStack(
-          index: pane == _Pane.notes ? 1 : 0,
-          children: [chat, NotesPanel(item: item)],
+          index: activePaneIndex,
+          children: [chat, NotesPanel(item: item), parliament],
         ),
       ),
     ]);
@@ -332,10 +361,11 @@ class _ProgressButton extends StatelessWidget {
 
 /// Chooses the right view for the material's kind.
 class _ReaderContent extends StatelessWidget {
-  const _ReaderContent({required this.item, required this.onAsk, required this.onNote});
+  const _ReaderContent({required this.item, required this.onAsk, required this.onNote, required this.onFactCheck});
   final LibraryItem item;
   final ValueChanged<String> onAsk;
   final ValueChanged<String> onNote;
+  final ValueChanged<String> onFactCheck;
 
   @override
   Widget build(BuildContext context) {
@@ -343,22 +373,23 @@ class _ReaderContent extends StatelessWidget {
       case MaterialKind.note:
         return NoteEditor(item: item, onAsk: onAsk);
       case MaterialKind.youtube:
-        return _VideoView(item: item, onAsk: onAsk, onNote: onNote);
+        return _VideoView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
       case MaterialKind.pdf:
-        return item.hasPdf ? _PdfView(item: item) : _DocumentView(item: item, onAsk: onAsk, onNote: onNote);
+        return item.hasPdf ? _PdfView(item: item) : _DocumentView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
       case MaterialKind.paper:
       case MaterialKind.link:
-        return _DocumentView(item: item, onAsk: onAsk, onNote: onNote);
+        return _DocumentView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
     }
   }
 }
 
 /// Adds "Ask Pinda" and "Add note" to the text selection menu.
 class _SelectableReading extends StatefulWidget {
-  const _SelectableReading({required this.child, required this.onAsk, required this.onNote});
+  const _SelectableReading({required this.child, required this.onAsk, required this.onNote, required this.onFactCheck});
   final Widget child;
   final ValueChanged<String> onAsk;
   final ValueChanged<String> onNote;
+  final ValueChanged<String> onFactCheck;
 
   @override
   State<_SelectableReading> createState() => _SelectableReadingState();
@@ -385,6 +416,13 @@ class _SelectableReadingState extends State<_SelectableReading> {
                 },
               ),
               ContextMenuButtonItem(
+                label: 'Fact-check',
+                onPressed: () {
+                  ContextMenuController.removeAny();
+                  widget.onFactCheck(text);
+                },
+              ),
+              ContextMenuButtonItem(
                 label: 'Add note',
                 onPressed: () {
                   ContextMenuController.removeAny();
@@ -403,10 +441,11 @@ class _SelectableReadingState extends State<_SelectableReading> {
 
 /// Long-form reading view for articles and papers.
 class _DocumentView extends StatefulWidget {
-  const _DocumentView({required this.item, required this.onAsk, required this.onNote});
+  const _DocumentView({required this.item, required this.onAsk, required this.onNote, required this.onFactCheck});
   final LibraryItem item;
   final ValueChanged<String> onAsk;
   final ValueChanged<String> onNote;
+  final ValueChanged<String> onFactCheck;
 
   @override
   State<_DocumentView> createState() => _DocumentViewState();
@@ -455,6 +494,7 @@ class _DocumentViewState extends State<_DocumentView> {
     return _SelectableReading(
       onAsk: widget.onAsk,
       onNote: widget.onNote,
+      onFactCheck: widget.onFactCheck,
       child: Scrollbar(
         controller: _scroll,
         child: SingleChildScrollView(
@@ -591,10 +631,11 @@ class _PdfView extends StatelessWidget {
 }
 
 class _VideoView extends StatelessWidget {
-  const _VideoView({required this.item, required this.onAsk, required this.onNote});
+  const _VideoView({required this.item, required this.onAsk, required this.onNote, required this.onFactCheck});
   final LibraryItem item;
   final ValueChanged<String> onAsk;
   final ValueChanged<String> onNote;
+  final ValueChanged<String> onFactCheck;
 
   @override
   Widget build(BuildContext context) {
@@ -604,6 +645,7 @@ class _VideoView extends StatelessWidget {
     return _SelectableReading(
       onAsk: onAsk,
       onNote: onNote,
+      onFactCheck: onFactCheck,
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(pad, 16, pad, 60),
         child: Align(

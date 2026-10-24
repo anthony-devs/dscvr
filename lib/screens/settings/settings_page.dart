@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/shelf_page.dart';
+import 'package:dscvr/screens/subscription/paywall_page.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
@@ -9,9 +12,41 @@ import 'package:dscvr/widgets/icons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _portalLoading = false;
+
+  Future<void> _openPortal() async {
+    setState(() => _portalLoading = true);
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) throw Exception('Not signed in');
+      final resp = await http.post(
+        Uri.parse('${Env.functionsUrl}/customerPortal'),
+        headers: { 'Authorization': 'Bearer $token', 'Content-Type': 'application/json' },
+      );
+      if (!mounted) return;
+      if (resp.statusCode != 200) {
+        final msg = (jsonDecode(resp.body) as Map)['error'] ?? 'Failed';
+        throw Exception(msg);
+      }
+      final url = (jsonDecode(resp.body) as Map)['url'] as String;
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) toast(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _portalLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +105,25 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ]),
+        if (!Env.demo)
+          _Section(title: 'Subscription', children: [
+            _Row(
+              label: 'Plan',
+              description: '${user.subscription.tier.label} plan'
+                  '${user.subscription.isPaid ? ' • renews ${_formatDate(user.subscription.currentPeriodEnd)}' : ''}',
+              child: _portalLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : AppButton.secondary(
+                      onPressed: user.subscription.isPaid
+                          ? _openPortal
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const PaywallPage()),
+                              ),
+                      label: Text(user.subscription.isPaid ? 'Manage billing' : 'Upgrade'),
+                      icon: Icon(user.subscription.isPaid ? Ic.settings : Ic.lightning, size: 15),
+                    ),
+            ),
+          ]),
         _Section(title: 'Account', children: [
           _Row(
             label: user.displayName,
@@ -125,13 +179,19 @@ class SettingsPage extends StatelessWidget {
         _Section(title: 'About', children: [
           _Row(
             label: 'DSCVR',
-            description: Env.demo ? 'Demo mode: sample data, nothing is saved.' : 'Free forever. No ads, no tracking, no algorithmic feed.',
+            description: Env.demo ? 'Demo mode: sample data, nothing is saved.' : 'Your research desk, everywhere.',
             child: Text('1.0.0', style: context.text.labelMedium),
           ),
         ]),
       ]),
     );
   }
+}
+
+String _formatDate(DateTime? d) {
+  if (d == null) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${months[d.month - 1]} ${d.day}, ${d.year}';
 }
 
 class _Section extends StatelessWidget {

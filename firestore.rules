@@ -1,21 +1,38 @@
 rules_version = '2';
 
-// Every document lives under users/{uid}; only that user can read or write it.
+// DSCVR Firestore Security Rules
+//
+// Users own their data under users/{uid}. Share links live in a top-level
+// /shares collection: owners CRUD, anyone can read (for public share links).
+// Usage tracking under /usage is Cloud-Function-only.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    match /users/{uid} {
-      allow read, write: if isOwner(uid);
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-      // Usage counters are written by Cloud Functions only.
+    // ── User data ──────────────────────────────────────────────────
+    match /users/{uid} {
+      // Users can read their own profile; subscription writes come from
+      // Cloud Functions via admin SDK (bypasses rules).
+      allow read: if isOwner(uid);
+      // Users can write their profile but NOT the subscription field
+      // (that's managed server-side by Stripe webhook).
+      allow update: if isOwner(uid)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription']));
+      allow create: if isOwner(uid);
+
+      // Usage counters — Cloud Functions only (admin SDK bypasses rules).
       match /meta/{doc} {
         allow read: if isOwner(uid);
         allow write: if false;
       }
 
+      // Library collections
       match /{collection}/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
@@ -29,6 +46,35 @@ service cloud.firestore {
 
       match /conversations/{convId}/messages/{msgId} {
         allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ── Share links ────────────────────────────────────────────────
+    // Owner can CRUD their own share links; anyone can read (needed for
+    // public viewers to resolve a share link).
+    match /shares/{linkId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.keys().hasAll(['ownerId', 'targetType', 'targetId', 'permission', 'createdAt'])
+        && request.resource.data.targetType in ['category', 'topic']
+        && request.resource.data.permission in ['view', 'comment', 'fork']
+        && request.resource.data.size() < 20;
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ── Usage tracking ─────────────────────────────────────────────
+    // Written only by Cloud Functions (admin SDK). Clients can read
+    // their own usage stats.
+    match /usage/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+      match /{sub}/{doc} {
+        allow read: if isOwner(uid);
+        allow write: if false;
       }
     }
   }

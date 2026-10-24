@@ -79,6 +79,16 @@ class Ic {
   static const caretUpDown = IconData(0xe140, fontFamily: 'PhosphorRegular');
   static const pindaFill = IconData(0xe6a2, fontFamily: 'PhosphorFill');
   static const lightning = IconData(0xe2de, fontFamily: 'PhosphorRegular');
+  static const scale = IconData(0xe3f0, fontFamily: 'PhosphorRegular');
+  static const minus = IconData(0xe326, fontFamily: 'PhosphorRegular');
+  static const question = IconData(0xe3ec, fontFamily: 'PhosphorRegular');
+  static const share = IconData(0xe416, fontFamily: 'PhosphorRegular');
+  static const linkSimple = IconData(0xe2e4, fontFamily: 'PhosphorRegular');
+  static const eye = IconData(0xe224, fontFamily: 'PhosphorRegular');
+  static const chatCircle = IconData(0xe16c, fontFamily: 'PhosphorRegular');
+  static const gitFork = IconData(0xe278, fontFamily: 'PhosphorRegular');
+  static const clock = IconData(0xe192, fontFamily: 'PhosphorRegular');
+  static const shield = IconData(0xe41e, fontFamily: 'PhosphorRegular');
 
   static IconData forKind(MaterialKind k) => switch (k) {
         MaterialKind.paper => paper,

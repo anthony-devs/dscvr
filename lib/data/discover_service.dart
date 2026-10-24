@@ -54,23 +54,37 @@ class DiscoverService {
 
   Future<List<Paper>> _fetch(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
     if (Env.demo) return _demoPapers(q);
-    if (!kIsWeb) {
-      try {
-        return await _direct(source, q, sortByDate: sortByDate, limit: limit);
-      } catch (_) {
-        // fall through to the function proxy
-      }
+
+    // Always try the direct API first (works on native; may work on web
+    // for endpoints that send CORS headers, e.g. Semantic Scholar v2).
+    try {
+      return await _direct(source, q, sortByDate: sortByDate, limit: limit);
+    } catch (_) {
+      // Direct call failed (CORS on web, or network on native) —
+      // fall through to the Cloud Function proxy.
     }
-    final uri = Uri.parse('${Env.functionsUrl}/discover').replace(queryParameters: {
-      'source': source.key,
-      'q': q,
-      'sort': sortByDate ? 'date' : 'relevance',
-      'limit': '$limit',
-    });
-    final res = await _client.get(uri).timeout(const Duration(seconds: 20));
-    if (res.statusCode != 200) throw Exception('Search failed (${res.statusCode})');
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
+
+    try {
+      final uri = Uri.parse('${Env.functionsUrl}/discover').replace(queryParameters: {
+        'source': source.key,
+        'q': q,
+        'sort': sortByDate ? 'date' : 'relevance',
+        'limit': '$limit',
+      });
+      final res = await _client.get(uri).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) throw Exception('Search failed (${res.statusCode})');
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
+    } catch (e) {
+      if (kIsWeb) {
+        throw Exception(
+          'Could not reach ${source.label}. '
+          'Deploy the discover Cloud Function, or run on a mobile device '
+          'to bypass CORS restrictions.',
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<List<Paper>> _direct(PaperSource source, String q, {required bool sortByDate, required int limit}) async {

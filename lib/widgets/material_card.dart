@@ -33,8 +33,8 @@ class _MaterialCardState extends State<MaterialCard> {
     final item = widget.item;
     final fill = CardPalette.fill(item.colorIndex, c);
     final border = CardPalette.border(item.colorIndex, c);
-    final inkOnCard = c.isDark ? c.ink : const Color(0xFF2A2420);
-    final mutedOnCard = c.isDark ? c.inkMuted : const Color(0xFF4F4740);
+    final inkOnCard = c.isDark ? c.ink : const Color(0xFF1D1F2B);
+    final mutedOnCard = c.isDark ? c.inkMuted : const Color(0xFF4A4C5E);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),

@@ -2,6 +2,7 @@ import 'package:dscvr/models/library.dart';
 import 'package:dscvr/screens/add/add_material_sheet.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/item_actions.dart';
+import 'package:dscvr/screens/library/share_dialog.dart';
 import 'package:dscvr/state/library_controller.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
@@ -95,6 +96,14 @@ class _ShelfPageState extends State<ShelfPage> {
           PageTitle(
             topic?.name ?? cat.name,
             onEdit: () => showCollectionEditor(context, category: topic == null ? cat : null, topic: topic),
+            onShare: () => showAdaptiveSheet(
+              context,
+              builder: (_) => ShareDialog(
+                targetType: topic != null ? 'topic' : 'category',
+                targetId: topic?.id ?? cat.id,
+                targetName: topic?.name ?? cat.name,
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           _Description(

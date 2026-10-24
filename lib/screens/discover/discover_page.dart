@@ -66,11 +66,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
         _papers = results;
         _summary = s;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted || id != _request) return;
       setState(() {
         _papers = const [];
-        _error = 'Could not reach ${_source.label}. Check your connection, or deploy the discover function for web.';
+        _error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted && id == _request) setState(() => _loading = false);
