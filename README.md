@@ -179,50 +179,15 @@ lib/
 
 # 🚀 Getting Started
 
-## Prerequisites
-
-- Flutter SDK
-- Dart SDK
-- Chrome
-- Firebase/Supabase project
-- Claude API key
-
----
-
-# ⚙️ Installation
-
-## Clone the repository
-
-```bash
-git clone https://github.com/yourusername/dscvr.git
-cd dscvr
-```
-
-## Install dependencies
+See **[docs/SETUP.md](docs/SETUP.md)** for Firebase, Cloud Functions (Pinda), PWA and store builds.
 
 ```bash
 flutter pub get
+flutter run -d chrome                                   # real app
+flutter run -d chrome --dart-define=DSCVR_DEMO=true     # sample library, no backend
 ```
 
-## Run the app
-
-```bash
-flutter run -d chrome
-```
-
----
-
-# 🔑 Environment Variables
-
-Create a `.env` file:
-
-```env
-CLAUDE_API_KEY=
-SEMANTIC_SCHOLAR_API=
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-YOUTUBE_API_KEY=
-```
+The Claude API key lives in Firebase Secret Manager (`ANTHROPIC_API_KEY`), never in the app.
 
 ---
 
@@ -230,7 +195,7 @@ YOUTUBE_API_KEY=
 
 | Platform | Support |
 |----------|----------|
-| Web | ✅ Primary |
+| Web (PWA) | ✅ |
 | Android | ✅ |
 | iOS | ✅ |
 | macOS | Planned |

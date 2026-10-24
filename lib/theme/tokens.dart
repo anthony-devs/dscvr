@@ -156,12 +156,12 @@ class CardPalette {
 
   static Color fill(int index, DscvrColors c) {
     final base = _fills[index.abs() % _fills.length];
-    return c.isDark ? Color.lerp(c.surface, base, 0.20)! : base;
+    return c.isDark ? Color.lerp(c.surface, base, 0.27)! : base;
   }
 
   static Color border(int index, DscvrColors c) {
     final base = _borders[index.abs() % _borders.length];
-    return c.isDark ? Color.lerp(c.surface, base, 0.38)! : base;
+    return c.isDark ? Color.lerp(c.surface, base, 0.48)! : base;
   }
 
   /// Small badge background inside a card (the year pill).

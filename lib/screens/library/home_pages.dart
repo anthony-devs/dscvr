@@ -79,7 +79,7 @@ class RecentPage extends StatelessWidget {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: inProgress.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, i) => _ContinueTile(item: inProgress[i]),
               ),
             ),
@@ -105,6 +105,15 @@ class _QuickActions extends StatelessWidget {
       (Ic.note, 'New note', () => createNote(context)),
       (Ic.pinda, 'Ask Pinda', () => context.go('/pinda')),
     ];
+    if (context.isCompact) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (final a in actions)
+            Padding(padding: const EdgeInsets.only(right: 8), child: PillButton(label: a.$2, icon: a.$1, onTap: a.$3)),
+        ]),
+      );
+    }
     return Wrap(spacing: 8, runSpacing: 8, children: [
       for (final a in actions) PillButton(label: a.$2, icon: a.$1, onTap: a.$3),
     ]);

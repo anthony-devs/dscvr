@@ -1,46 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
+  <!-- Replaced by `flutter build web --base-href`. Keep "/" for Firebase Hosting. -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="DSCVR is a calm, personal research library. Collect papers, PDFs, articles and lectures, read and annotate them, and ask Pinda about anything you have saved.">
+  <meta name="theme-color" content="#F8F3ED" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171513" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS home-screen app -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="dscvr">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="DSCVR">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Social previews -->
+  <meta property="og:title" content="DSCVR">
+  <meta property="og:description" content="A personal research library with an assistant that has read your sources.">
+  <meta property="og:image" content="icons/Icon-512.png">
 
-  <title>dscvr</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
+  <title>DSCVR</title>
+
+  <style>
+    :root { --bg: #F8F3ED; --ink: #2A2420; --soft: rgba(248, 243, 237, .5); }
+    @media (prefers-color-scheme: dark) { :root { --bg: #171513; --ink: #F1EBE4; --soft: rgba(23, 21, 19, .5); } }
+    html, body { margin: 0; height: 100%; background: var(--bg); }
+    #splash { position: fixed; inset: 0; display: grid; place-items: center; transition: opacity .25s ease; }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    .mark { width: 52px; height: 52px; border-radius: 14px; background: var(--ink); padding: 10px; box-sizing: border-box;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 3px; animation: breathe 1.6s ease-in-out infinite; }
+    .mark i { display: block; background: var(--bg); border-radius: 3px; }
+    .mark i:nth-child(2), .mark i:nth-child(3) { border-radius: 50%; opacity: .5; }
+    @keyframes breathe { 50% { transform: scale(.94); opacity: .85; } }
+    @media (prefers-reduced-motion: reduce) { .mark { animation: none; } }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <div id="splash" aria-label="Loading DSCVR"><div class="mark"><i></i><i></i><i></i><i></i></div></div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('splash');
+      if (s) { s.classList.add('hide'); setTimeout(function () { s.remove(); }, 300); }
+    });
+    // Offline support. See web/sw.js.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

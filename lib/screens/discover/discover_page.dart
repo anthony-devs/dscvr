@@ -191,7 +191,7 @@ class _SummaryCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(Radii.md),
             child: Image.network(summary.thumbnail!, width: 88, height: 88, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                errorBuilder: (_, _, _) => const SizedBox.shrink()),
           ),
           const SizedBox(width: 16),
         ],
@@ -239,6 +239,7 @@ class _PaperRowState extends State<_PaperRow> {
       if (p.subjects.isNotEmpty) p.subjects.first,
     ].join('  ·  ');
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

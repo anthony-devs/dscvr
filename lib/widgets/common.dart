@@ -234,7 +234,7 @@ class PageTitle extends StatelessWidget {
       spacing: 12,
       runSpacing: 4,
       children: [
-        if (leading != null) leading!,
+        ?leading,
         Text(title, style: style),
         if (onEdit != null) RoundIconButton(icon: Ic.edit, tooltip: 'Edit', onTap: onEdit!),
       ],
@@ -314,10 +314,13 @@ class FolderTabs extends StatelessWidget {
 
 /// Simple segmented control used in settings and the reader.
 class Segmented<T> extends StatelessWidget {
-  const Segmented({super.key, required this.options, required this.value, required this.onChanged});
+  const Segmented({super.key, required this.options, required this.value, required this.onChanged, this.expand = false});
   final List<(T, String, IconData?)> options;
   final T value;
   final ValueChanged<T> onChanged;
+
+  /// Stretch segments to fill the available width.
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -329,10 +332,11 @@ class Segmented<T> extends StatelessWidget {
         borderRadius: BorderRadius.circular(Radii.md),
         border: Border.all(color: c.line),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+      child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, children: [
         for (final o in options)
-          GestureDetector(
+          _maybeExpand(GestureDetector(
             onTap: () => onChanged(o.$1),
+            behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -343,7 +347,7 @@ class Segmented<T> extends StatelessWidget {
                     ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 1))]
                     : null,
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
+              child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
                 if (o.$3 != null) ...[Icon(o.$3, size: 14, color: c.ink), const SizedBox(width: 6)],
                 Text(o.$2,
                     style: AppTheme.sans(
@@ -352,10 +356,12 @@ class Segmented<T> extends StatelessWidget {
                         color: o.$1 == value ? c.ink : c.inkMuted)),
               ]),
             ),
-          ),
+          )),
       ]),
     );
   }
+
+  Widget _maybeExpand(Widget w) => expand ? Expanded(child: w) : w;
 }
 
 String relativeTime(DateTime t) {

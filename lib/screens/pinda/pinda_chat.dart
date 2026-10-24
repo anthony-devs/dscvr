@@ -67,10 +67,10 @@ class PindaChatState extends State<PindaChat> {
   }
 
   @override
-  void didUpdateWidget(covariant PindaChat old) {
-    super.didUpdateWidget(old);
-    if (old.controller != widget.controller) {
-      old.controller.removeListener(_onChange);
+  void didUpdateWidget(covariant PindaChat oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onChange);
       widget.controller.addListener(_onChange);
     }
   }

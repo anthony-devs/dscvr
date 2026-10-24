@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/data/link_service.dart';
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/models/paper.dart';
@@ -522,7 +521,7 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
         child: ListView.separated(
           shrinkWrap: true,
           itemCount: _papers.length,
-          separatorBuilder: (_, __) => Divider(color: c.line),
+          separatorBuilder: (_, _) => Divider(color: c.line),
           itemBuilder: (context, i) {
             final p = _papers[i];
             final added = _added.contains(p.id);
@@ -616,6 +615,3 @@ Future<void> savePaperFlow(BuildContext context, Paper p) async {
   await lib.repo.saveItem(paperToItem(context, p, categoryId: cat!, topicId: topic));
   if (context.mounted) toast(context, 'Saved to ${lib.category(cat)?.name ?? 'library'}');
 }
-
-/// Discover service accessor kept here to avoid a dependency cycle.
-DiscoverService discoverOf(BuildContext context) => context.services.discover;

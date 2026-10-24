@@ -213,7 +213,7 @@ class DemoLibraryRepository implements LibraryRepository {
 
     LibraryItem item(String id, String title, List<String> authors, int year, String cat,
         {String? topic, MaterialKind kind = MaterialKind.paper, String summary = '', String? url,
-        double progress = 0, int notes = 0, int daysAgo = 3, bool readingList = false, String content = ''}) {
+        double progress = 0, int notes = 0, int daysAgo = 3, bool readingList = false, String content = '', String? arxiv}) {
       return LibraryItem(
         id: id, kind: kind, title: title, authors: authors, year: year, categoryId: cat, topicId: topic,
         summary: summary, url: url, content: content, progress: progress, noteCount: notes,
@@ -222,21 +222,23 @@ class DemoLibraryRepository implements LibraryRepository {
         updatedAt: now.subtract(Duration(days: daysAgo)),
         lastOpenedAt: now.subtract(Duration(days: daysAgo, hours: _rand.nextInt(20))),
         source: kind == MaterialKind.paper ? 'arxiv' : null,
+        externalId: arxiv,
+        siteName: kind == MaterialKind.paper ? 'arXiv' : null,
       );
     }
 
     _items.value = [
       item('p1', 'Attention Is All You Need',
           ['Ashish Vaswani', 'Noam Shazeer', 'Niki Parmar', 'Jakob Uszkoreit', 'Llion Jones', 'Aidan N. Gomez', 'Lukasz Kaiser', 'Illia Polosukhin'],
-          2017, 'cs', topic: 'llm', url: 'https://arxiv.org/abs/1706.03762', progress: 0.85, notes: 4, daysAgo: 0, readingList: true,
+          2017, 'cs', topic: 'llm', url: 'https://arxiv.org/abs/1706.03762', arxiv: '1706.03762', progress: 0.85, notes: 4, daysAgo: 0, readingList: true,
           summary: 'Introduces the Transformer, a sequence transduction architecture based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.'),
       item('p2', 'Deep Residual Learning for Image Recognition',
           ['Kaiming He', 'Xiangyu Zhang', 'Shaoqing Ren', 'Jian Sun'], 2015, 'cs', topic: 'vision',
-          url: 'https://arxiv.org/abs/1512.03385', progress: 0.4, notes: 2, daysAgo: 1,
+          url: 'https://arxiv.org/abs/1512.03385', arxiv: '1512.03385', progress: 0.4, notes: 2, daysAgo: 1,
           summary: 'Presents a residual learning framework to ease the training of networks substantially deeper than those used previously.'),
       item('p3', 'Language Models are Few-Shot Learners',
           ['Tom B. Brown', 'Benjamin Mann', 'Nick Ryder', 'Melanie Subbiah', 'Jared Kaplan', 'Prafulla Dhariwal'], 2020, 'cs', topic: 'llm',
-          url: 'https://arxiv.org/abs/2005.14165', progress: 0.15, notes: 1, daysAgo: 2, readingList: true,
+          url: 'https://arxiv.org/abs/2005.14165', arxiv: '2005.14165', progress: 0.15, notes: 1, daysAgo: 2, readingList: true,
           summary: 'Shows that scaling up language models greatly improves task-agnostic, few-shot performance.'),
       item('p4', 'Mastering the game of Go with deep neural networks and tree search',
           ['David Silver', 'Aja Huang', 'Chris J. Maddison', 'Arthur Guez'], 2016, 'cs', topic: 'ml',

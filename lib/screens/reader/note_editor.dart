@@ -141,7 +141,8 @@ class _NoteEditorState extends State<NoteEditor> {
       Expanded(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(pad, 16, pad, 80),
-          child: Center(
+          child: Align(
+            alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 700),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

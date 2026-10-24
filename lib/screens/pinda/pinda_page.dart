@@ -132,10 +132,20 @@ class _PindaPageState extends State<PindaPage> {
   }
 }
 
-class _History extends StatelessWidget {
+class _History extends StatefulWidget {
   const _History({required this.controller, this.onPicked});
   final PindaController controller;
   final VoidCallback? onPicked;
+
+  @override
+  State<_History> createState() => _HistoryState();
+}
+
+class _HistoryState extends State<_History> {
+  late final Stream<List<Conversation>> _stream = context.services.repo.watchConversations();
+
+  PindaController get controller => widget.controller;
+  VoidCallback? get onPicked => widget.onPicked;
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +169,7 @@ class _History extends StatelessWidget {
       ),
       Expanded(
         child: StreamBuilder<List<Conversation>>(
-          stream: repo.watchConversations(),
+          stream: _stream,
           builder: (context, snap) {
             final list = snap.data ?? const <Conversation>[];
             if (list.isEmpty) {

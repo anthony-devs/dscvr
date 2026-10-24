@@ -7,6 +7,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 /// Frame around every library screen.
@@ -32,6 +33,9 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    // Between sign-out and the redirect to /login there is a frame where the
+    // library is gone; render nothing rather than building pages without it.
+    if (Services.of(context).library == null) return Scaffold(backgroundColor: c.background);
     final background = BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topCenter,
@@ -46,7 +50,11 @@ class AppShell extends StatelessWidget {
         drawer: Drawer(
           backgroundColor: c.background,
           width: 290,
-          child: SafeArea(child: Builder(builder: (ctx) => Sidebar(location: location, onNavigate: () => Navigator.of(ctx).pop()))),
+          child: SafeArea(
+            child: Builder(
+              builder: (ctx) => Sidebar(location: location, onNavigate: () => Navigator.of(ctx).pop()),
+            ),
+          ),
         ),
         appBar: AppBar(
           titleSpacing: 0,
@@ -59,7 +67,11 @@ class AppShell extends StatelessWidget {
           ),
           title: _Breadcrumb(location: location, compact: true),
           actions: [
-            IconButton(tooltip: 'Search', onPressed: () => context.go('/search'), icon: const Icon(Ic.search, size: 20)),
+            IconButton(
+              tooltip: 'Search',
+              onPressed: () => context.go('/search'),
+              icon: const Icon(Ic.search, size: 20),
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: RoundIconButton(icon: Ic.add, tooltip: 'Add material', onTap: () => _add(context), size: 34),
@@ -71,32 +83,57 @@ class AppShell extends StatelessWidget {
       );
     }
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: Row(children: [
-        SizedBox(width: 256, child: Sidebar(location: location)),
-        VerticalDivider(width: 1, color: c.line),
-        Expanded(
-          child: DecoratedBox(
-            decoration: background,
-            child: Column(children: [
-              SizedBox(
-                height: 56,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(children: [
-                    Expanded(child: _Breadcrumb(location: location)),
-                    RoundIconButton(icon: Ic.add, tooltip: 'Add material', onTap: () => _add(context), size: 32),
-                    const SizedBox(width: 8),
-                    RoundIconButton(icon: Ic.pinda, tooltip: 'Ask Pinda', onTap: () => context.go('/pinda'), size: 32),
-                  ]),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => context.go('/search'),
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => context.go('/search'),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: c.background,
+          body: Row(
+            children: [
+              SizedBox(width: 256, child: Sidebar(location: location)),
+              VerticalDivider(width: 1, color: c.line),
+              Expanded(
+                child: DecoratedBox(
+                  decoration: background,
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 56,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            children: [
+                              Expanded(child: _Breadcrumb(location: location)),
+                              RoundIconButton(
+                                icon: Ic.add,
+                                tooltip: 'Add material',
+                                onTap: () => _add(context),
+                                size: 32,
+                              ),
+                              const SizedBox(width: 8),
+                              RoundIconButton(
+                                icon: Ic.pinda,
+                                tooltip: 'Ask Pinda',
+                                onTap: () => context.go('/pinda'),
+                                size: 32,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(child: child),
+                    ],
+                  ),
                 ),
               ),
-              Expanded(child: child),
-            ]),
+            ],
           ),
         ),
-      ]),
+      ),
     );
   }
 }
@@ -119,28 +156,38 @@ class _Breadcrumb extends StatelessWidget {
           final last = i == crumbs.length - 1;
           if (compact && !last && crumbs.length > 1) continue;
           if (parts.isNotEmpty) {
-            parts.add(Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text('/', style: AppTheme.sans(fontSize: 13, color: c.inkFaint)),
-            ));
+            parts.add(
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text('/', style: AppTheme.sans(fontSize: 13, color: c.inkFaint)),
+              ),
+            );
           }
-          parts.add(InkWell(
-            onTap: crumb.path == null || last ? null : () => context.go(crumb.path!),
-            borderRadius: BorderRadius.circular(4),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (crumb.dot != null) ...[ColorDot(crumb.dot!, size: 8), const SizedBox(width: 7)],
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: compact ? 200 : 260),
-                child: Text(crumb.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTheme.sans(
+          parts.add(
+            InkWell(
+              onTap: crumb.path == null || last ? null : () => context.go(crumb.path!),
+              borderRadius: BorderRadius.circular(4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (crumb.dot != null) ...[ColorDot(crumb.dot!, size: 8), const SizedBox(width: 7)],
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: compact ? 200 : 260),
+                    child: Text(
+                      crumb.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.sans(
                         fontSize: compact ? 15 : 13,
                         fontWeight: last ? FontWeight.w600 : FontWeight.w500,
-                        color: last ? c.ink : c.inkMuted)),
+                        color: last ? c.ink : c.inkMuted,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-          ));
+            ),
+          );
         }
         return Row(children: parts);
       },
@@ -201,28 +248,39 @@ class _BottomNav extends StatelessWidget {
     final c = context.colors;
     final idx = _index;
     return Container(
-      decoration: BoxDecoration(color: c.background, border: Border(top: BorderSide(color: c.line))),
+      decoration: BoxDecoration(
+        color: c.background,
+        border: Border(top: BorderSide(color: c.line)),
+      ),
       child: SafeArea(
         top: false,
         child: SizedBox(
           height: 58,
-          child: Row(children: [
-            for (final (i, t) in _tabs.indexed)
-              Expanded(
-                child: InkWell(
-                  onTap: () => context.go(t.$1),
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(t.$2, size: 21, color: i == idx ? c.ink : c.inkFaint),
-                    const SizedBox(height: 3),
-                    Text(t.$3,
-                        style: AppTheme.sans(
+          child: Row(
+            children: [
+              for (final (i, t) in _tabs.indexed)
+                Expanded(
+                  child: InkWell(
+                    onTap: () => context.go(t.$1),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(t.$2, size: 21, color: i == idx ? c.ink : c.inkFaint),
+                        const SizedBox(height: 3),
+                        Text(
+                          t.$3,
+                          style: AppTheme.sans(
                             fontSize: 11,
                             fontWeight: i == idx ? FontWeight.w600 : FontWeight.w500,
-                            color: i == idx ? c.ink : c.inkFaint)),
-                  ]),
+                            color: i == idx ? c.ink : c.inkFaint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-          ]),
+            ],
+          ),
         ),
       ),
     );

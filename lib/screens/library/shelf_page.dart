@@ -142,7 +142,7 @@ class _ShelfPageState extends State<ShelfPage> {
         ? materials
         : materials.where((i) => i.authors.any(_authors.contains)).toList())
       ..sort(_sort.compare);
-    final shownFacets = _showAllAuthors ? facets : facets.take(context.isCompact ? 8 : 14).toList();
+    final shownFacets = _showAllAuthors ? facets : facets.take(context.isCompact ? 5 : 14).toList();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (facets.isNotEmpty) ...[

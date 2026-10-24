@@ -101,7 +101,7 @@ class _NotesPanelState extends State<NotesPanel> {
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
               itemCount: notes.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, i) => _NoteTile(item: widget.item, note: notes[i]),
             );
           },

@@ -41,7 +41,7 @@ GoRouter buildRouter(SessionController session) {
       }
     },
     routes: [
-      GoRoute(path: '/', redirect: (_, __) => '/recent'),
+      GoRoute(path: '/', redirect: (_, _) => '/recent'),
       GoRoute(path: '/splash', pageBuilder: (_, s) => page(s, const SplashPage())),
       GoRoute(path: '/login', pageBuilder: (_, s) => page(s, const LoginPage())),
       GoRoute(path: '/signup', pageBuilder: (_, s) => page(s, const SignupPage())),

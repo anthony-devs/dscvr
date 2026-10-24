@@ -128,7 +128,7 @@ class _Showcase extends StatelessWidget {
         const SizedBox(height: 32),
         IgnorePointer(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: const BoxConstraints(maxWidth: 640),
             child: MaterialGrid(minTileWidth: 120, children: [
               for (final (item, label) in cards) MaterialCard(item: item, collectionLabel: label, onTap: () {}),
             ]),

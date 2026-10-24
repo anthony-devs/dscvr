@@ -83,7 +83,9 @@ class _ReaderPageState extends State<ReaderPage> {
 
   @override
   Widget build(BuildContext context) {
-    final lib = Services.of(context).library!;
+    final maybeLib = Services.of(context).library;
+    if (maybeLib == null) return Scaffold(backgroundColor: context.colors.background);
+    final lib = maybeLib;
     return ListenableBuilder(
       listenable: lib,
       builder: (context, _) {
@@ -137,6 +139,7 @@ class _ReaderPageState extends State<ReaderPage> {
                     (_Pane.pinda, 'Pinda', Ic.pinda),
                   ],
                   value: _mobilePane,
+                  expand: true,
                   onChanged: (p) => setState(() => _mobilePane = p),
                 ),
               ),
@@ -447,7 +450,8 @@ class _DocumentViewState extends State<_DocumentView> {
         child: SingleChildScrollView(
           controller: _scroll,
           padding: EdgeInsets.fromLTRB(pad, 24, pad, 80),
-          child: Center(
+          child: Align(
+            alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 700),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -592,7 +596,8 @@ class _VideoView extends StatelessWidget {
       onNote: onNote,
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(pad, 16, pad, 60),
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -48,7 +48,6 @@ class SettingsPage extends StatelessWidget {
                     value: settings.readerScale,
                     min: 0.85,
                     max: 1.4,
-                    divisions: 11,
                     activeColor: c.ink,
                     inactiveColor: c.line,
                     onChanged: settings.setReaderScale,
