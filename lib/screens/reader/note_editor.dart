@@ -8,6 +8,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/markdown_view.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 /// Markdown note editor with live preview and autosave.
@@ -131,7 +132,7 @@ class _NoteEditorState extends State<NoteEditor> {
           const Spacer(),
           Text(status, style: AppTheme.sans(fontSize: 12, color: _state == _SaveState.failed ? c.danger : c.inkFaint)),
           const SizedBox(width: 8),
-          IconButton(
+          AppIconButton(
             tooltip: 'Ask Pinda about this note',
             onPressed: () => widget.onAsk(_body.text.length > 600 ? _body.text.substring(0, 600) : _body.text),
             icon: const Icon(Ic.pinda, size: 18),
@@ -205,8 +206,7 @@ class _ToolButton extends StatelessWidget {
     final c = context.colors;
     return Tooltip(
       message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.sm),
+      child: Pressable(
         onTap: onTap,
         child: SizedBox(
           width: 32,

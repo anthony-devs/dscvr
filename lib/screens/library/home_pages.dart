@@ -11,6 +11,7 @@ import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/material_card.dart';
 import 'package:dscvr/widgets/progress_ring.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -35,7 +36,7 @@ class RecentPage extends StatelessWidget {
       listenable: lib,
       builder: (context, _) {
         final c = context.colors;
-        if (!lib.loaded) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+        if (!lib.loaded) return const SkeletonPage();
         final user = services.session.user;
         final inProgress = lib.inProgress.take(8).toList();
         final recent = lib.recent.take(context.isCompact ? 8 : 12).toList();
@@ -57,12 +58,12 @@ class RecentPage extends StatelessWidget {
               title: 'Your library is empty',
               message: 'Start by adding a paper, a PDF, an article or a YouTube lecture, or find something new in Discover.',
               action: Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.center, children: [
-                FilledButton.icon(
+                AppButton.primary(
                   onPressed: () => showAddMaterial(context),
                   icon: const Icon(Ic.add, size: 16),
                   label: const Text('Add material'),
                 ),
-                OutlinedButton.icon(
+                AppButton.secondary(
                   onPressed: () => context.go('/discover'),
                   icon: const Icon(Ic.discover, size: 16),
                   label: const Text('Open Discover'),
@@ -129,8 +130,7 @@ class _ContinueTile extends StatelessWidget {
     final c = context.colors;
     final lib = context.library;
     final cat = lib.category(item.categoryId);
-    return InkWell(
-      borderRadius: BorderRadius.circular(Radii.lg),
+    return Pressable(
       onTap: () => openItem(context, item),
       child: Container(
         width: 300,
@@ -235,7 +235,7 @@ class LibraryIndexPage extends StatelessWidget {
               icon: Ic.folder,
               title: 'Create your first category',
               message: 'Categories are the top shelves of your library, like Economics or Machine Learning.',
-              action: FilledButton(onPressed: () => showCollectionEditor(context), child: const Text('New category')),
+              action: AppButton.primary(onPressed: () => showCollectionEditor(context), child: const Text('New category')),
             )
           else
             MaterialGrid(minTileWidth: 260, children: [
@@ -258,8 +258,7 @@ class _CategoryTile extends StatelessWidget {
     final items = lib.itemsIn(cat.id)..sort(ItemSort.recentlyAccessed.compare);
     final topics = lib.topicsOf(cat.id);
     final color = CategoryPalette.of(cat.colorIndex);
-    return InkWell(
-      borderRadius: BorderRadius.circular(Radii.lg),
+    return Pressable(
       onTap: () => context.go('/c/${cat.id}'),
       child: Container(
         height: 168,
@@ -345,8 +344,7 @@ class _SearchPageState extends State<SearchPage> {
             const SizedBox(height: 8),
             for (final item in results.take(60)) _ResultRow(item: item, lib: lib),
             const SizedBox(height: 12),
-            InkWell(
-              borderRadius: BorderRadius.circular(Radii.md),
+            Pressable(
               onTap: () => context.go('/discover?q=${Uri.encodeComponent(_q.text.trim())}'),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -374,8 +372,7 @@ class _ResultRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final cat = lib.category(item.categoryId);
-    return InkWell(
-      borderRadius: BorderRadius.circular(Radii.md),
+    return Pressable(
       onTap: () => openItem(context, item),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),

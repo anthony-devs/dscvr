@@ -10,6 +10,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -234,7 +235,7 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
     await repo.saveItem(item);
     if (!mounted) return;
     Navigator.pop(context);
-    toast(context, 'Added to your library');
+    toast(context, 'Added to your library', description: item.title);
   }
 
   // ── PDF ────────────────────────────────────────────────────────────────────
@@ -287,7 +288,7 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
       }));
       if (!mounted) return;
       Navigator.pop(context);
-      toast(context, 'PDF uploaded');
+      toast(context, 'PDF uploaded', description: 'Pinda can now read ${draft.title}.');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -365,10 +366,7 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           child: lib.categories.isEmpty
-              ? TextField(
-                  controller: _newCategory,
-                  decoration: const InputDecoration(labelText: 'New category', hintText: 'e.g. Computer Science'),
-                )
+              ? AppField(controller: _newCategory, label: 'New category', hint: 'e.g. Computer Science')
               : CollectionPicker(
                   categoryId: _categoryId,
                   topicId: _topicId,
@@ -382,12 +380,12 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
           child: Row(children: [
             if (_busy && _uploadProgress == null && _tab == AddTab.pdf)
-              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 16, height: 16, child: Spinner(size: 16)),
             const Spacer(),
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(_tab == AddTab.paper ? 'Done' : 'Cancel')),
+            AppButton.ghost(onPressed: () => Navigator.pop(context), child: Text(_tab == AddTab.paper ? 'Done' : 'Cancel')),
             if (_tab != AddTab.paper) ...[
               const SizedBox(width: 8),
-              FilledButton(
+              AppButton.primary(
                 onPressed: _busy
                     ? null
                     : switch (_tab) {
@@ -409,16 +407,14 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
   Widget _linkBody(DscvrColors c) {
     final yt = _tab == AddTab.youtube;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      TextField(
+      AppField(
         controller: _url,
+        label: yt ? 'YouTube URL' : 'Web address',
+        hint: yt ? 'https://youtube.com/watch?v=...' : 'https://',
         autofocus: true,
         keyboardType: TextInputType.url,
-        decoration: InputDecoration(
-          labelText: yt ? 'YouTube URL' : 'Web address',
-          hintText: yt ? 'https://youtube.com/watch?v=...' : 'https://',
-          prefixIcon: Icon(yt ? Ic.video : Ic.link, size: 18),
-          suffixIcon: _busy ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))) : null,
-        ),
+        prefixIcon: Icon(yt ? Ic.video : Ic.link, size: 18),
+        suffix: _busy ? const Padding(padding: EdgeInsets.all(13), child: Spinner(size: 16)) : null,
         onChanged: (_) {
           if (_preview != null) setState(() => _preview = null);
         },
@@ -443,10 +439,10 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
               ),
             ]),
             const SizedBox(height: 10),
-            TextField(
+            AppField(
               controller: _title,
+              label: 'Title',
               style: AppTheme.serif(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink),
-              decoration: const InputDecoration(labelText: 'Title'),
               maxLines: 2,
               minLines: 1,
             ),
@@ -467,8 +463,7 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
 
   Widget _pdfBody(DscvrColors c) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      InkWell(
-        borderRadius: BorderRadius.circular(Radii.lg),
+      Pressable(
         onTap: _busy ? null : _pickPdf,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
@@ -490,29 +485,27 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
       ),
       if (_file != null) ...[
         const SizedBox(height: 14),
-        TextField(controller: _title, decoration: const InputDecoration(labelText: 'Title')),
+        AppField(controller: _title, label: 'Title'),
       ],
       if (_busy) ...[
         const SizedBox(height: 14),
-        const LinearProgressIndicator(minHeight: 3),
+        const Spinner(size: 18),
       ],
     ]);
   }
 
   Widget _paperBody(DscvrColors c) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      TextField(
+      AppField(
         controller: _query,
+        label: 'Search arXiv',
+        hint: 'Title, author or topic',
         autofocus: true,
         textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          labelText: 'Search arXiv',
-          hintText: 'Title, author or topic',
-          prefixIcon: const Icon(Ic.search, size: 18),
-          suffixIcon: _busy
-              ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
-              : IconButton(icon: const Icon(Ic.arrowRight, size: 18), onPressed: _searchPapers),
-        ),
+        prefixIcon: const Icon(Ic.search, size: 18),
+        suffix: _busy
+            ? const Padding(padding: EdgeInsets.all(13), child: Spinner(size: 16))
+            : AppIconButton(icon: const Icon(Ic.arrowRight, size: 18), onPressed: _searchPapers, size: 32),
         onSubmitted: (_) => _searchPapers(),
       ),
       const SizedBox(height: 8),
@@ -585,7 +578,7 @@ Future<void> savePaperFlow(BuildContext context, Paper p) async {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           child: lib.categories.isEmpty
-              ? TextField(controller: newCat, autofocus: true, decoration: const InputDecoration(labelText: 'New category'))
+              ? AppField(controller: newCat, autofocus: true, label: 'New category', hint: 'e.g. Papers')
               : CollectionPicker(
                   categoryId: cat,
                   topicId: topic,
@@ -598,9 +591,9 @@ Future<void> savePaperFlow(BuildContext context, Paper p) async {
         Padding(
           padding: const EdgeInsets.all(24),
           child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            AppButton.ghost(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
             const SizedBox(width: 8),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+            AppButton.primary(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
           ]),
         ),
       ]);
@@ -613,5 +606,5 @@ Future<void> savePaperFlow(BuildContext context, Paper p) async {
   }
   if (!context.mounted) return;
   await lib.repo.saveItem(paperToItem(context, p, categoryId: cat!, topicId: topic));
-  if (context.mounted) toast(context, 'Saved to ${lib.category(cat)?.name ?? 'library'}');
+  if (context.mounted) toast(context, 'Saved to ${lib.category(cat)?.name ?? 'library'}', description: p.title);
 }

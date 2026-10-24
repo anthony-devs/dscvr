@@ -7,6 +7,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -43,16 +44,16 @@ class SettingsPage extends StatelessWidget {
               width: 220,
               child: Row(children: [
                 Icon(Ic.textSize, size: 14, color: c.inkFaint),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Slider(
+                  child: AppSlider(
                     value: settings.readerScale,
                     min: 0.85,
                     max: 1.4,
-                    activeColor: c.ink,
-                    inactiveColor: c.line,
                     onChanged: settings.setReaderScale,
                   ),
                 ),
+                const SizedBox(width: 10),
                 Icon(Ic.textSize, size: 20, color: c.inkFaint),
               ]),
             ),
@@ -83,7 +84,7 @@ class SettingsPage extends StatelessWidget {
             _Row(
               label: 'Password',
               description: 'We will email you a reset link.',
-              child: OutlinedButton(
+              child: AppButton.secondary(
                 onPressed: () async {
                   await FirebaseAuth.instance.sendPasswordResetEmail(email: user.email);
                   if (context.mounted) toast(context, 'Reset link sent to ${user.email}');
@@ -93,7 +94,7 @@ class SettingsPage extends StatelessWidget {
             ),
             _Row(
               label: 'Sign out',
-              child: OutlinedButton.icon(
+              child: AppButton.secondary(
                 onPressed: () => s.session.signOut(),
                 icon: const Icon(Ic.signOut, size: 16),
                 label: const Text('Sign out'),
@@ -102,7 +103,7 @@ class SettingsPage extends StatelessWidget {
             _Row(
               label: 'Delete account',
               description: 'Removes your profile. Library data is deleted with it.',
-              child: TextButton(
+              child: AppButton.ghost(
                 onPressed: () async {
                   final ok = await confirm(context,
                       title: 'Delete your account?',

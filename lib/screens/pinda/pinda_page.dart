@@ -7,6 +7,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 /// Full-page Pinda: conversation history on the left, chat on the right,
@@ -56,21 +57,18 @@ class _PindaPageState extends State<PindaPage> {
     final c = context.colors;
     return ListenableBuilder(
       listenable: _ctl,
-      builder: (context, _) => PopupMenuButton<PindaContext>(
+      builder: (context, _) => MenuButton<PindaContext>(
         tooltip: 'What Pinda reads',
+        title: 'What should Pinda read?',
+        width: 280,
         onSelected: _ctl.setContext,
-        itemBuilder: (_) => [
+        entries: () => [
           for (final s in _scopes())
-            PopupMenuItem(
+            MenuEntry(
               value: s,
-              height: 38,
-              child: Row(children: [
-                SizedBox(width: 22, child: s == _ctl.context ? const Icon(Ic.check, size: 15) : null),
-                Icon(s.scope == PindaScope.general ? Ic.library : (s.scope == PindaScope.topic ? Ic.folderOpen : Ic.folder),
-                    size: 15, color: c.inkMuted),
-                const SizedBox(width: 8),
-                Flexible(child: Text(s.scope == PindaScope.general ? 'Whole library' : s.label, overflow: TextOverflow.ellipsis)),
-              ]),
+              label: s.scope == PindaScope.general ? 'Whole library' : s.label,
+              icon: s.scope == PindaScope.general ? Ic.library : (s.scope == PindaScope.topic ? Ic.folderOpen : Ic.folder),
+              checked: s == _ctl.context,
             ),
         ],
         child: IgnorePointer(
@@ -93,12 +91,10 @@ class _PindaPageState extends State<PindaPage> {
         _scopePicker(),
         const Spacer(),
         if (context.isCompact)
-          IconButton(
+          AppIconButton(
             tooltip: 'History',
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              useSafeArea: true,
-              isScrollControlled: true,
+            onPressed: () => showAppSheet<void>(
+              context,
               builder: (ctx) => SizedBox(
                 height: MediaQuery.sizeOf(ctx).height * 0.7,
                 child: _History(controller: _ctl, onPicked: () => Navigator.pop(ctx)),
@@ -110,7 +106,7 @@ class _PindaPageState extends State<PindaPage> {
           listenable: _ctl,
           builder: (context, _) => _ctl.messages.isEmpty
               ? const SizedBox.shrink()
-              : TextButton.icon(onPressed: _ctl.newConversation, icon: const Icon(Ic.add, size: 15), label: const Text('New chat')),
+              : AppButton.ghost(onPressed: _ctl.newConversation, icon: const Icon(Ic.add, size: 15), label: const Text('New chat')),
         ),
       ]),
     );
@@ -120,8 +116,8 @@ class _PindaPageState extends State<PindaPage> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final chat = PindaChat(controller: _ctl, compact: context.isCompact, header: _header());
-    if (context.isCompact) return chat;
-    return Row(children: [
+    if (context.isCompact) return SafeArea(top: false, child: chat);
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         width: 260,
         decoration: BoxDecoration(border: Border(right: BorderSide(color: c.line))),
@@ -157,7 +153,7 @@ class _HistoryState extends State<_History> {
         child: Row(children: [
           Text('Conversations', style: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
           const Spacer(),
-          IconButton(
+          AppIconButton(
             tooltip: 'New chat',
             onPressed: () {
               controller.newConversation();
@@ -186,22 +182,28 @@ class _HistoryState extends State<_History> {
                 itemBuilder: (context, i) {
                   final conv = list[i];
                   final active = conv.id == controller.conversationId;
-                  return Material(
-                    color: active ? c.selection : Colors.transparent,
-                    borderRadius: BorderRadius.circular(Radii.sm),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(Radii.sm),
+                  return Pressable(
+                      scale: 0.98,
                       onTap: () {
                         controller.openConversation(conv);
                         onPicked?.call();
                       },
-                      onLongPress: () async {
+                      onLongPress: (_) async {
                         final ok = await confirm(context, title: 'Delete conversation?', message: conv.title);
                         if (ok) {
                           if (conv.id == controller.conversationId) controller.newConversation();
                           await repo.deleteConversation(conv.id);
                         }
                       },
+                      builder: (context, hovered, pressed, child) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        margin: const EdgeInsets.only(bottom: 2),
+                        decoration: ShapeDecoration(
+                          color: active ? c.selection : (hovered ? c.selection.withValues(alpha: 0.5) : Colors.transparent),
+                          shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: child,
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -218,7 +220,6 @@ class _HistoryState extends State<_History> {
                           ),
                         ]),
                       ),
-                    ),
                   );
                 },
               ),

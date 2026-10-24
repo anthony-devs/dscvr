@@ -1,53 +1,54 @@
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/state/services.dart';
-import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// Shows content as a dialog on wide screens and a bottom sheet on phones.
-Future<T?> showAdaptiveSheet<T>(BuildContext context, {required WidgetBuilder builder, double maxWidth = 520}) {
-  if (context.isCompact) {
-    return showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-        child: builder(ctx),
-      ),
-    );
-  }
-  return showDialog<T>(
-    context: context,
-    builder: (ctx) => Dialog(
-      insetPadding: const EdgeInsets.all(24),
-      child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: builder(ctx)),
-    ),
-  );
-}
-
+/// Confirmation: centered dialog on wide screens, action sheet on phones.
 Future<bool> confirm(BuildContext context,
     {required String title, required String message, String action = 'Delete', bool destructive = true}) async {
   final c = context.colors;
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380),
-        child: Text(message, style: context.text.bodyMedium?.copyWith(color: c.inkMuted)),
+  if (context.isCompact) {
+    final ok = await showAppSheet<bool>(
+      context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(title, textAlign: TextAlign.center, style: ctx.text.titleLarge),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center, style: ctx.text.bodyMedium?.copyWith(color: c.inkMuted)),
+          const SizedBox(height: 22),
+          destructive
+              ? AppButton.danger(onPressed: () => Navigator.pop(ctx, true), size: BtnSize.lg, expand: true, child: Text(action))
+              : AppButton.primary(onPressed: () => Navigator.pop(ctx, true), size: BtnSize.lg, expand: true, child: Text(action)),
+          const SizedBox(height: 8),
+          AppButton.secondary(onPressed: () => Navigator.pop(ctx, false), size: BtnSize.lg, expand: true, child: const Text('Cancel')),
+        ]),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(
-          style: destructive ? FilledButton.styleFrom(backgroundColor: c.danger, foregroundColor: Colors.white) : null,
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(action),
-        ),
-      ],
+    );
+    return ok ?? false;
+  }
+  final ok = await showAppDialog<bool>(
+    context,
+    maxWidth: 420,
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: ctx.text.headlineSmall),
+        const SizedBox(height: 8),
+        Text(message, style: ctx.text.bodyMedium?.copyWith(color: c.inkMuted)),
+        const SizedBox(height: 22),
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          AppButton.ghost(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          const SizedBox(width: 8),
+          destructive
+              ? AppButton.danger(onPressed: () => Navigator.pop(ctx, true), child: Text(action))
+              : AppButton.primary(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+        ]),
+      ]),
     ),
   );
   return ok ?? false;
@@ -74,7 +75,7 @@ class SheetHeader extends StatelessWidget {
           ]),
         ),
         if (!context.isCompact)
-          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Ic.close, size: 18), tooltip: 'Close'),
+          AppIconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Ic.close, size: 18), tooltip: 'Close'),
       ]),
     );
   }
@@ -94,10 +95,11 @@ class ColorPicker extends StatelessWidget {
           button: true,
           selected: i == value,
           label: 'Colour ${i + 1}',
-          child: InkWell(
-            customBorder: const CircleBorder(),
+          child: Pressable(
+            scale: 0.88,
             onTap: () => onChanged(i),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
               width: 28,
               height: 28,
               padding: const EdgeInsets.all(3),
@@ -222,23 +224,19 @@ class _CollectionEditorState extends State<CollectionEditor> {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            TextField(
+            AppField(
               controller: _name,
+              label: 'Name',
               autofocus: true,
               textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(labelText: 'Name', hintText: widget.isTopic ? 'Machine learning' : 'Computer Science'),
+              hint: widget.isTopic ? 'Machine learning' : 'Computer Science',
               onSubmitted: (_) => _save(),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _desc,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(labelText: 'Description', hintText: 'What belongs here?'),
-            ),
+            const SizedBox(height: 14),
+            AppField(controller: _desc, label: 'Description', hint: 'What belongs here?', minLines: 2, maxLines: 4),
             const SizedBox(height: 18),
-            Text('Colour', style: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w500, color: c.inkMuted)),
-            const SizedBox(height: 10),
+            const FieldLabel('Colour'),
+            const SizedBox(height: 3),
             ColorPicker(value: _color, onChanged: (v) => setState(() => _color = v)),
           ]),
         ),
@@ -246,15 +244,15 @@ class _CollectionEditorState extends State<CollectionEditor> {
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           child: Row(children: [
             if (widget.isEdit)
-              TextButton.icon(
+              AppButton.ghost(
                 onPressed: _delete,
                 icon: Icon(Ic.trash, size: 16, color: c.danger),
                 label: Text('Delete', style: TextStyle(color: c.danger)),
               ),
             const Spacer(),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            AppButton.ghost(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             const SizedBox(width: 8),
-            FilledButton(
+            AppButton.primary(
               onPressed: _saving ? null : _save,
               child: Text(widget.isEdit ? 'Save' : 'Create'),
             ),
@@ -287,36 +285,28 @@ class CollectionPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final lib = context.library;
     final topics = categoryId == null ? <Topic>[] : lib.topicsOf(categoryId!);
-    return Row(children: [
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(
-        child: DropdownButtonFormField<String>(
-          initialValue: lib.category(categoryId) == null ? null : categoryId,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Category'),
-          items: [
+        child: AppSelect<String>(
+          label: 'Category',
+          placeholder: 'Choose a category',
+          value: lib.category(categoryId) == null ? null : categoryId,
+          options: [
             for (final cat in lib.categories)
-              DropdownMenuItem(
-                value: cat.id,
-                child: Row(children: [
-                  ColorDot(CategoryPalette.of(cat.colorIndex)),
-                  const SizedBox(width: 8),
-                  Flexible(child: Text(cat.name, overflow: TextOverflow.ellipsis)),
-                ]),
-              ),
+              SelectOption(cat.id, cat.name, leading: ColorDot(CategoryPalette.of(cat.colorIndex))),
           ],
           onChanged: (v) => onChanged(v, null),
         ),
       ),
       const SizedBox(width: 12),
       Expanded(
-        child: DropdownButtonFormField<String?>(
-          key: ValueKey(categoryId),
-          initialValue: topics.any((t) => t.id == topicId) ? topicId : null,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Topic'),
-          items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('None')),
-            for (final t in topics) DropdownMenuItem<String?>(value: t.id, child: Text(t.name, overflow: TextOverflow.ellipsis)),
+        child: AppSelect<String?>(
+          label: 'Topic',
+          placeholder: topics.isEmpty ? 'No topics' : 'None',
+          value: topics.any((t) => t.id == topicId) ? topicId : null,
+          options: [
+            const SelectOption<String?>(null, 'None'),
+            for (final t in topics) SelectOption<String?>(t.id, t.name, leading: ColorDot(CategoryPalette.of(t.colorIndex), size: 7)),
           ],
           onChanged: topics.isEmpty ? null : (v) => onChanged(categoryId, v),
         ),

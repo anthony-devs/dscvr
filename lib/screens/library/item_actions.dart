@@ -6,6 +6,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/material_card.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -32,29 +33,21 @@ class LibraryCard extends StatelessWidget {
 }
 
 Future<void> showItemMenu(BuildContext context, LibraryItem item, Offset position) async {
-  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-  final c = context.colors;
-  PopupMenuItem<String> entry(String value, IconData icon, String label, {Color? color}) => PopupMenuItem(
-        value: value,
-        height: 40,
-        child: Row(children: [
-          Icon(icon, size: 17, color: color ?? c.inkMuted),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(color: color)),
-        ]),
-      );
-
-  final choice = await showMenu<String>(
-    context: context,
-    position: RelativeRect.fromRect(position & const Size(1, 1), Offset.zero & overlay.size),
-    items: [
-      entry('open', Ic.book, 'Open'),
-      entry('reading', item.inReadingList ? Ic.readingListOn : Ic.readingList,
-          item.inReadingList ? 'Remove from reading list' : 'Add to reading list'),
-      entry('edit', Ic.edit, 'Edit details'),
-      entry('move', Ic.folder, 'Move to...'),
-      const PopupMenuDivider(),
-      entry('delete', Ic.trash, 'Delete', color: c.danger),
+  final choice = await showAppMenu<String>(
+    context,
+    anchor: position & const Size(1, 1),
+    title: item.title,
+    entries: [
+      const MenuEntry(value: 'open', label: 'Open', icon: Ic.book),
+      MenuEntry(
+        value: 'reading',
+        label: item.inReadingList ? 'Remove from reading list' : 'Add to reading list',
+        icon: item.inReadingList ? Ic.readingListOn : Ic.readingList,
+      ),
+      const MenuEntry(value: 'edit', label: 'Edit details', icon: Ic.edit),
+      const MenuEntry(value: 'move', label: 'Move to...', icon: Ic.folder),
+      const MenuEntry.divider(),
+      const MenuEntry(value: 'delete', label: 'Delete', icon: Ic.trash, destructive: true),
     ],
   );
   if (choice == null || !context.mounted) return;
@@ -68,7 +61,10 @@ Future<void> runItemAction(BuildContext context, LibraryItem item, String action
       openItem(context, item);
     case 'reading':
       await repo.setReadingList(item.id, !item.inReadingList);
-      if (context.mounted) toast(context, item.inReadingList ? 'Removed from reading list' : 'Added to reading list');
+      if (context.mounted) {
+        toast(context, item.inReadingList ? 'Removed from reading list' : 'Added to reading list',
+            kind: ToastKind.success, description: item.title);
+      }
     case 'edit':
       await showAdaptiveSheet(context, builder: (_) => ItemDetailsEditor(item: item));
     case 'move':
@@ -78,7 +74,7 @@ Future<void> runItemAction(BuildContext context, LibraryItem item, String action
           title: 'Delete this item?', message: '"${item.title}" and its notes will be removed from your library.');
       if (!ok) return;
       await repo.deleteItem(item);
-      if (context.mounted) toast(context, 'Deleted');
+      if (context.mounted) toast(context, 'Deleted', description: item.title);
   }
 }
 
@@ -112,9 +108,9 @@ class _MoveItemSheetState extends State<MoveItemSheet> {
       Padding(
         padding: const EdgeInsets.all(24),
         child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          AppButton.ghost(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           const SizedBox(width: 8),
-          FilledButton(
+          AppButton.primary(
             onPressed: _cat == null
                 ? null
                 : () async {
@@ -164,27 +160,27 @@ class _ItemDetailsEditorState extends State<ItemDetailsEditor> {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            TextField(controller: _title, decoration: const InputDecoration(labelText: 'Title'), maxLines: 2, minLines: 1),
-            const SizedBox(height: 12),
-            TextField(controller: _authors, decoration: const InputDecoration(labelText: 'Authors', hintText: 'Separate names with commas')),
-            const SizedBox(height: 12),
-            TextField(controller: _year, decoration: const InputDecoration(labelText: 'Year'), keyboardType: TextInputType.number),
-            const SizedBox(height: 12),
-            TextField(controller: _summary, decoration: const InputDecoration(labelText: 'Summary'), minLines: 2, maxLines: 5),
+            AppField(controller: _title, label: 'Title', maxLines: 2, minLines: 1),
+            const SizedBox(height: 14),
+            AppField(controller: _authors, label: 'Authors', hint: 'Separate names with commas'),
+            const SizedBox(height: 14),
+            AppField(controller: _year, label: 'Year', keyboardType: TextInputType.number),
+            const SizedBox(height: 14),
+            AppField(controller: _summary, label: 'Summary', minLines: 2, maxLines: 5),
             const SizedBox(height: 16),
-            Text('Card colour', style: context.text.labelMedium),
-            const SizedBox(height: 8),
+            const FieldLabel('Card colour'),
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (var i = 0; i < CardPalette.length; i++)
-                InkWell(
-                  borderRadius: BorderRadius.circular(8),
+                Pressable(
+                  scale: 0.88,
                   onTap: () => setState(() => _color = i),
-                  child: Container(
-                    width: 30,
-                    height: 30,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: CardPalette.fill(i, c),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(9),
                       border: Border.all(color: i == _color ? c.ink : CardPalette.border(i, c), width: i == _color ? 2 : 1),
                     ),
                   ),
@@ -195,9 +191,9 @@ class _ItemDetailsEditorState extends State<ItemDetailsEditor> {
         Padding(
           padding: const EdgeInsets.all(24),
           child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            AppButton.ghost(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             const SizedBox(width: 8),
-            FilledButton(
+            AppButton.primary(
               onPressed: () async {
                 final nav = Navigator.of(context);
                 await context.services.repo.saveItem(widget.item.copyWith(

@@ -74,6 +74,10 @@ class Ic {
   static const warning = IconData(0xe4e2, fontFamily: 'PhosphorRegular');
   static const info = IconData(0xe2ce, fontFamily: 'PhosphorRegular');
   static const hash = IconData(0xe2a2, fontFamily: 'PhosphorRegular');
+  static const arrowUp = IconData(0xe08e, fontFamily: 'PhosphorRegular');
+  static const arrowUpBold = IconData(0xe08e, fontFamily: 'PhosphorFill');
+  static const caretUpDown = IconData(0xe140, fontFamily: 'PhosphorRegular');
+  static const pindaFill = IconData(0xe6a2, fontFamily: 'PhosphorFill');
   static const lightning = IconData(0xe2de, fontFamily: 'PhosphorRegular');
 
   static IconData forKind(MaterialKind k) => switch (k) {

@@ -5,6 +5,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 /// Margin notes for a material: quick capture at the top, list below.
@@ -78,7 +79,7 @@ class _NotesPanelState extends State<NotesPanel> {
             ),
             ListenableBuilder(
               listenable: _input,
-              builder: (context, _) => TextButton(
+              builder: (context, _) => AppButton.ghost(
                 onPressed: _saving || _input.text.trim().isEmpty ? null : _add,
                 child: const Text('Add note'),
               ),
@@ -145,7 +146,7 @@ class _NoteTile extends StatelessWidget {
             Text(relativeTime(note.createdAt), style: context.text.labelSmall),
           ]),
         ),
-        IconButton(
+        AppIconButton(
           tooltip: 'Delete note',
           visualDensity: VisualDensity.compact,
           onPressed: () async {
@@ -192,9 +193,9 @@ Future<bool> showNoteComposer(BuildContext context, {required LibraryItem item, 
       Padding(
         padding: const EdgeInsets.all(24),
         child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          AppButton.ghost(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           const SizedBox(width: 8),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+          AppButton.primary(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
         ]),
       ),
     ]),

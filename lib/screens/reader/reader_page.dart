@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:dscvr/data/link_service.dart';
 import 'package:dscvr/models/library.dart';
@@ -16,6 +17,7 @@ import 'package:dscvr/widgets/embed/embed_view.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/markdown_view.dart';
 import 'package:dscvr/widgets/progress_ring.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -78,7 +80,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final item = context.library.item(widget.itemId);
     if (item == null) return;
     final saved = await showNoteComposer(context, item: item, quote: passage);
-    if (saved && mounted) toast(context, 'Note added');
+    if (saved && mounted) toast(context, 'Note added', description: 'Find it in the Notes panel.');
   }
 
   @override
@@ -99,9 +101,9 @@ class _ReaderPageState extends State<ReaderPage> {
                     icon: Ic.file,
                     title: 'This item is not in your library',
                     message: 'It may have been deleted.',
-                    action: OutlinedButton(onPressed: () => context.go('/recent'), child: const Text('Back to library')),
+                    action: AppButton.secondary(onPressed: () => context.go('/recent'), child: const Text('Back to library')),
                   )
-                : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                : const PageSpinner(),
           );
         }
         _markOpened(item);
@@ -119,28 +121,34 @@ class _ReaderPageState extends State<ReaderPage> {
           return Scaffold(
             backgroundColor: c.background,
             appBar: _appBar(context, item, showSideToggle: false),
-            body: IndexedStack(
-              index: _mobilePane.index,
-              children: [
-                content,
-                NotesPanel(item: item),
-                PindaChat(key: _chatKey, controller: pinda, compact: true),
-              ],
-            ),
-            bottomNavigationBar: SafeArea(
+            extendBody: true,
+            body: SafeArea(
               top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line))),
-                child: Segmented<_Pane>(
-                  options: const [
-                    (_Pane.read, 'Read', Ic.book),
-                    (_Pane.notes, 'Notes', Ic.notebook),
-                    (_Pane.pinda, 'Pinda', Ic.pinda),
-                  ],
-                  value: _mobilePane,
-                  expand: true,
-                  onChanged: (p) => setState(() => _mobilePane = p),
+              child: IndexedStack(
+                index: _mobilePane.index,
+                children: [
+                  content,
+                  NotesPanel(item: item),
+                  PindaChat(key: _chatKey, controller: pinda, compact: true),
+                ],
+              ),
+            ),
+            bottomNavigationBar: Padding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, MediaQuery.paddingOf(context).bottom > 0 ? MediaQuery.paddingOf(context).bottom : 12),
+              child: ClipRSuperellipse(
+                borderRadius: BorderRadius.circular(Radii.md + 4),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Segmented<_Pane>(
+                    options: const [
+                      (_Pane.read, 'Read', Ic.book),
+                      (_Pane.notes, 'Notes', Ic.notebook),
+                      (_Pane.pinda, 'Pinda', Ic.pinda),
+                    ],
+                    value: _mobilePane,
+                    expand: true,
+                    onChanged: (p) => setState(() => _mobilePane = p),
+                  ),
                 ),
               ),
             ),
@@ -151,7 +159,7 @@ class _ReaderPageState extends State<ReaderPage> {
         return Scaffold(
           backgroundColor: c.background,
           appBar: _appBar(context, item, showSideToggle: true),
-          body: Row(children: [
+          body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(child: content),
             AnimatedContainer(
               duration: const Duration(milliseconds: 220),
@@ -176,7 +184,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  Widget _backButton(BuildContext context) => IconButton(
+  Widget _backButton(BuildContext context) => AppIconButton(
         tooltip: 'Back',
         icon: const Icon(Ic.back, size: 20),
         onPressed: () => context.canPop() ? context.pop() : context.go('/recent'),
@@ -191,7 +199,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return AppBar(
       leading: _backButton(context),
       titleSpacing: 0,
-      title: InkWell(
+      title: GestureDetector(
         onTap: cat == null ? null : () => context.go(topic == null ? '/c/${cat.id}' : '/c/${cat.id}/t/${topic.id}'),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (cat != null) ...[ColorDot(CategoryPalette.of(cat.colorIndex), size: 8), const SizedBox(width: 8)],
@@ -206,19 +214,19 @@ class _ReaderPageState extends State<ReaderPage> {
       ),
       actions: [
         if (item.kind != MaterialKind.note) _ProgressButton(item: item),
-        IconButton(
+        AppIconButton(
           tooltip: item.inReadingList ? 'Remove from reading list' : 'Add to reading list',
           onPressed: () => context.services.repo.setReadingList(item.id, !item.inReadingList),
           icon: Icon(item.inReadingList ? Ic.readingListOn : Ic.readingList, size: 19),
         ),
         if (external != null)
-          IconButton(
+          AppIconButton(
             tooltip: 'Open original',
             onPressed: () => launchUrl(Uri.parse(external), mode: LaunchMode.externalApplication),
             icon: const Icon(Ic.external, size: 19),
           ),
         Builder(
-          builder: (ctx) => IconButton(
+          builder: (ctx) => AppIconButton(
             tooltip: 'More',
             onPressed: () {
               final box = ctx.findRenderObject() as RenderBox;
@@ -231,14 +239,14 @@ class _ReaderPageState extends State<ReaderPage> {
           Padding(
             padding: const EdgeInsets.only(right: 12, left: 4),
             child: _sideOpen
-                ? IconButton(
+                ? AppIconButton(
                     tooltip: 'Hide panel',
                     onPressed: () => setState(() => _sideOpen = false),
                     icon: const Icon(Ic.sidebar, size: 19),
                   )
-                : FilledButton.icon(
+                : AppButton.primary(
                     onPressed: () => setState(() => _sideOpen = true),
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+                    size: BtnSize.sm,
                     icon: const Icon(Ic.pinda, size: 15),
                     label: const Text('Ask Pinda'),
                   ),
@@ -293,19 +301,21 @@ class _ProgressButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     const steps = [(0.0, 'Not started'), (0.25, 'A quarter'), (0.5, 'Halfway'), (0.75, 'Nearly done'), (1.0, 'Finished')];
-    return PopupMenuButton<double>(
+    return MenuButton<double>(
       tooltip: 'Reading progress',
-      onSelected: (v) => context.services.repo.setProgress(item.id, v),
-      itemBuilder: (_) => [
+      title: 'Reading progress',
+      width: 200,
+      onSelected: (v) {
+        context.services.repo.setProgress(item.id, v);
+        if (v >= 1) toast(context, 'Marked as finished', kind: ToastKind.success);
+      },
+      entries: () => [
         for (final s in steps)
-          PopupMenuItem(
+          MenuEntry(
             value: s.$1,
-            height: 38,
-            child: Row(children: [
-              ProgressRing(value: s.$1, size: 14, color: c.ink, track: c.line),
-              const SizedBox(width: 10),
-              Text(s.$2),
-            ]),
+            label: s.$2,
+            checked: (item.progress - s.$1).abs() < 0.13,
+            leading: ProgressRing(value: s.$1, size: 15, color: c.ink, track: c.line),
           ),
       ],
       child: Padding(
@@ -532,13 +542,13 @@ class _NoTextNotice extends StatelessWidget {
         const SizedBox(height: 14),
         Wrap(spacing: 8, runSpacing: 8, children: [
           if (arxivPdf != null && !item.hasPdf)
-            FilledButton.icon(
+            AppButton.primary(
               onPressed: () => context.services.repo.saveItem(LibraryItem.fromMap(item.id, {...item.toMap(), 'pdfUrl': arxivPdf})),
               icon: const Icon(Ic.pdf, size: 16),
               label: const Text('Load PDF'),
             ),
           if (url != null)
-            OutlinedButton.icon(
+            AppButton.secondary(
               onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
               icon: const Icon(Ic.external, size: 16),
               label: const Text('Open original'),

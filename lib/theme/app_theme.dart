@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -75,8 +76,24 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: c.background,
       canvasColor: c.background,
-      splashFactory: InkSparkle.splashFactory,
+      // No Material ripples anywhere: interactions use spring presses.
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      hoverColor: c.selection.withValues(alpha: 0.6),
+      focusColor: c.selection,
       visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        // Native-feeling slide with swipe-back on phones and tablets.
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        // Quiet fade-through on desktop and web.
+        TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.fuchsia: FadeForwardsPageTransitionsBuilder(),
+      }),
       extensions: [c],
     );
 
@@ -131,13 +148,14 @@ class AppTheme {
         fillColor: c.surface,
         isDense: true,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         hintStyle: s(14, FontWeight.w400, c.inkFaint),
+        floatingLabelBehavior: FloatingLabelBehavior.never,
         labelStyle: s(13, FontWeight.w500, c.inkMuted),
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(
-            borderSide: BorderSide(color: c.ink, width: 1.2)),
+            borderSide: BorderSide(color: c.inkMuted, width: 1.4)),
         errorBorder:
             inputBorder.copyWith(borderSide: BorderSide(color: c.danger)),
       ),

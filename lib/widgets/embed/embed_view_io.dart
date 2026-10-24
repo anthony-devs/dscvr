@@ -1,5 +1,6 @@
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -63,7 +64,7 @@ class _EmbedViewState extends State<EmbedView> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Ic.external, color: c.inkMuted),
           const SizedBox(height: 12),
-          OutlinedButton(
+          AppButton.secondary(
             onPressed: () => launchUrl(Uri.parse(widget.url), mode: LaunchMode.externalApplication),
             child: const Text('Open in browser'),
           ),
@@ -72,7 +73,7 @@ class _EmbedViewState extends State<EmbedView> {
     }
     return Stack(children: [
       WebViewWidget(controller: _controller!),
-      if (_loading) const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      if (_loading) const PageSpinner(),
     ]);
   }
 }

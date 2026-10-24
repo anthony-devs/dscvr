@@ -5,6 +5,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 /// Three short steps: who you are, what you study, how DSCVR works.
@@ -100,14 +101,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 const SizedBox(height: 36),
                 Row(children: [
                   if (_step > 0)
-                    TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
+                    AppButton.ghost(onPressed: () => setState(() => _step--), child: const Text('Back')),
                   const Spacer(),
-                  FilledButton(
+                  AppButton.primary(
                     onPressed: !canNext || _saving
                         ? null
                         : () => _step < 2 ? setState(() => _step++) : _finish(),
                     child: _saving
-                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.inverseInk))
+                        ? SizedBox(width: 16, height: 16, child: Spinner(size: 16, color: c.inverseInk))
                         : Text(_step < 2 ? 'Continue' : 'Open my library'),
                   ),
                 ]),
@@ -128,28 +129,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
           Text('A personal research library with an assistant that has actually read your sources.',
               style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
           const SizedBox(height: 28),
-          TextField(
+          AppField(
             controller: _name,
+            label: 'What should we call you?',
+            hint: 'Your name',
             autofocus: true,
+            textCapitalization: TextCapitalization.words,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(labelText: 'What should we call you?'),
           ),
           const SizedBox(height: 22),
           Text('You are mostly a...', style: context.text.labelMedium),
           const SizedBox(height: 10),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final r in roles)
-              ChoiceChip(
-                label: Text(r),
-                selected: _role == r,
-                showCheckmark: false,
-                onSelected: (_) => setState(() => _role = r),
-                labelStyle: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w500, color: _role == r ? c.inverseInk : c.ink),
-                selectedColor: c.ink,
-                backgroundColor: c.chip,
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.sm)),
-              ),
+              AppChip(label: r, selected: _role == r, onTap: () => setState(() => _role = r)),
           ]),
         ]);
       case 1:
@@ -161,19 +154,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
           const SizedBox(height: 26),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final s in subjects)
-              FilterChip(
-                avatar: _interests.contains(s)
-                    ? ColorDot(CategoryPalette.of(_interests.indexOf(s)))
-                    : null,
-                label: Text(s),
+              AppChip(
+                label: s,
                 selected: _interests.contains(s),
-                showCheckmark: false,
-                onSelected: (v) => setState(() => v ? _interests.add(s) : _interests.remove(s)),
-                labelStyle: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w500, color: c.ink),
-                selectedColor: c.surface,
-                backgroundColor: c.chip,
-                side: BorderSide(color: _interests.contains(s) ? c.ink : Colors.transparent),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.sm)),
+                leading: _interests.contains(s) ? ColorDot(CategoryPalette.of(_interests.indexOf(s))) : null,
+                onTap: () => setState(() => _interests.contains(s) ? _interests.remove(s) : _interests.add(s)),
               ),
           ]),
         ]);

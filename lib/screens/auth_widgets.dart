@@ -7,6 +7,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/material_card.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -188,7 +189,7 @@ class AuthField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
         suffixIcon: suffixLabel == null
             ? null
-            : TextButton(
+            : AppButton.ghost(
                 onPressed: onSuffixTap,
                 child: Text(suffixLabel!, style: AppTheme.sans(fontSize: 12.5, color: c.inkMuted)),
               ),
@@ -211,15 +212,12 @@ class AuthButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return SizedBox(
-      height: 48,
-      child: FilledButton(
-        onPressed: loading ? null : onTap,
-        child: loading
-            ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: c.inverseInk))
-            : Text(label),
-      ),
+    return AppButton.primary(
+      onPressed: onTap,
+      loading: loading,
+      size: BtnSize.lg,
+      expand: true,
+      child: Text(label),
     );
   }
 }
@@ -232,17 +230,12 @@ class GoogleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: OutlinedButton(
-        onPressed: loading ? null : onTap,
-        style: OutlinedButton.styleFrom(backgroundColor: context.colors.surface),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const SizedBox(width: 18, height: 18, child: CustomPaint(painter: _GoogleLogoPainter())),
-          const SizedBox(width: 10),
-          Text('Continue with Google', style: AppTheme.sans(fontSize: 14, fontWeight: FontWeight.w500, color: context.colors.ink)),
-        ]),
-      ),
+    return AppButton.secondary(
+      onPressed: loading ? null : onTap,
+      size: BtnSize.lg,
+      expand: true,
+      icon: const SizedBox(width: 18, height: 18, child: CustomPaint(painter: _GoogleLogoPainter())),
+      child: const Text('Continue with Google'),
     );
   }
 }
@@ -303,7 +296,7 @@ class AuthSwitchLink extends StatelessWidget {
     final c = context.colors;
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       Text(prompt, style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted)),
-      TextButton(onPressed: onTap, child: Text(action, style: AppTheme.sans(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.ink))),
+      AppButton.ghost(onPressed: onTap, child: Text(action, style: AppTheme.sans(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.ink))),
     ]);
   }
 }

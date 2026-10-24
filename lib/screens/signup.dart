@@ -1,4 +1,5 @@
 import 'package:dscvr/models/auth.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'auth_widgets.dart';
@@ -37,20 +38,14 @@ class _SignupPageState extends State<SignupPage> {
         displayName: _nameCtrl.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully')),
-      );
+      Toasts.success(context, 'Account created successfully');
       // The router redirects to onboarding once the session updates.
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      Toasts.error(context, e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong')),
-      );
+      Toasts.error(context, 'Something went wrong');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -62,14 +57,10 @@ class _SignupPageState extends State<SignupPage> {
       await _auth.signInWithGoogle();
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      Toasts.error(context, e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google sign-in failed')),
-      );
+      Toasts.error(context, 'Google sign-in failed');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

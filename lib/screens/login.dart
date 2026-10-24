@@ -1,5 +1,6 @@
 import 'package:dscvr/models/auth.dart';
 import 'package:dscvr/screens/auth_widgets.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -41,14 +42,10 @@ class _LoginPageState extends State<LoginPage> {
       // No manual Navigator call needed here, same as signup.
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      Toasts.error(context, e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong')),
-      );
+      Toasts.error(context, 'Something went wrong');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -61,14 +58,10 @@ class _LoginPageState extends State<LoginPage> {
       // Same pattern — auth state change handles navigation automatically.
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      Toasts.error(context, e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google sign-in failed')),
-      );
+      Toasts.error(context, 'Google sign-in failed');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -77,28 +70,20 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _forgotPassword() async {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your email above first')),
-      );
+      Toasts.show(context, 'Enter your email above first', kind: ToastKind.warning);
       return;
     }
     try {
       // Fix: was _auth.sendPasswordReset — correct name is sendPasswordResetEmail
       await _auth.sendPasswordResetEmail(email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset email sent')),
-      );
+      Toasts.success(context, 'Password reset email sent');
     } on DSCVRAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      Toasts.error(context, e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not send reset email')),
-      );
+      Toasts.error(context, 'Could not send reset email');
     }
   }
 
@@ -137,7 +122,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(onPressed: _forgotPassword, child: const Text('Forgot password?')),
+              child: AppButton.ghost(onPressed: _forgotPassword, child: const Text('Forgot password?')),
             ),
             const SizedBox(height: 8),
             AuthButton(label: 'Sign in', loading: _loading, onTap: _submit),

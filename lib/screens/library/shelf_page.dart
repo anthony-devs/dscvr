@@ -9,6 +9,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/material_card.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,7 +23,8 @@ class PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final pad = context.isCompact ? 16.0 : 32.0;
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(pad, context.isCompact ? 12 : 8, pad, 48),
+      // Bottom padding includes the floating tab bar on phones.
+      padding: EdgeInsets.fromLTRB(pad, context.isCompact ? 12 : 8, pad, 48 + MediaQuery.paddingOf(context).bottom),
       child: Align(
         alignment: Alignment.topLeft,
         child: ConstrainedBox(
@@ -69,12 +71,12 @@ class _ShelfPageState extends State<ShelfPage> {
       builder: (context, _) {
         final cat = lib.category(widget.categoryId);
         final topic = widget.topicId == null ? null : lib.topic(widget.topicId);
-        if (!lib.loaded) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+        if (!lib.loaded) return const SkeletonPage();
         if (cat == null || (widget.topicId != null && topic == null)) {
           return EmptyState(
             icon: Ic.folder,
             title: 'This collection no longer exists',
-            action: OutlinedButton(onPressed: () => context.go('/recent'), child: const Text('Back to Recent')),
+            action: AppButton.secondary(onPressed: () => context.go('/recent'), child: const Text('Back to Recent')),
           );
         }
         final all = lib.itemsIn(cat.id, topicId: topic?.id);
@@ -185,7 +187,7 @@ class _ShelfPageState extends State<ShelfPage> {
             icon: Ic.file,
             title: 'Nothing here yet',
             message: 'Add a paper, PDF, article or video. Pinda can read anything you add here.',
-            action: FilledButton.icon(
+            action: AppButton.primary(
               onPressed: () => showAddMaterial(context, categoryId: cat.id, topicId: topic?.id),
               icon: const Icon(Ic.add, size: 16),
               label: const Text('Add material'),
@@ -238,8 +240,7 @@ class _ShelfPageState extends State<ShelfPage> {
       else
         MaterialGrid(minTileWidth: 220, children: [
           for (final t in topics)
-            InkWell(
-              borderRadius: BorderRadius.circular(Radii.lg),
+            Pressable(
               onTap: () => context.go('/c/${cat.id}/t/${t.id}'),
               child: Container(
                 height: 120,
@@ -274,7 +275,7 @@ class _Description extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     if (text.trim().isEmpty) {
-      return InkWell(
+      return Pressable(
         onTap: onAdd,
         child: Text('Add a description', style: AppTheme.sans(fontSize: 14.5, color: c.inkFaint)),
       );
@@ -293,20 +294,11 @@ class _SortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<ItemSort>(
-      tooltip: 'Sort',
+    return MenuButton<ItemSort>(
+      title: 'Sort by',
+      width: 210,
+      entries: () => [for (final s in ItemSort.values) MenuEntry(value: s, label: s.label, checked: s == value)],
       onSelected: onChanged,
-      itemBuilder: (_) => [
-        for (final s in ItemSort.values)
-          PopupMenuItem(
-            value: s,
-            height: 38,
-            child: Row(children: [
-              SizedBox(width: 22, child: s == value ? const Icon(Ic.check, size: 15) : null),
-              Text(s.label),
-            ]),
-          ),
-      ],
       child: IgnorePointer(child: PillButton(label: value.label, icon: Ic.sort, onTap: () {})),
     );
   }

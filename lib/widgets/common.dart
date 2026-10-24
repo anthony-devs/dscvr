@@ -1,6 +1,7 @@
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class ColorDot extends StatelessWidget {
@@ -107,25 +108,24 @@ class AuthorChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
-      color: selected ? c.ink : c.chip,
-      borderRadius: BorderRadius.circular(Radii.sm),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Radii.sm),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(9, 5, 6, 5),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(name,
-                style: AppTheme.sans(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: selected ? c.inverseInk : c.ink)),
-            const SizedBox(width: 6),
-            CountBadge(count, background: selected ? c.inverseInk.withValues(alpha: 0.2) : null),
-          ]),
+    return Pressable(
+      onTap: onTap,
+      scale: 0.95,
+      builder: (context, hovered, pressed, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.fromLTRB(9, 5, 6, 5),
+        decoration: ShapeDecoration(
+          color: selected ? c.ink : (hovered ? Color.lerp(c.chip, c.ink, 0.06) : c.chip),
+          shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(8)),
         ),
+        child: child,
       ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(name,
+            style: AppTheme.sans(fontSize: 12.5, fontWeight: FontWeight.w500, color: selected ? c.inverseInk : c.ink)),
+        const SizedBox(width: 6),
+        CountBadge(count, background: selected ? c.inverseInk.withValues(alpha: 0.2) : null),
+      ]),
     );
   }
 }
@@ -141,24 +141,27 @@ class PillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
-      color: c.surface.withValues(alpha: c.isDark ? 0.6 : 0.75),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.sm),
-        side: BorderSide(color: c.line),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Radii.sm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[Icon(icon, size: 14, color: c.ink), const SizedBox(width: 6)],
-            Text(label, style: AppTheme.sans(fontSize: 12.5, fontWeight: FontWeight.w500, color: c.ink)),
-            if (trailing != null) ...[const SizedBox(width: 4), trailing!],
-          ]),
+    return Pressable(
+      onTap: onTap,
+      scale: 0.95,
+      builder: (context, hovered, pressed, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: ShapeDecoration(
+          color: hovered ? c.surface : c.surface.withValues(alpha: c.isDark ? 0.55 : 0.72),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(9),
+            side: BorderSide(color: hovered ? c.inkFaint.withValues(alpha: 0.6) : c.line),
+          ),
+          shadows: hovered ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))] : null,
         ),
+        child: child,
       ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (icon != null) ...[Icon(icon, size: 14, color: c.ink), const SizedBox(width: 6)],
+        Text(label, style: AppTheme.sans(fontSize: 12.5, fontWeight: FontWeight.w500, color: c.ink)),
+        if (trailing != null) ...[const SizedBox(width: 5), trailing!],
+      ]),
     );
   }
 }
@@ -254,14 +257,21 @@ class RoundIconButton extends StatelessWidget {
     final c = context.colors;
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: c.surfaceMuted,
-        shape: CircleBorder(side: BorderSide(color: c.line)),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox.square(dimension: size, child: Icon(icon, size: size * 0.5, color: c.ink)),
+      child: Pressable(
+        onTap: onTap,
+        scale: 0.88,
+        builder: (context, hovered, pressed, child) => AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          width: size,
+          height: size,
+          decoration: ShapeDecoration(
+            color: hovered ? c.surface : c.surfaceMuted,
+            shape: CircleBorder(side: BorderSide(color: c.line)),
+            shadows: hovered ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))] : null,
+          ),
+          child: child,
         ),
+        child: Icon(icon, size: size * 0.5, color: c.ink),
       ),
     );
   }
@@ -279,32 +289,37 @@ class FolderTabs extends StatelessWidget {
     final c = context.colors;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Row(children: [
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         for (final (i, t) in tabs.indexed)
           Padding(
             padding: const EdgeInsets.only(right: 4),
-            child: Material(
-              color: i == selected ? c.surface : c.surfaceMuted,
-              shape: RoundedRectangleBorder(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.md)),
-                side: BorderSide(color: c.line),
-              ),
-              child: InkWell(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.md)),
-                onTap: () => onSelect(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  child: Row(children: [
-                    Icon(t.$1, size: 15, color: i == selected ? c.ink : c.inkMuted),
-                    const SizedBox(width: 7),
-                    Text(t.$2,
-                        style: AppTheme.sans(
-                            fontSize: 13,
-                            fontWeight: i == selected ? FontWeight.w600 : FontWeight.w500,
-                            color: i == selected ? c.ink : c.inkMuted)),
-                  ]),
+            child: Pressable(
+              scale: 0.97,
+              onTap: () => onSelect(i),
+              builder: (context, hovered, pressed, child) => AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: i == selected ? 10 : 8),
+                decoration: BoxDecoration(
+                  color: i == selected ? c.surface : (hovered ? c.selection : c.surfaceMuted),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.md)),
+                  border: Border(
+                    top: BorderSide(color: c.line),
+                    left: BorderSide(color: c.line),
+                    right: BorderSide(color: c.line),
+                  ),
                 ),
+                child: child,
               ),
+              child: Row(children: [
+                Icon(t.$1, size: 15, color: i == selected ? c.ink : c.inkMuted),
+                const SizedBox(width: 7),
+                Text(t.$2,
+                    style: AppTheme.sans(
+                        fontSize: 13,
+                        fontWeight: i == selected ? FontWeight.w600 : FontWeight.w500,
+                        color: i == selected ? c.ink : c.inkMuted)),
+              ]),
             ),
           ),
       ]),
@@ -313,7 +328,7 @@ class FolderTabs extends StatelessWidget {
 }
 
 /// Simple segmented control used in settings and the reader.
-class Segmented<T> extends StatelessWidget {
+class Segmented<T> extends StatefulWidget {
   const Segmented({super.key, required this.options, required this.value, required this.onChanged, this.expand = false});
   final List<(T, String, IconData?)> options;
   final T value;
@@ -323,45 +338,109 @@ class Segmented<T> extends StatelessWidget {
   final bool expand;
 
   @override
+  State<Segmented<T>> createState() => _SegmentedState<T>();
+}
+
+/// iOS-style segmented control with a thumb that slides between segments.
+class _SegmentedState<T> extends State<Segmented<T>> {
+  final _keys = <GlobalKey>[];
+  final _rowKey = GlobalKey();
+  Rect? _thumb;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncKeys();
+  }
+
+  @override
+  void didUpdateWidget(covariant Segmented<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncKeys();
+  }
+
+  void _syncKeys() {
+    while (_keys.length < widget.options.length) {
+      _keys.add(GlobalKey());
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final i = widget.options.indexWhere((o) => o.$1 == widget.value);
+    final row = _rowKey.currentContext?.findRenderObject() as RenderBox?;
+    final seg = i < 0 ? null : _keys[i].currentContext?.findRenderObject() as RenderBox?;
+    if (row == null || seg == null || !row.hasSize || !seg.hasSize) return;
+    final r = seg.localToGlobal(Offset.zero, ancestor: row) & seg.size;
+    if (r != _thumb) setState(() => _thumb = r);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    Widget segment(int i) {
+      final o = widget.options[i];
+      final on = o.$1 == widget.value;
+      return GestureDetector(
+        key: _keys[i],
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (on) return;
+          Haptics.selection();
+          widget.onChanged(o.$1);
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (o.$3 != null) ...[Icon(o.$3, size: 14, color: on ? c.ink : c.inkMuted), const SizedBox(width: 6)],
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 160),
+                style: AppTheme.sans(fontSize: 12.5, fontWeight: on ? FontWeight.w600 : FontWeight.w500, color: on ? c.ink : c.inkMuted),
+                child: Text(o.$2),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: c.surfaceMuted,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: c.line),
+        shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(Radii.md), side: BorderSide(color: c.line)),
       ),
-      child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, children: [
-        for (final o in options)
-          _maybeExpand(GestureDetector(
-            onTap: () => onChanged(o.$1),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: o.$1 == value ? c.surface : Colors.transparent,
-                borderRadius: BorderRadius.circular(Radii.sm),
-                boxShadow: o.$1 == value
-                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 1))]
-                    : null,
+      child: Stack(children: [
+        if (_thumb != null)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 320),
+            curve: const Cubic(0.3, 1.25, 0.5, 1),
+            left: _thumb!.left,
+            top: _thumb!.top,
+            width: _thumb!.width,
+            height: _thumb!.height,
+            child: Container(
+              decoration: ShapeDecoration(
+                color: c.isDark ? c.chip : c.surface,
+                shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(Radii.sm + 1)),
+                shadows: [BoxShadow(color: Colors.black.withValues(alpha: c.isDark ? 0.3 : 0.08), blurRadius: 5, offset: const Offset(0, 1))],
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (o.$3 != null) ...[Icon(o.$3, size: 14, color: c.ink), const SizedBox(width: 6)],
-                Text(o.$2,
-                    style: AppTheme.sans(
-                        fontSize: 12.5,
-                        fontWeight: o.$1 == value ? FontWeight.w600 : FontWeight.w500,
-                        color: o.$1 == value ? c.ink : c.inkMuted)),
-              ]),
             ),
-          )),
+          ),
+        Row(
+          key: _rowKey,
+          mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            for (var i = 0; i < widget.options.length; i++) widget.expand ? Expanded(child: segment(i)) : segment(i),
+          ],
+        ),
       ]),
     );
   }
-
-  Widget _maybeExpand(Widget w) => expand ? Expanded(child: w) : w;
 }
 
 String relativeTime(DateTime t) {
@@ -376,8 +455,14 @@ String relativeTime(DateTime t) {
   return '${d.inDays ~/ 365} years ago';
 }
 
-void toast(BuildContext context, String message) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 3)));
+/// Shows a Sileo-style toast. Kind is inferred from wording unless given.
+void toast(BuildContext context, String message, {ToastKind? kind, String? description}) {
+  final low = message.toLowerCase();
+  final inferred = kind ??
+      (low.contains('fail') || low.contains('could not') || low.contains('error') || low.contains('not saved')
+          ? ToastKind.error
+          : (low.contains('added') || low.contains('saved') || low.contains('sent') || low.contains('uploaded') || low.contains('copied') || low.contains('deleted') || low.contains('created'))
+              ? ToastKind.success
+              : ToastKind.info);
+  Toasts.show(context, message, kind: inferred, description: description);
 }

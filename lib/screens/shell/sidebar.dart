@@ -5,6 +5,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -72,7 +73,7 @@ class _SidebarState extends State<Sidebar> {
               child: Row(children: [
                 const Wordmark(size: 24),
                 const Spacer(),
-                IconButton(
+                AppIconButton(
                   tooltip: 'Search',
                   onPressed: () => _go('/search'),
                   icon: const Icon(Ic.search, size: 18),
@@ -97,7 +98,7 @@ class _SidebarState extends State<Sidebar> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 0, 4, 6),
                     child: Row(children: [
-                      InkWell(
+                      Pressable(
                         onTap: () => _go('/library'),
                         child: Text('My library',
                             style: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
@@ -106,7 +107,7 @@ class _SidebarState extends State<Sidebar> {
                       SizedBox(
                         width: 26,
                         height: 26,
-                        child: IconButton(
+                        child: AppIconButton(
                           padding: EdgeInsets.zero,
                           tooltip: 'New category',
                           onPressed: () => showCollectionEditor(context),
@@ -258,10 +259,9 @@ class _NavRowState extends State<_NavRow> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: Material(
-        color: widget.active ? c.selection : Colors.transparent,
+        color: widget.active ? c.selection : (_hover ? c.selection.withValues(alpha: 0.55) : Colors.transparent),
         borderRadius: BorderRadius.circular(Radii.sm),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(Radii.sm),
+        child: Pressable(
           onTap: widget.onTap,
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 10, vertical: widget.dense ? 5 : 7),

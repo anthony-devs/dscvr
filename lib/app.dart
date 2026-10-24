@@ -10,6 +10,7 @@ import 'package:dscvr/state/services.dart';
 import 'package:dscvr/state/session_controller.dart';
 import 'package:dscvr/state/settings_controller.dart';
 import 'package:dscvr/theme/app_theme.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -79,7 +80,11 @@ class _DscvrAppState extends State<DscvrApp> {
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: widget.settings.themeMode,
+          themeAnimationDuration: const Duration(milliseconds: 280),
           routerConfig: _router,
+          scrollBehavior: const DscvrScrollBehavior(),
+          // Sileo-style toasts float above every route, sheet and dialog.
+          builder: (context, child) => Toaster(child: child ?? const SizedBox.shrink()),
         ),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/markdown_view.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -127,7 +128,7 @@ class PindaChatState extends State<PindaChat> {
           if (widget.header != null) widget.header!,
           Expanded(
             child: ctl.isLoading
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                ? const PageSpinner()
                 : msgs.isEmpty
                     ? _Empty(
                         compact: widget.compact,
@@ -202,24 +203,27 @@ class PindaChatState extends State<PindaChat> {
                       ),
                       ListenableBuilder(
                         listenable: _input,
-                        builder: (context, _) => ctl.isStreaming
-                            ? IconButton.filled(
-                                tooltip: 'Stop',
-                                onPressed: ctl.stop,
-                                style: IconButton.styleFrom(backgroundColor: c.ink, foregroundColor: c.inverseInk),
-                                icon: const Icon(Ic.stop, size: 16),
-                              )
-                            : IconButton.filled(
-                                tooltip: 'Send',
-                                onPressed: _input.text.trim().isEmpty ? null : _submit,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: c.ink,
-                                  foregroundColor: c.inverseInk,
-                                  disabledBackgroundColor: c.surfaceMuted,
-                                  disabledForegroundColor: c.inkFaint,
+                        builder: (context, _) => AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
+                          child: ctl.isStreaming
+                              ? AppIconButton(
+                                  key: const ValueKey('stop'),
+                                  filled: true,
+                                  size: 34,
+                                  tooltip: 'Stop',
+                                  onPressed: ctl.stop,
+                                  icon: const Icon(Ic.stop, size: 15),
+                                )
+                              : AppIconButton(
+                                  key: const ValueKey('send'),
+                                  filled: true,
+                                  size: 34,
+                                  tooltip: 'Send',
+                                  onPressed: _input.text.trim().isEmpty ? null : _submit,
+                                  icon: const Icon(Ic.arrowUp, size: 17),
                                 ),
-                                icon: const Icon(Ic.send, size: 16),
-                              ),
+                        ),
                       ),
                     ]),
                   ]),
@@ -329,7 +333,7 @@ class _MessageView extends StatelessWidget {
           Text('Pinda', style: AppTheme.sans(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.ink)),
           const Spacer(),
           if (!message.pending && message.text.isNotEmpty)
-            IconButton(
+            AppIconButton(
               tooltip: 'Copy',
               visualDensity: VisualDensity.compact,
               onPressed: () {
@@ -357,7 +361,7 @@ class _MessageView extends StatelessWidget {
               Icon(Ic.warning, size: 16, color: c.danger),
               const SizedBox(width: 8),
               Expanded(child: Text(message.error!, style: AppTheme.sans(fontSize: 13, color: c.ink))),
-              TextButton.icon(onPressed: onRetry, icon: const Icon(Ic.retry, size: 14), label: const Text('Retry')),
+              AppButton.ghost(onPressed: onRetry, icon: const Icon(Ic.retry, size: 14), label: const Text('Retry')),
             ]),
           ),
       ]),

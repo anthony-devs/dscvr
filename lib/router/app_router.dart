@@ -11,6 +11,7 @@ import 'package:dscvr/screens/shell/app_shell.dart';
 import 'package:dscvr/state/session_controller.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -79,7 +80,7 @@ GoRouter buildRouter(SessionController session) {
           icon: Ic.warning,
           title: 'Page not found',
           message: s.location,
-          action: FilledButton(onPressed: () => context.go('/recent'), child: const Text('Go home')),
+          action: AppButton.primary(onPressed: () => context.go('/recent'), child: const Text('Go home')),
         ),
       ),
     ),

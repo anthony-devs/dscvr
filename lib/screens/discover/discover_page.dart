@@ -7,6 +7,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -113,7 +114,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               hintText: 'Search papers, authors or ideas',
               prefixIcon: const Icon(Ic.search, size: 18),
               contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 12),
-              suffixIcon: IconButton(onPressed: _search, icon: const Icon(Ic.arrowRight, size: 18), tooltip: 'Search'),
+              suffixIcon: AppIconButton(onPressed: _search, icon: const Icon(Ic.arrowRight, size: 18), tooltip: 'Search'),
             ),
           ),
         ),
@@ -134,21 +135,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       const SizedBox(height: 12),
       Wrap(spacing: 6, runSpacing: 6, children: [
         for (final s in Subject.all)
-          ChoiceChip(
-            label: Text(s.label),
-            selected: _subject == s,
-            onSelected: (_) => _loadSubject(s),
-            showCheckmark: false,
-            labelStyle: AppTheme.sans(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                color: _subject == s ? c.inverseInk : c.ink),
-            selectedColor: c.ink,
-            backgroundColor: c.chip,
-            side: BorderSide.none,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.sm)),
-            visualDensity: VisualDensity.compact,
-          ),
+          AppChip(label: s.label, selected: _subject == s, onTap: () => _loadSubject(s)),
       ]),
       const SizedBox(height: 26),
       if (_summary != null && _summary!.extract.isNotEmpty) ...[
@@ -161,7 +148,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       ),
       const SizedBox(height: 6),
       if (_loading)
-        const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+        const Padding(padding: EdgeInsets.only(top: 18), child: _PaperSkeleton())
       else if (_error != null)
         EmptyState(icon: Ic.warning, title: 'Search unavailable', message: _error)
       else if (_papers.isEmpty)
@@ -205,8 +192,8 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(summary.extract, maxLines: 5, overflow: TextOverflow.ellipsis, style: AppTheme.sans(fontSize: 14, color: c.inkMuted, height: 1.55)),
             if (summary.url != null)
-              TextButton(
-                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              AppButton.ghost(
+                size: BtnSize.sm,
                 onPressed: () => launchUrl(Uri.parse(summary.url!), mode: LaunchMode.externalApplication),
                 child: const Text('Read more'),
               ),
@@ -255,7 +242,7 @@ class _PaperRowState extends State<_PaperRow> {
         ],
         if (p.summary.isNotEmpty) ...[
           const SizedBox(height: 10),
-          InkWell(
+          Pressable(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Text(p.summary,
                 maxLines: _expanded ? null : 3,
@@ -273,5 +260,28 @@ class _PaperRowState extends State<_PaperRow> {
         ]),
       ]),
     );
+  }
+}
+
+class _PaperSkeleton extends StatelessWidget {
+  const _PaperSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (var i = 0; i < 4; i++)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Skeleton(width: 420, height: 18),
+            SizedBox(height: 10),
+            Skeleton(width: 260, height: 12),
+            SizedBox(height: 14),
+            Skeleton(height: 12),
+            SizedBox(height: 6),
+            Skeleton(width: 520, height: 12),
+          ]),
+        ),
+    ]);
   }
 }

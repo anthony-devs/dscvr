@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:dscvr/screens/add/add_material_sheet.dart';
 import 'package:dscvr/screens/shell/sidebar.dart';
 import 'package:dscvr/state/library_controller.dart';
@@ -6,6 +8,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -47,8 +50,11 @@ class AppShell extends StatelessWidget {
     if (context.isCompact) {
       return Scaffold(
         backgroundColor: c.background,
+        extendBody: true,
+        drawerScrimColor: Colors.black.withValues(alpha: c.isDark ? 0.5 : 0.22),
         drawer: Drawer(
           backgroundColor: c.background,
+          shape: const RoundedSuperellipseBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(28))),
           width: 290,
           child: SafeArea(
             child: Builder(
@@ -59,7 +65,7 @@ class AppShell extends StatelessWidget {
         appBar: AppBar(
           titleSpacing: 0,
           leading: Builder(
-            builder: (ctx) => IconButton(
+            builder: (ctx) => AppIconButton(
               tooltip: 'Library',
               icon: const Icon(Ic.sidebar, size: 20),
               onPressed: () => Scaffold.of(ctx).openDrawer(),
@@ -67,7 +73,7 @@ class AppShell extends StatelessWidget {
           ),
           title: _Breadcrumb(location: location, compact: true),
           actions: [
-            IconButton(
+            AppIconButton(
               tooltip: 'Search',
               onPressed: () => context.go('/search'),
               icon: const Icon(Ic.search, size: 20),
@@ -164,9 +170,8 @@ class _Breadcrumb extends StatelessWidget {
             );
           }
           parts.add(
-            InkWell(
+            Pressable(
               onTap: crumb.path == null || last ? null : () => context.go(crumb.path!),
-              borderRadius: BorderRadius.circular(4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -247,39 +252,65 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final idx = _index;
-    return Container(
-      decoration: BoxDecoration(
-        color: c.background,
-        border: Border(top: BorderSide(color: c.line)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            children: [
-              for (final (i, t) in _tabs.indexed)
-                Expanded(
-                  child: InkWell(
-                    onTap: () => context.go(t.$1),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(t.$2, size: 21, color: i == idx ? c.ink : c.inkFaint),
-                        const SizedBox(height: 3),
-                        Text(
-                          t.$3,
-                          style: AppTheme.sans(
-                            fontSize: 11,
-                            fontWeight: i == idx ? FontWeight.w600 : FontWeight.w500,
-                            color: i == idx ? c.ink : c.inkFaint,
-                          ),
-                        ),
-                      ],
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottom > 0 ? bottom : 12),
+      child: ClipRSuperellipse(
+        borderRadius: BorderRadius.circular(26),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            height: 60,
+            decoration: ShapeDecoration(
+              color: c.surface.withValues(alpha: c.isDark ? 0.72 : 0.78),
+              shape: RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.circular(26),
+                side: BorderSide(color: c.line.withValues(alpha: 0.8)),
+              ),
+            ),
+            padding: const EdgeInsets.all(5),
+            child: LayoutBuilder(builder: (context, box) {
+              final w = box.maxWidth / _tabs.length;
+              return Stack(children: [
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 380),
+                  curve: const Cubic(0.3, 1.3, 0.5, 1),
+                  left: idx * w,
+                  top: 0,
+                  bottom: 0,
+                  width: w,
+                  child: Container(
+                    decoration: ShapeDecoration(
+                      color: c.isDark ? c.chip : c.selection,
+                      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(21)),
                     ),
                   ),
                 ),
-            ],
+                Row(children: [
+                  for (final (i, t) in _tabs.indexed)
+                    Expanded(
+                      child: Pressable(
+                        scale: 0.9,
+                        onTap: () => context.go(t.$1),
+                        semanticLabel: t.$3,
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(t.$2, size: 20, color: i == idx ? c.ink : c.inkFaint),
+                          const SizedBox(height: 2),
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: AppTheme.sans(
+                              fontSize: 10.5,
+                              fontWeight: i == idx ? FontWeight.w600 : FontWeight.w500,
+                              color: i == idx ? c.ink : c.inkFaint,
+                            ),
+                            child: Text(t.$3),
+                          ),
+                        ]),
+                      ),
+                    ),
+                ]),
+              ]);
+            }),
           ),
         ),
       ),
