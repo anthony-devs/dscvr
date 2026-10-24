@@ -2,14 +2,15 @@
  *
  * - Page navigations: network first, falling back to the cached app shell so
  *   the PWA opens offline.
- * - Same-origin static files (main.dart.js, fonts, icons, canvaskit):
- *   stale-while-revalidate, so updates land on the next launch.
+ * - Same-origin code (main.dart.js, flutter_bootstrap.js, wasm): network first
+ *   (revalidated, so a new deploy is picked up immediately), cache when offline.
+ * - Other same-origin static files (fonts, icons, assets): stale-while-revalidate.
  * - Flutter's CanvasKit on gstatic is versioned by hash: cache first.
  * - Everything else (Firestore, Auth, Cloud Functions, Storage) is never cached.
  *
  * Bump VERSION to force-drop old caches.
  */
-const VERSION = 'dscvr-v1';
+const VERSION = 'dscvr-v2';
 const SHELL = ['./', 'index.html', 'flutter_bootstrap.js', 'main.dart.js', 'manifest.json', 'favicon.png', 'icons/Icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -40,6 +41,19 @@ function staleWhileRevalidate(request) {
   );
 }
 
+function networkFirst(request) {
+  // `no-cache` makes the browser revalidate (cheap 304) instead of trusting HTTP cache.
+  return fetch(new Request(request, { cache: 'no-cache' }))
+    .then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(VERSION).then((c) => c.put(request, copy));
+      }
+      return res;
+    })
+    .catch(() => caches.match(request));
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -60,6 +74,10 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin === self.location.origin) {
     if (url.pathname.endsWith('/sw.js') || url.pathname.endsWith('version.json')) return;
+    if (/\.(?:m?js|wasm)$/.test(url.pathname)) {
+      event.respondWith(networkFirst(req));
+      return;
+    }
     event.respondWith(staleWhileRevalidate(req));
     return;
   }
