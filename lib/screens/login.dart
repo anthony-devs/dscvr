@@ -1,10 +1,10 @@
 import 'package:dscvr/models/auth.dart';
 import 'package:dscvr/screens/auth_widgets.dart';
-import 'package:dscvr/screens/signup.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -104,141 +104,54 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
-              ),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 64),
-
-                    const DscvrLogo(),
-                    const SizedBox(height: 32),
-
-                    const Text(
-                      'Welcome back',
-                      style: TextStyle(
-                        fontFamily: 'InstrumentSerif',
-                        fontSize: 26,
-                        fontStyle: FontStyle.italic,
-                        color: Color(0xFF111111),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    AuthField(
-                      controller: _emailCtrl,
-                      hint: 'Email address',
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.email],
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Email is required';
-                        if (!v.contains('@')) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    AuthField(
-                      controller: _passCtrl,
-                      hint: 'Password',
-                      obscureText: _obscure,
-                      textInputAction: TextInputAction.done,
-                      autofillHints: const [AutofillHints.password],
-                      onFieldSubmitted: (_) => _submit(),
-                      suffixLabel: _obscure ? 'show' : 'hide',
-                      onSuffixTap: () =>
-                          setState(() => _obscure = !_obscure),
-                      validator: (v) => (v == null || v.isEmpty)
-                          ? 'Password is required'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: GestureDetector(
-                        onTap: _forgotPassword,
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                            fontFamily: 'DMMono',
-                            fontSize: 11,
-                            color: Color(0xFFAAAAAA),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    AuthButton(
-                      label: 'Continue',
-                      loading: _loading,
-                      onTap: _submit,
-                    ),
-                    const SizedBox(height: 16),
-
-                    const OrDivider(),
-                    const SizedBox(height: 14),
-
-                    GoogleButton(
-                      loading: _loading,
-                      onTap: _googleSignIn,
-                    ),
-
-                    const Spacer(),
-
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 32),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            "don't have an account? ",
-                            style: TextStyle(
-                              fontFamily: 'DMMono',
-                              fontSize: 11.5,
-                              color: Color(0xFFAAAAAA),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SignupPage(),
-                              ),
-                            ),
-                            child: const Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                fontFamily: 'DMMono',
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF111111),
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    return AuthScaffold(
+      title: 'Welcome back',
+      subtitle: 'Sign in to pick up where you left off.',
+      form: Form(
+        key: _formKey,
+        child: AutofillGroup(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            AuthField(
+              controller: _emailCtrl,
+              hint: 'Email address',
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.email],
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Email is required';
+                if (!v.contains('@')) return 'Enter a valid email';
+                return null;
+              },
             ),
-          ),
+            const SizedBox(height: 12),
+            AuthField(
+              controller: _passCtrl,
+              hint: 'Password',
+              obscureText: _obscure,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.password],
+              onFieldSubmitted: (_) => _submit(),
+              suffixLabel: _obscure ? 'Show' : 'Hide',
+              onSuffixTap: () => setState(() => _obscure = !_obscure),
+              validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: _forgotPassword, child: const Text('Forgot password?')),
+            ),
+            const SizedBox(height: 8),
+            AuthButton(label: 'Sign in', loading: _loading, onTap: _submit),
+            const SizedBox(height: 18),
+            const OrDivider(),
+            const SizedBox(height: 18),
+            GoogleButton(loading: _loading, onTap: _googleSignIn),
+          ]),
         ),
+      ),
+      footer: AuthSwitchLink(
+        prompt: "Don't have an account?",
+        action: 'Create one',
+        onTap: () => context.go('/signup'),
       ),
     );
   }

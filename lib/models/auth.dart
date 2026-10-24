@@ -1,7 +1,6 @@
 import 'package:dscvr/models/file.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-//import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -19,6 +18,12 @@ class DSCVRUser {
   final String? avatarUrl;
   final String? bio;
   final List<Note>? notes;
+
+  // Onboarding
+  final String? handle;
+  final String role;
+  final List<String> interests;
+  final bool onboarded;
 
   // Preferences
   final bool darkMode;
@@ -46,9 +51,25 @@ class DSCVRUser {
     this.savePindaHistory = true,
     this.pindaStyle = PindaStyle.detailed,
     this.notes,
+    this.handle,
+    this.role = 'Researcher',
+    this.interests = const [],
+    this.onboarded = false,
     required this.createdAt,
-
   });
+
+  String get firstName {
+    final t = displayName.trim();
+    if (t.isEmpty) return 'there';
+    return t.split(RegExp(r'\s+')).first;
+  }
+
+  String get initials {
+    final parts = displayName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
 
   bool get isEmpty => id.isEmpty;
   bool get isNotEmpty => id.isNotEmpty;
@@ -86,6 +107,10 @@ class DSCVRUser {
     FontSize? fontSize,
     bool? savePindaHistory,
     PindaStyle? pindaStyle,
+    String? handle,
+    String? role,
+    List<String>? interests,
+    bool? onboarded,
   }) =>
       DSCVRUser(
         id: id,
@@ -98,6 +123,10 @@ class DSCVRUser {
         fontSize: fontSize ?? this.fontSize,
         savePindaHistory: savePindaHistory ?? this.savePindaHistory,
         pindaStyle: pindaStyle ?? this.pindaStyle,
+        handle: handle ?? this.handle,
+        role: role ?? this.role,
+        interests: interests ?? this.interests,
+        onboarded: onboarded ?? this.onboarded,
         createdAt: createdAt,
       );
 
@@ -112,6 +141,10 @@ class DSCVRUser {
         'fontSize': fontSize.name,
         'savePindaHistory': savePindaHistory,
         'pindaStyle': pindaStyle.name,
+        'handle': handle,
+        'role': role,
+        'interests': interests,
+        'onboarded': onboarded,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -121,7 +154,13 @@ class DSCVRUser {
         email: map['email'] ?? '',
         avatarUrl: map['avatarUrl'],
         bio: map['bio'],
-        notes: map['notes'].forEach((key, value) => Note.fromMap(value),),
+        // The old code called forEach (which returns void) and crashed when
+        // the field was missing. Notes are optional legacy data.
+        notes: _parseNotes(map['notes']),
+        handle: map['handle'] as String?,
+        role: map['role'] as String? ?? 'Researcher',
+        interests: (map['interests'] as List?)?.whereType<String>().toList() ?? const [],
+        onboarded: map['onboarded'] as bool? ?? false,
         darkMode: map['darkMode'] ?? false,
         readerTheme: ReaderTheme.values.firstWhere(
           (e) => e.name == map['readerTheme'],
@@ -136,10 +175,27 @@ class DSCVRUser {
           (e) => e.name == map['pindaStyle'],
           orElse: () => PindaStyle.detailed,
         ),
-        createdAt: map['createdAt'] != null
-    ? DateTime.parse(map['createdAt'])
-    : DateTime.now(),
+        createdAt: map['createdAt'] is String
+            ? DateTime.tryParse(map['createdAt']) ?? DateTime.now()
+            : map['createdAt'] is Timestamp
+                ? (map['createdAt'] as Timestamp).toDate()
+                : DateTime.now(),
       );
+
+  static List<Note>? _parseNotes(Object? raw) {
+    if (raw is! Map) return null;
+    final out = <Note>[];
+    for (final v in raw.values) {
+      if (v is Map<String, dynamic>) {
+        try {
+          out.add(Note.fromMap(v));
+        } catch (_) {
+          // Skip malformed legacy notes instead of failing the whole profile.
+        }
+      }
+    }
+    return out;
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -160,34 +216,51 @@ class DSCVRAuth {
   // ─── Stream ────────────────────────────────────────────────────────────────
  
   /// Emits a [DSCVRUser] when auth state changes, or [DSCVRUser.empty()] on sign-out.
+  ///
+  /// Follows the Firestore profile document live, so edits made during
+  /// onboarding or in Settings show up immediately without re-login.
   Stream<DSCVRUser> get userStream {
-  return _auth.authStateChanges().asyncMap(
-    (firebaseUser) async {
+    return _auth.authStateChanges().asyncExpand((firebaseUser) {
       if (firebaseUser == null) {
-        return DSCVRUser.empty();
+        return Stream.value(DSCVRUser.empty());
       }
-
-      // Try Firestore first
-      final firestoreUser =
-          await fetchUser(firebaseUser.uid);
-
-      // If Firestore doc exists
-      if (firestoreUser != null) {
-        return firestoreUser;
-      }
-
-      // Fallback to FirebaseAuth user
-      return DSCVRUser.fromFirebaseUser(
+      final fallback = DSCVRUser.fromFirebaseUser(
         uid: firebaseUser.uid,
         email: firebaseUser.email ?? '',
-        displayName:
-            firebaseUser.displayName ??
-            'DSCVR User',
+        displayName: firebaseUser.displayName ?? 'DSCVR User',
         avatarUrl: firebaseUser.photoURL,
       );
-    },
-  );
-}
+      return _firestore
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .snapshots()
+          .map((doc) {
+        final data = doc.data();
+        if (data == null) return fallback;
+        return DSCVRUser.fromMap({...data, 'id': firebaseUser.uid});
+      }).handleError((Object _) => fallback);
+    });
+  }
+
+  /// Saves onboarding answers and marks the profile as set up.
+  Future<void> completeOnboarding({
+    required String uid,
+    required String displayName,
+    required String role,
+    required List<String> interests,
+  }) async {
+    await _firestore.collection('users').doc(uid).set({
+      'id': uid,
+      'displayName': displayName,
+      'email': _auth.currentUser?.email ?? '',
+      'role': role,
+      'interests': interests,
+      'onboarded': true,
+    }, SetOptions(merge: true));
+    if (displayName.isNotEmpty) {
+      await _auth.currentUser?.updateDisplayName(displayName);
+    }
+  }
 
  
   /// The currently signed-in user, or [DSCVRUser.empty()] if none.
@@ -200,17 +273,31 @@ class DSCVRAuth {
   // ─── Sign in ───────────────────────────────────────────────────────────────
  
   /// Signs in with Google. Creates a Firestore user doc on first sign-in.
-   Future<DSCVRUser> signInWithGoogle() async {
-    final googleUser = await _googleSignIn.authenticate();
-    if (googleUser == null) throw DSCVRAuthException('Google sign-in cancelled');
- 
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.idToken,
-      idToken: googleAuth.idToken,
-    );
- 
-    final result = await _auth.signInWithCredential(credential);
+  ///
+  /// On web this uses Firebase's popup flow (google_sign_in 7 does not
+  /// support `authenticate()` on web). On mobile it uses the native sheet.
+  Future<DSCVRUser> signInWithGoogle() async {
+    final UserCredential result;
+    try {
+      if (kIsWeb) {
+        result = await _auth.signInWithPopup(GoogleAuthProvider());
+      } else {
+        await _ensureGoogleInitialized();
+        final googleUser = await _googleSignIn.authenticate();
+        final googleAuth = googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+        );
+        result = await _auth.signInWithCredential(credential);
+      }
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        throw const DSCVRAuthException('Google sign-in cancelled');
+      }
+      throw DSCVRAuthException(e.description ?? 'Google sign-in failed');
+    } on FirebaseAuthException catch (e) {
+      throw DSCVRAuthException(_firebaseAuthErrorMessage(e));
+    }
     final firebaseUser = result.user!;
  
     // First sign-in — create Firestore doc
@@ -328,11 +415,20 @@ class DSCVRAuth {
   // ─── Sign out ──────────────────────────────────────────────────────────────
  
   Future<void> signOut() async {
-    await Future.wait([
-      _auth.signOut(),
-      _googleSignIn.signOut(),
-    ]);
+    await _auth.signOut();
+    if (!kIsWeb) {
+      try {
+        await _ensureGoogleInitialized();
+        await _googleSignIn.signOut();
+      } catch (_) {
+        // Not signed in with Google; nothing to do.
+      }
+    }
   }
+
+  static Future<void>? _googleInit;
+  Future<void> _ensureGoogleInitialized() =>
+      _googleInit ??= _googleSignIn.initialize();
  
   // ─── Password ──────────────────────────────────────────────────────────────
  

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// LEGACY: superseded by lib/screens/library + lib/screens/reader. Not routed.
 import 'package:dscvr/models/auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -172,12 +172,11 @@ class MaterialCard extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              onTap: () async {
-                // Handle tap - download or view
-                final url = await fileRef.getDownloadURL();
+              onTap: () {
+                // Legacy screen (superseded by the library + reader).
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Opening: $_getCleanFileName(fileName)'),
+                    content: Text('Opening: ${_getCleanFileName(fileName)}'),
                     backgroundColor: Colors.black87,
                   ),
                 );

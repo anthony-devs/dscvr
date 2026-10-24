@@ -1,84 +1,25 @@
-import 'package:dscvr/models/auth.dart';
-import 'package:dscvr/screens/home.dart';
-import 'package:dscvr/screens/login.dart';
-import 'package:dscvr/screens/recents_page.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dscvr/app.dart';
+import 'package:dscvr/config/env.dart';
+import 'package:dscvr/state/settings_controller.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'firebase_options.dart';
 
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Clean URLs on the web (/c/econ instead of /#/c/econ). Firebase Hosting
+  // rewrites every path to index.html, see firebase.json.
+  usePathUrlStrategy();
 
-  runApp(const MyApp());
-}
-
-// Fix: MyApp must be StatefulWidget so the stream is created once in initState
-// and reused across rebuilds — not recreated on every build() call.
-//
-// The old code did:
-//   final Stream<DSCVRUser> currentUser = DSCVRAuth().userStream;
-// inside build(), which created a brand-new DSCVRAuth instance (and therefore
-// a brand-new stream subscription) on every rebuild. The StreamBuilder was
-// never watching the same stream that login/signup were writing to.
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  // Created once, lives for the lifetime of the app.
-  final DSCVRAuth _auth = DSCVRAuth();
-  late final Stream<DSCVRUser> _userStream;
-
-  @override
-  void initState() {
-    super.initState();
-    _userStream = _auth.userStream;
+  if (!Env.demo) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'DSCVR',
-      theme: ThemeData(primarySwatch: Colors.purple, textTheme: GoogleFonts.spaceGroteskTextTheme()),
-      home: StreamBuilder<DSCVRUser>(
-        stream: _userStream,
-        builder: (context, snapshot) {
-          // Still loading first emission
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+  final settings = SettingsController();
+  await settings.load();
 
-          // Stream error
-          if (snapshot.hasError) {
-            return Scaffold(
-              body: Center(child: Text('Error: ${snapshot.error}')),
-            );
-          }
-
-          // Signed in
-          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            return HomePage(userId: snapshot.data!.id);
-            //return RecentsPage(userId: snapshot.data!.id, displayName: snapshot.data!.displayName);
-          }
-
-          // Signed out
-          return const LoginPage();
-        },
-      ),
-    );
-  }
+  runApp(DscvrApp(settings: settings));
 }

@@ -1,7 +1,12 @@
 // auth_widgets.dart
 // Shared widgets used by both signup.dart and login.dart.
-// Import this file in both pages.
+// Restyled onto the DSCVR theme (light + dark); public APIs are unchanged.
 
+import 'package:dscvr/models/library.dart';
+import 'package:dscvr/theme/app_theme.dart';
+import 'package:dscvr/theme/tokens.dart';
+import 'package:dscvr/widgets/common.dart';
+import 'package:dscvr/widgets/material_card.dart';
 import 'package:flutter/material.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -9,37 +14,21 @@ import 'package:flutter/material.dart';
 // ══════════════════════════════════════════════════════════════════════════════
 
 class DscvrLogo extends StatelessWidget {
-  const DscvrLogo();
+  const DscvrLogo({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Logo mark — 2×2 grid of shapes
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: const Color(0xFF111111),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Center(
-            child: SizedBox(
-              width: 36,
-              height: 36,
-              child: CustomPaint(painter: _LogoMarkPainter()),
-            ),
-          ),
-        ),
+        const DscvrMark(size: 52),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'DSCVR',
-          style: TextStyle(
-            fontFamily: 'Geist',
+          style: AppTheme.sans(
             fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             letterSpacing: 2.4,
-            color: Color(0xFF111111),
+            color: context.colors.ink,
           ),
         ),
       ],
@@ -47,51 +36,109 @@ class DscvrLogo extends StatelessWidget {
   }
 }
 
-class _LogoMarkPainter extends CustomPainter {
+// ══════════════════════════════════════════════════════════════════════════════
+// LAYOUT
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Auth page frame: a showcase panel on wide screens, the form on the right.
+class AuthScaffold extends StatelessWidget {
+  const AuthScaffold({super.key, required this.title, required this.subtitle, required this.form, required this.footer});
+
+  final String title;
+  final String subtitle;
+  final Widget form;
+  final Widget footer;
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white;
-    final half = size.width / 2;
-    final gap = 2.0;
-    final tile = half - gap;
-
-    // top-left: square
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, tile, tile),
-        const Radius.circular(3),
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final wide = MediaQuery.sizeOf(context).width >= 980;
+    final formColumn = Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (!wide) ...[const Center(child: DscvrLogo()), const SizedBox(height: 32)],
+            Text(title, style: context.text.displaySmall, textAlign: wide ? TextAlign.start : TextAlign.center),
+            const SizedBox(height: 8),
+            Text(subtitle,
+                style: AppTheme.sans(fontSize: 14.5, color: c.inkMuted, height: 1.5),
+                textAlign: wide ? TextAlign.start : TextAlign.center),
+            const SizedBox(height: 28),
+            form,
+            const SizedBox(height: 28),
+            footer,
+          ]),
+        ),
       ),
-      paint,
     );
 
-    // top-right: circle
-    paint.color = Colors.white.withOpacity(0.5);
-    canvas.drawCircle(
-      Offset(half + gap + tile / 2, tile / 2),
-      tile / 2,
-      paint,
-    );
-
-    // bottom-left: circle
-    canvas.drawCircle(
-      Offset(tile / 2, half + gap + tile / 2),
-      tile / 2,
-      paint,
-    );
-
-    // bottom-right: square
-    paint.color = Colors.white;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(half + gap, half + gap, tile, tile),
-        const Radius.circular(3),
+    return Scaffold(
+      backgroundColor: c.background,
+      body: SafeArea(
+        child: wide
+            ? Row(children: [
+                const Expanded(flex: 11, child: _Showcase()),
+                Expanded(flex: 9, child: formColumn),
+              ])
+            : formColumn,
       ),
-      paint,
     );
   }
+}
+
+/// Decorative collage of sample material cards for the auth screens.
+class _Showcase extends StatelessWidget {
+  const _Showcase();
 
   @override
-  bool shouldRepaint(_) => false;
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final now = DateTime.now();
+    LibraryItem sample(String t, List<String> a, int y, int color, double p, int n) => LibraryItem(
+        id: t, kind: MaterialKind.paper, title: t, authors: a, year: y, categoryId: '', colorIndex: color,
+        progress: p, noteCount: n, createdAt: now, updatedAt: now);
+    final cards = [
+      (sample('The Market for "Lemons"', ['George A. Akerlof'], 1970, 3, 1, 3), 'Economics'),
+      (sample('Attention Is All You Need', ['Ashish Vaswani', 'Noam Shazeer', 'Niki Parmar'], 2017, 0, 0.6, 4), 'Computer Science'),
+      (sample('A Mathematical Theory of Communication', ['Claude E. Shannon'], 1948, 5, 0.3, 2), 'Information'),
+      (sample('The Neural Basis of Loss Aversion', ['Sabrina M. Tom', 'Craig R. Fox'], 2007, 1, 0.8, 1), 'Neuroscience'),
+    ];
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(Radii.xl),
+        border: Border.all(color: c.line),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Wordmark(size: 28),
+        const Spacer(),
+        Text('A quiet place\nfor serious reading.', style: context.text.displayMedium),
+        const SizedBox(height: 14),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(
+            'Collect papers, PDFs, articles and lectures into one library. Read without noise, take notes, and ask Pinda about anything you have saved.',
+            style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.6),
+          ),
+        ),
+        const SizedBox(height: 32),
+        IgnorePointer(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: MaterialGrid(minTileWidth: 120, children: [
+              for (final (item, label) in cards) MaterialCard(item: item, collectionLabel: label, onTap: () {}),
+            ]),
+          ),
+        ),
+        const Spacer(),
+        Text('Free forever. Supported by readers.', style: context.text.labelMedium),
+      ]),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -111,6 +158,7 @@ class AuthField extends StatelessWidget {
   final String? Function(String?)? validator;
 
   const AuthField({
+    super.key,
     required this.controller,
     required this.hint,
     this.obscureText = false,
@@ -125,82 +173,33 @@ class AuthField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AutofillGroup(
-      child: TextFormField(
-        controller: controller,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        textInputAction: textInputAction,
-        autofillHints: autofillHints,
-        onFieldSubmitted: onFieldSubmitted,
-        validator: validator,
-        style: const TextStyle(
-          fontFamily: 'Geist',
-          fontSize: 16, // 16px stops iOS auto-zoom on focus
-          color: Color(0xFF111111),
-        ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 15,
-            color: Color(0xFFCCCCCC),
-          ),
-          filled: true,
-          fillColor: const Color(0xFFFAF9F6),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          suffixIcon: suffixLabel != null
-              ? GestureDetector(
-                  onTap: onSuffixTap,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 14),
-                    child: Text(
-                      suffixLabel!,
-                      style: const TextStyle(
-                        fontFamily: 'DMMono',
-                        fontSize: 11,
-                        color: Color(0xFFAAAAAA),
-                      ),
-                    ),
-                  ),
-                )
-              : null,
-          suffixIconConstraints:
-              const BoxConstraints(minWidth: 0, minHeight: 0),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0DDD6)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0DDD6)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF999999)),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFDDAA99)),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFCC6655)),
-          ),
-          errorStyle: const TextStyle(
-            fontFamily: 'DMMono',
-            fontSize: 10.5,
-            color: Color(0xFFCC6655),
-          ),
-        ),
+    final c = context.colors;
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      onFieldSubmitted: onFieldSubmitted,
+      validator: validator,
+      style: AppTheme.sans(fontSize: 15, color: c.ink),
+      decoration: InputDecoration(
+        hintText: hint,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        suffixIcon: suffixLabel == null
+            ? null
+            : TextButton(
+                onPressed: onSuffixTap,
+                child: Text(suffixLabel!, style: AppTheme.sans(fontSize: 12.5, color: c.inkMuted)),
+              ),
+        errorStyle: AppTheme.sans(fontSize: 12, color: c.danger),
       ),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PRIMARY BUTTON
+// BUTTONS
 // ══════════════════════════════════════════════════════════════════════════════
 
 class AuthButton extends StatelessWidget {
@@ -208,134 +207,67 @@ class AuthButton extends StatelessWidget {
   final bool loading;
   final VoidCallback onTap;
 
-  const AuthButton({
-    required this.label,
-    required this.loading,
-    required this.onTap,
-  });
+  const AuthButton({super.key, required this.label, required this.loading, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
+      height: 48,
+      child: FilledButton(
         onPressed: loading ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF111111),
-          disabledBackgroundColor: const Color(0xFF444444),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          textStyle: const TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
         child: loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.8,
-                  color: Colors.white,
-                ),
-              )
+            ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: c.inverseInk))
             : Text(label),
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// GOOGLE BUTTON
-// ══════════════════════════════════════════════════════════════════════════════
-
 class GoogleButton extends StatelessWidget {
   final bool loading;
   final VoidCallback onTap;
 
-  const GoogleButton({required this.loading, required this.onTap});
+  const GoogleButton({super.key, required this.loading, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
-      height: 52,
+      height: 48,
       child: OutlinedButton(
         onPressed: loading ? null : onTap,
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFE0DDD6)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF333333),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Google G logo via CustomPaint
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CustomPaint(painter: _GoogleLogoPainter()),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Continue with Google',
-              style: TextStyle(
-                fontFamily: 'DMMono',
-                fontSize: 13,
-                color: Color(0xFF333333),
-              ),
-            ),
-          ],
-        ),
+        style: OutlinedButton.styleFrom(backgroundColor: context.colors.surface),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const SizedBox(width: 18, height: 18, child: CustomPaint(painter: _GoogleLogoPainter())),
+          const SizedBox(width: 10),
+          Text('Continue with Google', style: AppTheme.sans(fontSize: 14, fontWeight: FontWeight.w500, color: context.colors.ink)),
+        ]),
       ),
     );
   }
 }
 
+/// The four-colour Google "G", drawn so no image asset is needed.
 class _GoogleLogoPainter extends CustomPainter {
+  const _GoogleLogoPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
-    // Simplified Google G mark
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    // Blue arc (top)
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(rect, -1.57, 3.14, true, paint);
-
-    // Green arc (bottom-right)
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(rect, 1.57, 1.0, true, paint);
-
-    // Yellow arc (bottom-left)
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(rect, 2.57, 0.9, true, paint);
-
-    // Red arc (left)
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(rect, -1.57, -1.2, true, paint);
-
-    // White centre cutout
-    paint.color = Colors.white;
-    canvas.drawCircle(
-      Offset(size.width / 2, size.height / 2),
-      size.width * 0.32,
-      paint,
-    );
-
-    // White right bar (the inner part of G)
+    final s = size.width;
+    final stroke = s * 0.2;
+    final rect = Rect.fromLTWH(stroke / 2, stroke / 2, s - stroke, s - stroke);
+    Paint p(Color c) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke;
+    const deg = 3.14159265 / 180;
+    canvas.drawArc(rect, -40 * deg, -100 * deg, false, p(const Color(0xFFEA4335)));
+    canvas.drawArc(rect, -140 * deg, -90 * deg, false, p(const Color(0xFFFBBC05)));
+    canvas.drawArc(rect, -230 * deg, -95 * deg, false, p(const Color(0xFF34A853)));
+    canvas.drawArc(rect, -325 * deg, -35 * deg, false, p(const Color(0xFF4285F4)));
     canvas.drawRect(
-      Rect.fromLTWH(size.width * 0.5, size.height * 0.38,
-          size.width * 0.5, size.height * 0.24),
-      paint,
+      Rect.fromLTWH(s * 0.5, s * 0.5 - stroke / 2, s * 0.5, stroke),
+      Paint()..color = const Color(0xFF4285F4),
     );
   }
 
@@ -343,35 +275,35 @@ class _GoogleLogoPainter extends CustomPainter {
   bool shouldRepaint(_) => false;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// OR DIVIDER
-// ══════════════════════════════════════════════════════════════════════════════
-
 class OrDivider extends StatelessWidget {
-  const OrDivider();
+  const OrDivider({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(
-          child: Divider(color: Color(0xFFECE9E2), thickness: 1),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'or',
-            style: TextStyle(
-              fontFamily: 'DMMono',
-              fontSize: 11,
-              color: Color(0xFFCCCCCC),
-            ),
-          ),
-        ),
-        const Expanded(
-          child: Divider(color: Color(0xFFECE9E2), thickness: 1),
-        ),
-      ],
-    );
+    final c = context.colors;
+    return Row(children: [
+      Expanded(child: Divider(color: c.line)),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text('or', style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint)),
+      ),
+      Expanded(child: Divider(color: c.line)),
+    ]);
+  }
+}
+
+class AuthSwitchLink extends StatelessWidget {
+  const AuthSwitchLink({super.key, required this.prompt, required this.action, required this.onTap});
+  final String prompt;
+  final String action;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text(prompt, style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted)),
+      TextButton(onPressed: onTap, child: Text(action, style: AppTheme.sans(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.ink))),
+    ]);
   }
 }
