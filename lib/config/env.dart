@@ -3,7 +3,7 @@
 /// Pass values with --dart-define, for example:
 ///   flutter run -d chrome --dart-define=DSCVR_DEMO=true
 ///   flutter build web --dart-define=DSCVR_FUNCTIONS_URL=https://...
-///   flutter build web --dart-define=DSCVR_SERVER_URL=https://dscvr-server.up.railway.app
+///   flutter build web --dart-define=DSCVR_SERVER_URL=https://dscvr-server-production.up.railway.app
 class Env {
   Env._();
 
@@ -21,7 +21,7 @@ class Env {
   /// This server handles CORS for web and provides added security.
   static const String serverUrl = String.fromEnvironment(
     'DSCVR_SERVER_URL',
-    defaultValue: 'https://dscvr-server.up.railway.app',
+    defaultValue: 'https://dscvr-server-production.up.railway.app',
   );
 
   static const String storageBucket = 'gs://dscvr-9d362.firebasestorage.app';

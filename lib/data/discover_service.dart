@@ -52,41 +52,61 @@ class DiscoverService {
   Future<List<Paper>> latest(Subject subject, {int limit = 20}) =>
       _fetch(PaperSource.arxiv, subject.arxivQuery, sortByDate: true, limit: limit);
 
+  /// Results are cached for 10 minutes so switching subjects back and forth
+  /// is instant and we stay well inside the providers' rate limits.
+  static const _ttl = Duration(minutes: 10);
+  final _cache = <String, (DateTime, List<Paper>)>{};
+
   Future<List<Paper>> _fetch(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
     if (Env.demo) return _demoPapers(q);
 
-    // Always try the direct API first (works on native; may work on web
-    // for endpoints that send CORS headers, e.g. Semantic Scholar v2).
-    try {
-      return await _direct(source, q, sortByDate: sortByDate, limit: limit);
-    } catch (_) {
-      // Direct call failed (CORS on web, or network on native) —
-      // fall through to the Cloud Function proxy.
-    }
+    final key = '${source.key}|$q|$sortByDate|$limit';
+    final hit = _cache[key];
+    if (hit != null && DateTime.now().difference(hit.$1) < _ttl) return hit.$2;
 
-    // Use the dedicated Flask server for the proxy — it handles CORS
-    // and adds rate limiting / security on top of the raw APIs.
-    try {
-      final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
-        'source': source.key,
-        'q': q,
-        'sort': sortByDate ? 'date' : 'relevance',
-        'limit': '$limit',
-      });
-      final res = await _client.get(uri).timeout(const Duration(seconds: 20));
-      if (res.statusCode != 200) throw Exception('Search failed (${res.statusCode})');
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
-    } catch (e) {
-      if (kIsWeb) {
-        throw Exception(
-          'Could not reach ${source.label}. '
-          'Make sure the DSCVR server is running, or use a mobile device '
-          'to bypass CORS restrictions.',
-        );
+    final papers = await _fetchUncached(source, q, sortByDate: sortByDate, limit: limit);
+    if (_cache.length > 100) _cache.remove(_cache.keys.first);
+    _cache[key] = (DateTime.now(), papers);
+    return papers;
+  }
+
+  Future<List<Paper>> _fetchUncached(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
+    // Browsers block direct calls to arXiv and Semantic Scholar (no CORS
+    // headers, plus shared rate limits), so the web build always goes through
+    // the DSCVR server. Native apps try the provider first and fall back.
+    if (!kIsWeb) {
+      try {
+        return await _direct(source, q, sortByDate: sortByDate, limit: limit);
+      } catch (_) {
+        // Fall through to the server.
       }
-      rethrow;
     }
+    return _viaServer(source, q, sortByDate: sortByDate, limit: limit);
+  }
+
+  Future<List<Paper>> _viaServer(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
+    final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
+      'source': source.key,
+      'q': q,
+      'sort': sortByDate ? 'date' : 'relevance',
+      'limit': '$limit',
+    });
+    final http.Response res;
+    try {
+      res = await _client.get(uri).timeout(const Duration(seconds: 25));
+    } catch (e) {
+      debugPrint('Discover: could not reach ${Env.serverUrl}: $e');
+      throw Exception("Couldn't reach the search server. Check your connection and try again.");
+    }
+    if (res.statusCode == 429) {
+      throw Exception('Too many searches in a short time. Wait a minute and try again.');
+    }
+    if (res.statusCode != 200) {
+      debugPrint('Discover: ${res.statusCode} ${res.body}');
+      throw Exception('${source.label} is not responding right now. Try again shortly, or switch source.');
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
   }
 
   Future<List<Paper>> _direct(PaperSource source, String q, {required bool sortByDate, required int limit}) async {

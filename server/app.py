@@ -19,7 +19,7 @@ from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 
 from config import Config
-from discover import search_arxiv, search_semantic_scholar
+from discover import cached, search_arxiv, search_semantic_scholar
 from payments import (
     PRICING,
     activate_subscription,
@@ -89,9 +89,9 @@ def create_app(config: Config | None = None) -> Flask:
 
         try:
             if source == "semantic_scholar":
-                papers = search_semantic_scholar(q, limit)
+                papers = cached(("s2", q, limit), lambda: search_semantic_scholar(q, limit))
             else:
-                papers = search_arxiv(q, sort, limit)
+                papers = cached(("arxiv", q, sort, limit), lambda: search_arxiv(q, sort, limit))
 
             resp = jsonify(papers=papers)
             resp.cache_control.public = True

@@ -30,7 +30,7 @@ class Paper {
   final List<String> subjects;
 
   String get sourceLabel =>
-      source == 'arxiv' ? 'arXiv' : (source == 'semantic_scholar' ? 'Semantic Scholar' : source);
+      switch (source) { 'arxiv' => 'arXiv', 'semantic_scholar' => 'Semantic Scholar', 'openalex' => 'OpenAlex', _ => source };
 
   factory Paper.fromMap(Map<String, dynamic> m) => Paper(
         id: m['id'] as String? ?? '',

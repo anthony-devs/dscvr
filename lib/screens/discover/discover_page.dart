@@ -143,7 +143,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         const SizedBox(height: 22),
       ],
       SectionLabel(
-        _subject != null ? 'New in ${_subject!.label}' : 'Results',
+        _subject != null ? 'New in ${_subject!.label} on arXiv' : 'Results',
         count: _loading ? null : _papers.length,
       ),
       const SizedBox(height: 6),
