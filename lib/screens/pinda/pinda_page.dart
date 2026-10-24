@@ -1,232 +1,141 @@
-import 'package:dscvr/models/pinda.dart';
-import 'package:dscvr/screens/library/dialogs.dart';
-import 'package:dscvr/screens/pinda/pinda_chat.dart';
-import 'package:dscvr/state/pinda_controller.dart';
-import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
-import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
-import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
-/// Full-page Pinda: conversation history on the left, chat on the right,
-/// with a scope picker (whole library, a category or a topic).
-class PindaPage extends StatefulWidget {
+/// Pinda — Coming Soon placeholder.
+class PindaPage extends StatelessWidget {
   const PindaPage({super.key, this.conversationId});
   final String? conversationId;
 
   @override
-  State<PindaPage> createState() => _PindaPageState();
-}
-
-class _PindaPageState extends State<PindaPage> {
-  late final PindaController _ctl;
-
-  @override
-  void initState() {
-    super.initState();
-    final s = context.services;
-    _ctl = PindaController(
-      repo: s.repo,
-      service: s.pinda,
-      context: const PindaContext.general(),
-      styleOf: () => s.settings.pindaStyle,
-      conversationId: widget.conversationId,
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctl.dispose();
-    super.dispose();
-  }
-
-  List<PindaContext> _scopes() {
-    final lib = context.library;
-    return [
-      const PindaContext.general(),
-      for (final cat in lib.categories) ...[
-        PindaContext(scope: PindaScope.category, id: cat.id, label: cat.name),
-        for (final t in lib.topicsOf(cat.id)) PindaContext(scope: PindaScope.topic, id: t.id, label: '${cat.name} / ${t.name}'),
-      ],
-    ];
-  }
-
-  Widget _scopePicker() {
+  Widget build(BuildContext context) {
     final c = context.colors;
-    return ListenableBuilder(
-      listenable: _ctl,
-      builder: (context, _) => MenuButton<PindaContext>(
-        tooltip: 'What Pinda reads',
-        title: 'What should Pinda read?',
-        width: 280,
-        onSelected: _ctl.setContext,
-        entries: () => [
-          for (final s in _scopes())
-            MenuEntry(
-              value: s,
-              label: s.scope == PindaScope.general ? 'Whole library' : s.label,
-              icon: s.scope == PindaScope.general ? Ic.library : (s.scope == PindaScope.topic ? Ic.folderOpen : Ic.folder),
-              checked: s == _ctl.context,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Animated icon container
+            Container(
+              width: 88,
+              height: 88,
+              decoration: ShapeDecoration(
+                color: c.chip,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+              child: Center(
+                child: Icon(Ic.pinda, size: 40, color: c.inkMuted),
+              ),
             ),
-        ],
-        child: IgnorePointer(
-          child: PillButton(
-            label: _ctl.context.scope == PindaScope.general ? 'Whole library' : _ctl.context.label,
-            icon: Ic.folder,
-            trailing: Icon(Ic.caretDown, size: 12, color: c.inkMuted),
-            onTap: () {},
-          ),
+            const SizedBox(height: 28),
+            Text(
+              'Pinda is coming soon',
+              style: AppTheme.serif(
+                fontSize: 26,
+                fontWeight: FontWeight.w600,
+                color: c.ink,
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 360,
+              child: Text(
+                'Your AI research companion that reads your library and answers questions grounded in your own materials.',
+                style: AppTheme.sans(
+                  fontSize: 15,
+                  color: c.inkMuted,
+                  height: 1.55,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Feature pills
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                _FeaturePill(icon: Ic.library, label: 'Library-grounded', colors: c),
+                _FeaturePill(icon: Ic.chatCircle, label: 'Conversational', colors: c),
+                _FeaturePill(icon: Ic.scale, label: 'Fact-checked', colors: c),
+                _FeaturePill(icon: Ic.lightning, label: 'Powered by Claude', colors: c),
+              ],
+            ),
+            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: ShapeDecoration(
+                color: c.selection,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Ic.info, size: 16, color: c.ink),
+                  const SizedBox(width: 10),
+                  Text(
+                    'We\'ll notify you when Pinda is ready.',
+                    style: AppTheme.sans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: c.ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _header() {
-    final c = context.colors;
+class _FeaturePill extends StatelessWidget {
+  const _FeaturePill({
+    required this.icon,
+    required this.label,
+    required this.colors,
+  });
+  final IconData icon;
+  final String label;
+  final DscvrColors colors;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(context.isCompact ? 12 : 24, 4, context.isCompact ? 8 : 24, 8),
-      child: Row(children: [
-        _scopePicker(),
-        const Spacer(),
-        if (context.isCompact)
-          AppIconButton(
-            tooltip: 'History',
-            onPressed: () => showAppSheet<void>(
-              context,
-              builder: (ctx) => SizedBox(
-                height: MediaQuery.sizeOf(ctx).height * 0.7,
-                child: _History(controller: _ctl, onPicked: () => Navigator.pop(ctx)),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: ShapeDecoration(
+        color: colors.surface,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: colors.line),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: colors.inkMuted),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: AppTheme.sans(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: colors.ink,
             ),
-            icon: Icon(Ic.chats, size: 19, color: c.inkMuted),
           ),
-        ListenableBuilder(
-          listenable: _ctl,
-          builder: (context, _) => _ctl.messages.isEmpty
-              ? const SizedBox.shrink()
-              : AppButton.ghost(onPressed: _ctl.newConversation, icon: const Icon(Ic.add, size: 15), label: const Text('New chat')),
-        ),
-      ]),
+        ],
+      ),
     );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final chat = PindaChat(controller: _ctl, compact: context.isCompact, header: _header());
-    if (context.isCompact) return SafeArea(top: false, child: chat);
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Container(
-        width: 260,
-        decoration: BoxDecoration(border: Border(right: BorderSide(color: c.line))),
-        child: _History(controller: _ctl),
-      ),
-      Expanded(child: chat),
-    ]);
-  }
-}
-
-class _History extends StatefulWidget {
-  const _History({required this.controller, this.onPicked});
-  final PindaController controller;
-  final VoidCallback? onPicked;
-
-  @override
-  State<_History> createState() => _HistoryState();
-}
-
-class _HistoryState extends State<_History> {
-  late final Stream<List<Conversation>> _stream = context.services.repo.watchConversations();
-
-  PindaController get controller => widget.controller;
-  VoidCallback? get onPicked => widget.onPicked;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final repo = context.services.repo;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-        child: Row(children: [
-          Text('Conversations', style: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
-          const Spacer(),
-          AppIconButton(
-            tooltip: 'New chat',
-            onPressed: () {
-              controller.newConversation();
-              onPicked?.call();
-            },
-            icon: const Icon(Ic.add, size: 16),
-          ),
-        ]),
-      ),
-      Expanded(
-        child: StreamBuilder<List<Conversation>>(
-          stream: _stream,
-          builder: (context, snap) {
-            final list = snap.data ?? const <Conversation>[];
-            if (list.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Your conversations with Pinda will appear here.', style: context.text.bodySmall),
-              );
-            }
-            return ListenableBuilder(
-              listenable: controller,
-              builder: (context, _) => ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                itemCount: list.length,
-                itemBuilder: (context, i) {
-                  final conv = list[i];
-                  final active = conv.id == controller.conversationId;
-                  return Pressable(
-                      scale: 0.98,
-                      onTap: () {
-                        controller.openConversation(conv);
-                        onPicked?.call();
-                      },
-                      onLongPress: (_) async {
-                        final ok = await confirm(context, title: 'Delete conversation?', message: conv.title);
-                        if (ok) {
-                          if (conv.id == controller.conversationId) controller.newConversation();
-                          await repo.deleteConversation(conv.id);
-                        }
-                      },
-                      builder: (context, hovered, pressed, child) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 140),
-                        margin: const EdgeInsets.only(bottom: 2),
-                        decoration: ShapeDecoration(
-                          color: active ? c.selection : (hovered ? c.selection.withValues(alpha: 0.5) : Colors.transparent),
-                          shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: child,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(conv.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTheme.sans(fontSize: 13, fontWeight: active ? FontWeight.w600 : FontWeight.w400, color: c.ink)),
-                          const SizedBox(height: 3),
-                          Text(
-                            '${conv.context.scope == PindaScope.general ? 'Library' : conv.context.label}  ·  ${relativeTime(conv.updatedAt)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.text.labelSmall,
-                          ),
-                        ]),
-                      ),
-                  );
-                },
-              ),
-            );
-          },
-        ),
-      ),
-    ]);
   }
 }
