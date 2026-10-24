@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/models/auth.dart';
+import 'package:dscvr/models/subscription.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -62,6 +64,23 @@ class SessionController extends ChangeNotifier {
     }
     await _auth!.completeOnboarding(
         uid: _user.id, displayName: displayName, role: role, interests: interests);
+  }
+
+  /// Re-fetch the user's subscription from Firestore and update local state.
+  Future<void> refreshSubscription() async {
+    if (Env.demo) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (!doc.exists) return;
+      final data = doc.data();
+      if (data == null || data['subscription'] == null) return;
+      final sub = Subscription.fromMap((data['subscription'] as Map).cast<String, dynamic>());
+      _set(_user.copyWith(subscription: sub));
+    } catch (_) {
+      // Silently fail — subscription will refresh on next auth stream event.
+    }
   }
 
   Future<void> signOut() async {

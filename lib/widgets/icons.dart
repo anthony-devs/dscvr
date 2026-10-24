@@ -89,6 +89,12 @@ class Ic {
   static const gitFork = IconData(0xe278, fontFamily: 'PhosphorRegular');
   static const clock = IconData(0xe192, fontFamily: 'PhosphorRegular');
   static const shield = IconData(0xe41e, fontFamily: 'PhosphorRegular');
+  static const wallet = IconData(0xe4d0, fontFamily: 'PhosphorRegular');
+  static const creditCard = IconData(0xe1d2, fontFamily: 'PhosphorRegular');
+  static const googlePay = IconData(0xe4d0, fontFamily: 'PhosphorRegular'); // wallet glyph as proxy
+  static const crown = IconData(0xe1d6, fontFamily: 'PhosphorRegular');
+  static const star = IconData(0xe458, fontFamily: 'PhosphorRegular');
+  static const starFill = IconData(0xe458, fontFamily: 'PhosphorFill');
 
   static IconData forKind(MaterialKind k) => switch (k) {
         MaterialKind.paper => paper,

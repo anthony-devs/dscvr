@@ -1,10 +1,12 @@
 /**
  * DSCVR Cloud Functions
  *
- *   pinda     POST  Streams Claude answers grounded in the user's library (SSE).
- *   unfurl    POST  Title, metadata and readable text for a link or YouTube video.
- *   discover  GET   arXiv / Semantic Scholar search proxy (the web app needs it
- *                   because those APIs do not send CORS headers).
+ *   pinda       POST  Streams Claude answers grounded in the user's library (SSE).
+ *   unfurl      POST  Title, metadata and readable text for a link or YouTube video.
+ *   discover    GET   arXiv / Semantic Scholar search proxy (backup — primary is Flask server).
+ *   parliament  POST  Multi-model fact-check with Advocate / Skeptic / Analyst.
+ *
+ * Payments (checkout, webhook, portal) moved to the Flask server (server/).
  *
  * Setup:
  *   firebase functions:secrets:set ANTHROPIC_API_KEY
@@ -28,8 +30,7 @@ initializeApp();
 setGlobalOptions({ region: "us-central1", maxInstances: 20 });
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
-const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
-const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
+// Stripe secrets removed — payments now handled by the Flask server via Google Pay.
 const PINDA_MODEL = defineString("PINDA_MODEL", { default: "claude-sonnet-5-5" });
 const PINDA_DAILY_LIMIT = defineInt("PINDA_DAILY_LIMIT", { default: 150 });
 
@@ -198,162 +199,17 @@ export const discover = onRequest({ cors: ALLOWED_ORIGINS, timeoutSeconds: 30 },
 });
 
 /* ------------------------------------------------------------------ */
-/*  Stripe: checkout, webhook, customer portal                        */
+/*  Stripe endpoints removed — payments now handled by the dedicated  */
+/*  Flask server (server/) via Google Pay.                            */
+/*  Removed: checkout, stripeWebhook, customerPortal                  */
 /* ------------------------------------------------------------------ */
 
-/** Price IDs — set these to your real Stripe price IDs. */
-const STRIPE_PRICES: Record<string, { monthly: string; yearly: string }> = {
-  pro: {
-    monthly: process.env.STRIPE_PRO_MONTHLY || "price_pro_monthly",
-    yearly: process.env.STRIPE_PRO_YEARLY || "price_pro_yearly",
-  },
-  team: {
-    monthly: process.env.STRIPE_TEAM_MONTHLY || "price_team_monthly",
-    yearly: process.env.STRIPE_TEAM_YEARLY || "price_team_yearly",
-  },
-};
+// NOTE: The following exports were removed in this refactor:
+//   - checkout (POST /checkout)
+//   - stripeWebhook (POST /stripeWebhook)
+//   - customerPortal (POST /customerPortal)
+// Payments are now handled by the Flask server at Env.serverUrl.
 
-/**
- * POST /checkout
- * Body: { tier: "pro"|"team", interval: "monthly"|"yearly" }
- * Returns: { url: string } — the Stripe Checkout Session URL.
- */
-export const checkout = onRequest(
-  { cors: ALLOWED_ORIGINS, secrets: [STRIPE_SECRET_KEY], timeoutSeconds: 30 },
-  async (req, res) => {
-    if (req.method !== "POST") { res.status(405).json({ error: "Use POST" }); return; }
-    if (bodyTooLarge(req.rawBody, 4 * 1024)) {
-      res.status(413).json({ error: "Request too large." }); return;
-    }
-    const uid = await uidFrom(req.headers.authorization);
-    if (!uid) { res.status(401).json({ error: "Sign in first." }); return; }
-    const checkoutRatErr = checkRate(uid, "checkout");
-    if (checkoutRatErr) { res.status(429).json({ error: checkoutRatErr }); return; }
-    logAndDetectAbuse(uid, "checkout").catch(() => {});
-
-    const { tier, interval } = req.body as { tier?: string; interval?: string };
-    if (!tier || !["pro", "team"].includes(tier)) {
-      res.status(400).json({ error: "Invalid tier" }); return;
-    }
-    const billingInterval = interval === "yearly" ? "yearly" : "monthly";
-    const priceId = STRIPE_PRICES[tier]?.[billingInterval];
-    if (!priceId) { res.status(400).json({ error: "Price not configured" }); return; }
-
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(STRIPE_SECRET_KEY.value(), { apiVersion: "2025-04-30.basil" });
-    const db = getFirestore();
-
-    // Get or create Stripe customer
-    const userDoc = await db.doc(`users/${uid}`).get();
-    const userData = userDoc.data() ?? {};
-    let customerId = userData.subscription?.stripeCustomerId as string | undefined;
-
-    if (!customerId) {
-      const auth = getAuth();
-      const userRecord = await auth.getUser(uid);
-      const customer = await stripe.customers.create({
-        email: userRecord.email ?? undefined,
-        metadata: { firebaseUid: uid },
-      });
-      customerId = customer.id;
-      await db.doc(`users/${uid}`).set(
-        { subscription: { stripeCustomerId: customerId } },
-        { merge: true },
-      );
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${req.headers.origin ?? "https://dscvr-9d362.web.app"}/settings?checkout=success`,
-      cancel_url: `${req.headers.origin ?? "https://dscvr-9d362.web.app"}/settings?checkout=cancel`,
-      subscription_data: { metadata: { firebaseUid: uid, tier } },
-      metadata: { firebaseUid: uid, tier },
-    });
-
-    res.json({ url: session.url });
-  },
-);
-
-/**
- * POST /stripeWebhook
- * Stripe sends events here. Verifies the signature and updates Firestore.
- */
-export const stripeWebhook = onRequest(
-  { secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET], timeoutSeconds: 60 },
-  async (req, res) => {
-    if (req.method !== "POST") { res.status(405).end(); return; }
-
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(STRIPE_SECRET_KEY.value(), { apiVersion: "2025-04-30.basil" });
-    const sig = req.headers["stripe-signature"] as string;
-
-    let event;
-    try {
-      event = stripe.webhooks.constructEvent(req.rawBody, sig, STRIPE_WEBHOOK_SECRET.value());
-    } catch (e) {
-      logger.warn("Stripe webhook signature verification failed", e);
-      res.status(400).send("Webhook signature verification failed");
-      return;
-    }
-
-    const db = getFirestore();
-
-    const syncSubscription = async (sub: { id: string; customer: string; metadata: Record<string, string>; status: string; items: { data: Array<{ price: { id: string; recurring?: { interval?: string } | null } }> }; current_period_end: number; cancel_at_period_end: boolean }) => {
-      const uid = sub.metadata.firebaseUid;
-      if (!uid) {
-        logger.warn("Stripe subscription missing firebaseUid metadata", sub.id);
-        return;
-      }
-
-      const tier = sub.metadata.tier ?? "pro";
-      const isActive = ["active", "trialing"].includes(sub.status);
-      const priceInterval = sub.items.data[0]?.price.recurring?.interval;
-
-      await db.doc(`users/${uid}`).set(
-        {
-          subscription: {
-            tier: isActive ? tier : "free",
-            stripeCustomerId: typeof sub.customer === "string" ? sub.customer : (sub.customer as { id: string }).id,
-            stripeSubscriptionId: sub.id,
-            interval: priceInterval === "year" ? "yearly" : "monthly",
-            currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
-            cancelAtPeriodEnd: sub.cancel_at_period_end,
-          },
-        },
-        { merge: true },
-      );
-      logger.info(`Subscription synced for ${uid}: ${tier} (${sub.status})`);
-    };
-
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        if (session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-          // Copy metadata from session to subscription if missing
-          if (!sub.metadata.firebaseUid && session.metadata?.firebaseUid) {
-            await stripe.subscriptions.update(sub.id, {
-              metadata: { firebaseUid: session.metadata.firebaseUid, tier: session.metadata.tier ?? "pro" },
-            });
-            sub.metadata = { ...sub.metadata, ...session.metadata };
-          }
-          await syncSubscription(sub as Parameters<typeof syncSubscription>[0]);
-        }
-        break;
-      }
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted":
-        await syncSubscription(event.data.object as Parameters<typeof syncSubscription>[0]);
-        break;
-      default:
-        logger.info(`Unhandled Stripe event: ${event.type}`);
-    }
-
-    res.json({ received: true });
-  },
-);
 
 /* ------------------------------------------------------------------ */
 /*  Parliament Fact-Check — multi-perspective claim analysis           */
@@ -481,34 +337,3 @@ export const parliament = onRequest(
   },
 );
 
-/**
- * POST /customerPortal
- * Returns: { url: string } — the Stripe Customer Portal URL.
- */
-export const customerPortal = onRequest(
-  { cors: ALLOWED_ORIGINS, secrets: [STRIPE_SECRET_KEY], timeoutSeconds: 30 },
-  async (req, res) => {
-    if (req.method !== "POST") { res.status(405).json({ error: "Use POST" }); return; }
-    const uid = await uidFrom(req.headers.authorization);
-    if (!uid) { res.status(401).json({ error: "Sign in first." }); return; }
-    const portalRatErr = checkRate(uid, "portal");
-    if (portalRatErr) { res.status(429).json({ error: portalRatErr }); return; }
-
-    const db = getFirestore();
-    const userDoc = await db.doc(`users/${uid}`).get();
-    const customerId = userDoc.data()?.subscription?.stripeCustomerId as string | undefined;
-    if (!customerId) {
-      res.status(400).json({ error: "No billing account found. Subscribe to a plan first." });
-      return;
-    }
-
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(STRIPE_SECRET_KEY.value(), { apiVersion: "2025-04-30.basil" });
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: `${req.headers.origin ?? "https://dscvr-9d362.web.app"}/settings`,
-    });
-
-    res.json({ url: session.url });
-  },
-);

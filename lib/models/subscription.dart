@@ -85,16 +85,21 @@ class TierLimits {
 class Subscription {
   const Subscription({
     required this.tier,
-    this.stripeCustomerId,
-    this.stripeSubscriptionId,
+    this.paymentMethod,
+    this.cardNetwork,
+    this.cardDetails,
     this.interval = BillingInterval.monthly,
     this.currentPeriodEnd,
     this.cancelAtPeriodEnd = false,
   });
 
   final SubscriptionTier tier;
-  final String? stripeCustomerId;
-  final String? stripeSubscriptionId;
+  /// Payment method used: 'google_pay', 'stripe', etc.
+  final String? paymentMethod;
+  /// Card network from Google Pay (e.g. 'VISA', 'MASTERCARD').
+  final String? cardNetwork;
+  /// Last 4 digits of the card.
+  final String? cardDetails;
   final BillingInterval interval;
   final DateTime? currentPeriodEnd;
   final bool cancelAtPeriodEnd;
@@ -112,8 +117,9 @@ class Subscription {
           (e) => e.name == map['tier'],
           orElse: () => SubscriptionTier.free,
         ),
-        stripeCustomerId: map['stripeCustomerId'] as String?,
-        stripeSubscriptionId: map['stripeSubscriptionId'] as String?,
+        paymentMethod: map['paymentMethod'] as String?,
+        cardNetwork: map['cardNetwork'] as String?,
+        cardDetails: map['cardDetails'] as String?,
         interval: BillingInterval.values.firstWhere(
           (e) => e.name == map['interval'],
           orElse: () => BillingInterval.monthly,
@@ -126,8 +132,9 @@ class Subscription {
 
   Map<String, dynamic> toMap() => {
         'tier': tier.name,
-        if (stripeCustomerId != null) 'stripeCustomerId': stripeCustomerId,
-        if (stripeSubscriptionId != null) 'stripeSubscriptionId': stripeSubscriptionId,
+        if (paymentMethod != null) 'paymentMethod': paymentMethod,
+        if (cardNetwork != null) 'cardNetwork': cardNetwork,
+        if (cardDetails != null) 'cardDetails': cardDetails,
         'interval': interval.name,
         if (currentPeriodEnd != null) 'currentPeriodEnd': currentPeriodEnd!.toIso8601String(),
         'cancelAtPeriodEnd': cancelAtPeriodEnd,

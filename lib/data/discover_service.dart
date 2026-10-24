@@ -64,8 +64,10 @@ class DiscoverService {
       // fall through to the Cloud Function proxy.
     }
 
+    // Use the dedicated Flask server for the proxy — it handles CORS
+    // and adds rate limiting / security on top of the raw APIs.
     try {
-      final uri = Uri.parse('${Env.functionsUrl}/discover').replace(queryParameters: {
+      final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
         'source': source.key,
         'q': q,
         'sort': sortByDate ? 'date' : 'relevance',
@@ -79,7 +81,7 @@ class DiscoverService {
       if (kIsWeb) {
         throw Exception(
           'Could not reach ${source.label}. '
-          'Deploy the discover Cloud Function, or run on a mobile device '
+          'Make sure the DSCVR server is running, or use a mobile device '
           'to bypass CORS restrictions.',
         );
       }

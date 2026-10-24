@@ -1,6 +1,5 @@
-import 'dart:convert';
-
 import 'package:dscvr/config/env.dart';
+import 'package:dscvr/data/payment_service.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/shelf_page.dart';
 import 'package:dscvr/screens/subscription/paywall_page.dart';
@@ -12,8 +11,6 @@ import 'package:dscvr/widgets/icons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -23,28 +20,24 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _portalLoading = false;
+  bool _cancelLoading = false;
+  final _paymentService = PaymentService();
 
-  Future<void> _openPortal() async {
-    setState(() => _portalLoading = true);
+  Future<void> _cancelSubscription() async {
+    final ok = await confirm(context,
+        title: 'Cancel subscription?',
+        message: 'Your plan will remain active until the end of the current billing period. You can re-subscribe at any time.');
+    if (!ok) return;
+    setState(() => _cancelLoading = true);
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (token == null) throw Exception('Not signed in');
-      final resp = await http.post(
-        Uri.parse('${Env.functionsUrl}/customerPortal'),
-        headers: { 'Authorization': 'Bearer $token', 'Content-Type': 'application/json' },
-      );
+      await _paymentService.cancelSubscription();
       if (!mounted) return;
-      if (resp.statusCode != 200) {
-        final msg = (jsonDecode(resp.body) as Map)['error'] ?? 'Failed';
-        throw Exception(msg);
-      }
-      final url = (jsonDecode(resp.body) as Map)['url'] as String;
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      await Services.of(context).session.refreshSubscription();
+      if (mounted) toast(context, 'Subscription cancelled. Active until period end.');
     } catch (e) {
       if (mounted) toast(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _portalLoading = false);
+      if (mounted) setState(() => _cancelLoading = false);
     }
   }
 
@@ -111,16 +104,16 @@ class _SettingsPageState extends State<SettingsPage> {
               label: 'Plan',
               description: '${user.subscription.tier.label} plan'
                   '${user.subscription.isPaid ? ' • renews ${_formatDate(user.subscription.currentPeriodEnd)}' : ''}',
-              child: _portalLoading
+              child: _cancelLoading
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : AppButton.secondary(
                       onPressed: user.subscription.isPaid
-                          ? _openPortal
+                          ? _cancelSubscription
                           : () => Navigator.of(context).push(
                                 MaterialPageRoute(builder: (_) => const PaywallPage()),
                               ),
-                      label: Text(user.subscription.isPaid ? 'Manage billing' : 'Upgrade'),
-                      icon: Icon(user.subscription.isPaid ? Ic.settings : Ic.lightning, size: 15),
+                      label: Text(user.subscription.isPaid ? 'Cancel plan' : 'Upgrade'),
+                      icon: Icon(user.subscription.isPaid ? Ic.creditCard : Ic.lightning, size: 15),
                     ),
             ),
           ]),

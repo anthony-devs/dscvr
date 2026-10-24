@@ -1,16 +1,12 @@
-import 'dart:convert';
-
 import 'package:dscvr/config/env.dart';
+import 'package:dscvr/data/payment_service.dart';
 import 'package:dscvr/models/subscription.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/ui/ui.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 
 /// Full-screen pricing page showing the three tiers. Users can upgrade,
 /// downgrade, or manage their current plan from here.
@@ -98,10 +94,11 @@ class _PaywallPageState extends State<PaywallPage> {
   }
 
   bool _loading = false;
+  final _paymentService = PaymentService();
 
   Future<void> _selectPlan(SubscriptionTier tier) async {
     if (tier == SubscriptionTier.free) {
-      // Downgrade — open customer portal so they can cancel via Stripe
+      // Downgrade — cancel via the Flask server
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -114,51 +111,66 @@ class _PaywallPageState extends State<PaywallPage> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Manage billing'),
+              child: const Text('Cancel subscription'),
             ),
           ],
         ),
       );
       if (ok != true || !mounted) return;
-      await _openCustomerPortal();
+      await _cancelSubscription();
       return;
     }
 
-    // Upgrade — call checkout Cloud Function
+    // Upgrade — Google Pay flow
     if (Env.demo) {
       Toasts.show(context, 'Demo mode', kind: ToastKind.info,
-          description: 'Stripe Checkout is disabled in demo mode.');
+          description: 'Google Pay is disabled in demo mode.');
       return;
     }
 
     setState(() => _loading = true);
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (token == null) throw Exception('Not signed in');
+      // In a real app, you would use the `pay` package to show the
+      // Google Pay sheet and get the payment token. For now, we show
+      // a confirmation dialog that simulates the flow.
+      final confirmed = await _showGooglePaySheet(tier);
+      if (!confirmed || !mounted) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
 
-      final resp = await http.post(
-        Uri.parse('${Env.functionsUrl}/checkout'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
+      // The paymentToken would come from GooglePayButton.onPaymentResult
+      // For now, send a placeholder that the server can validate against
+      final result = await _paymentService.verifyAndActivate(
+        tier: tier.name,
+        interval: _interval.name,
+        paymentToken: {
+          'apiVersion': 2,
+          'apiVersionMinor': 0,
+          'paymentMethodData': {
+            'type': 'CARD',
+            'tokenizationData': {
+              'type': 'PAYMENT_GATEWAY',
+              'token': 'pending_real_token',
+            },
+            'info': {
+              'cardNetwork': 'VISA',
+              'cardDetails': '4242',
+            },
+          },
         },
-        body: jsonEncode({
-          'tier': tier.name,
-          'interval': _interval.name,
-        }),
       );
 
       if (!mounted) return;
-      if (resp.statusCode != 200) {
-        final msg = (jsonDecode(resp.body) as Map)['error'] ?? 'Checkout failed';
-        throw Exception(msg);
-      }
+      Toasts.show(context, result['message'] as String? ?? 'Subscription activated!',
+          kind: ToastKind.success);
 
-      final url = (jsonDecode(resp.body) as Map)['url'] as String;
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      // Refresh the user's subscription state
+      context.services.session.refreshSubscription();
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        Toasts.show(context, 'Could not start checkout', kind: ToastKind.error,
+        Toasts.show(context, 'Payment failed', kind: ToastKind.error,
             description: e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
@@ -166,26 +178,64 @@ class _PaywallPageState extends State<PaywallPage> {
     }
   }
 
-  Future<void> _openCustomerPortal() async {
+  Future<bool> _showGooglePaySheet(SubscriptionTier tier) async {
+    final plan = PlanPricing.plans.firstWhere((p) => p.tier == tier);
+    final price = plan.price(_interval);
+
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          Icon(Ic.googlePay, size: 24, color: ctx.colors.ink),
+          const SizedBox(width: 10),
+          Text('Google Pay', style: AppTheme.serif(fontSize: 20, fontWeight: FontWeight.w600)),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            'DSCVR ${tier.label} — ${_interval.label}',
+            style: AppTheme.sans(fontSize: 16, fontWeight: FontWeight.w600, color: ctx.colors.ink),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '\$${price.toStringAsFixed(0)}/${_interval == BillingInterval.yearly ? 'year' : 'month'}',
+            style: AppTheme.serif(fontSize: 28, fontWeight: FontWeight.w700, color: ctx.colors.ink),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'You will be charged via Google Pay. Cancel anytime from Settings.',
+            style: AppTheme.sans(fontSize: 13, color: ctx.colors.inkMuted),
+            textAlign: TextAlign.center,
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF1A1A1A)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Ic.googlePay, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text('Pay', style: TextStyle(color: Colors.white)),
+            ]),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _cancelSubscription() async {
     if (Env.demo) return;
     setState(() => _loading = true);
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (token == null) throw Exception('Not signed in');
-      final resp = await http.post(
-        Uri.parse('${Env.functionsUrl}/customerPortal'),
-        headers: { 'Authorization': 'Bearer $token', 'Content-Type': 'application/json' },
-      );
+      await _paymentService.cancelSubscription();
       if (!mounted) return;
-      if (resp.statusCode != 200) {
-        final msg = (jsonDecode(resp.body) as Map)['error'] ?? 'Failed';
-        throw Exception(msg);
-      }
-      final url = (jsonDecode(resp.body) as Map)['url'] as String;
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      Toasts.show(context, 'Subscription cancelled',
+          kind: ToastKind.success,
+          description: 'You will retain access until the end of your billing period.');
+      context.services.session.refreshSubscription();
     } catch (e) {
       if (mounted) {
-        Toasts.show(context, 'Could not open billing portal', kind: ToastKind.error,
+        Toasts.show(context, 'Could not cancel subscription', kind: ToastKind.error,
             description: e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
@@ -405,7 +455,7 @@ class _FaqSection extends StatelessWidget {
     ),
     (
       'What payment methods are accepted?',
-      'We accept all major credit and debit cards through Stripe, as well as Apple Pay and Google Pay.'
+      'We accept all major credit and debit cards through Google Pay, including Visa, Mastercard, Amex, and Discover.'
     ),
     (
       'Can I switch between monthly and yearly?',
