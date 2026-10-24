@@ -1,6 +1,8 @@
 """Security middleware: rate limiting, Firebase auth, input sanitization."""
 from __future__ import annotations
 
+import json
+import os
 import re
 import time
 from collections import defaultdict
@@ -21,10 +23,15 @@ def init_firebase(project_id: str) -> None:
     if _app is not None:
         return
     try:
-        _app = firebase_admin.initialize_app(
-            credentials.ApplicationDefault(),
-            {"projectId": project_id},
+        # On hosts without a credentials file (Railway), pass the whole
+        # service-account JSON in FIREBASE_SERVICE_ACCOUNT_JSON.
+        raw = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+        cred = (
+            credentials.Certificate(json.loads(raw))
+            if raw
+            else credentials.ApplicationDefault()
         )
+        _app = firebase_admin.initialize_app(cred, {"projectId": project_id})
     except ValueError:
         # Already initialized
         _app = firebase_admin.get_app()
