@@ -87,7 +87,7 @@ class _ShareDialogState extends State<ShareDialog> {
 
   void _copyUrl(String url) {
     Clipboard.setData(ClipboardData(text: url));
-    Toasts.show(context, text: 'Link copied to clipboard');
+    Toasts.show(context, 'Link copied to clipboard');
   }
 
   @override
@@ -202,7 +202,7 @@ class _PermissionPicker extends StatelessWidget {
     return Segmented<SharePermission>(
       value: value,
       onChanged: onChanged,
-      entries: const [
+      options: const [
         (SharePermission.view, 'View', Ic.eye),
         (SharePermission.comment, 'Comment', Ic.chatCircle),
         (SharePermission.fork, 'Fork', Ic.gitFork),

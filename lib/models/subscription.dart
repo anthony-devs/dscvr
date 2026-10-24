@@ -103,7 +103,9 @@ class Subscription {
   bool get isActive => isPaid && (currentPeriodEnd?.isAfter(DateTime.now()) ?? false);
   TierLimits get limits => TierLimits.forTier(tier);
 
-  factory Subscription.free() => const Subscription(tier: SubscriptionTier.free);
+  static const free_ = Subscription(tier: SubscriptionTier.free);
+
+  factory Subscription.free() => free_;
 
   factory Subscription.fromMap(Map<String, dynamic> map) => Subscription(
         tier: SubscriptionTier.values.firstWhere(

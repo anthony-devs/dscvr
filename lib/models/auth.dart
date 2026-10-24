@@ -59,7 +59,7 @@ class DSCVRUser {
     this.interests = const [],
     this.onboarded = false,
     required this.createdAt,
-  }) : subscription = subscription ?? Subscription.free();
+  }) : subscription = subscription ?? Subscription.free_;
 
   String get firstName {
     final t = displayName.trim();
