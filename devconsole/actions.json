@@ -1,0 +1,79 @@
+[
+  {
+    "id": "server-tests",
+    "label": "Run the server test suite",
+    "description": "Runs pytest in the server folder (SERVER_DIR). Needs the server requirements and pytest installed there.",
+    "argv": ["python3", "-m", "pytest", "-q", "tests"],
+    "cwd": "$SERVER_DIR",
+    "timeout": 600,
+    "confirm": "RUN"
+  },
+  {
+    "id": "backup-firestore",
+    "label": "Back up Firestore to a bucket",
+    "description": "Exports the whole database to gs://BUCKET/backups/NAME. Run this before a migration. Needs gcloud signed in with access to the project.",
+    "argv": ["gcloud", "firestore", "export", "gs://{bucket}/backups/{name}", "--project", "{project}"],
+    "params": {
+      "bucket": {"label": "Cloud Storage bucket", "pattern": "[a-z0-9][a-z0-9._-]{2,62}"},
+      "name": {"label": "Backup name", "pattern": "[A-Za-z0-9_-]{3,40}"},
+      "project": {"label": "Firebase project id", "pattern": "[a-z][a-z0-9-]{4,29}", "default": "dscvr-9d362"}
+    },
+    "timeout": 1800,
+    "confirm": "BACKUP"
+  },
+  {
+    "id": "deploy-server",
+    "label": "Deploy the server to Railway",
+    "description": "Uploads the server folder with the Railway CLI and waits for the build, then runs the live checks. Needs `railway login` and `railway link` done once in the server folder.",
+    "argv": ["railway", "up", "--service", "{service}", "--ci"],
+    "cwd": "$SERVER_DIR",
+    "params": {"service": {"label": "Railway service", "pattern": "[A-Za-z0-9][A-Za-z0-9_-]{1,62}", "default": "dscvr-server"}},
+    "pre": ["flush"],
+    "post": ["smoke"],
+    "timeout": 1800,
+    "danger": true,
+    "confirm": "DEPLOY"
+  },
+  {
+    "id": "deploy-landing",
+    "label": "Deploy the landing page to Railway",
+    "description": "Uploads the landing folder (Next.js) with the Railway CLI and waits for the build.",
+    "argv": ["railway", "up", "--service", "{service}", "--ci"],
+    "cwd": "$LANDING_DIR",
+    "params": {"service": {"label": "Railway service", "pattern": "[A-Za-z0-9][A-Za-z0-9_-]{1,62}", "default": "dscvr-landing"}},
+    "timeout": 1800,
+    "danger": true,
+    "confirm": "DEPLOY"
+  },
+  {
+    "id": "build-web",
+    "label": "Build the web app",
+    "description": "flutter build web --release in the repo. Run before deploying hosting.",
+    "argv": ["flutter", "build", "web", "--release"],
+    "cwd": "$REPO_DIR",
+    "timeout": 1200,
+    "confirm": "BUILD"
+  },
+  {
+    "id": "deploy-hosting",
+    "label": "Deploy the web app to Firebase Hosting",
+    "description": "Publishes build/web. Users get the new version on their next load.",
+    "argv": ["firebase", "deploy", "--only", "hosting", "--project", "{project}"],
+    "cwd": "$REPO_DIR",
+    "params": {"project": {"label": "Firebase project id", "pattern": "[a-z][a-z0-9-]{4,29}", "default": "dscvr-9d362"}},
+    "timeout": 1200,
+    "danger": true,
+    "confirm": "DEPLOY"
+  },
+  {
+    "id": "deploy-rules",
+    "label": "Deploy Firestore and Storage rules",
+    "description": "Publishes firestore.rules and storage.rules. Rules apply within a minute.",
+    "argv": ["firebase", "deploy", "--only", "firestore:rules,storage", "--project", "{project}"],
+    "cwd": "$REPO_DIR",
+    "params": {"project": {"label": "Firebase project id", "pattern": "[a-z][a-z0-9-]{4,29}", "default": "dscvr-9d362"}},
+    "timeout": 600,
+    "danger": true,
+    "confirm": "DEPLOY"
+  }
+]

@@ -19,6 +19,8 @@ Firestore layout
   users/{uid}/meta/usage               day, count (free daily allowance)
   papers/{key}                         title, sum, count       (community ratings)
   papers/{key}/ratings/{uid}           stars, updatedAt
+  stats/{YYYY-MM-DD}                   app-wide daily totals for the admin dashboard:
+                                       active{uid}, aiUsers{uid}, requests, inputTokens, outputTokens, byFeature{}
 """
 from __future__ import annotations
 
@@ -99,6 +101,8 @@ def check_allowance(uid: str) -> str | None:
     daily allowance. Returns an error message when it's used up."""
     if user_profile(uid).get("orgId"):
         return None
+    import flags
+    limit = flags.free_daily_ai(FREE_DAILY_AI)
     db = _db()
     ref = db.document(f"users/{uid}/meta/usage")
     today = _today()
@@ -108,13 +112,13 @@ def check_allowance(uid: str) -> str | None:
         snap = ref.get(transaction=tx)
         data = snap.to_dict() or {}
         count = data.get("count", 0) if data.get("day") == today else 0
-        if count >= FREE_DAILY_AI:
+        if count >= limit:
             return False
         tx.set(ref, {"day": today, "count": count + 1, "total": firestore.Increment(1)}, merge=True)
         return True
 
     if not txn(db.transaction()):
-        return f"You've used today's {FREE_DAILY_AI} free Pinda requests. They reset at midnight UTC."
+        return f"You've used today's {limit} free Pinda requests. They reset at midnight UTC."
     return None
 
 
@@ -137,14 +141,24 @@ def record_usage(uid: str, feature: str, input_tokens: int = 0, output_tokens: i
             "inputTokens": firestore.Increment(int(input_tokens)),
             "outputTokens": firestore.Increment(int(output_tokens)),
         }, merge=True)
+        db.document(f"stats/{_today()}").set({
+            "active": {uid: True},
+            "aiUsers": {uid: True},
+            "requests": firestore.Increment(1),
+            "inputTokens": firestore.Increment(int(input_tokens)),
+            "outputTokens": firestore.Increment(int(output_tokens)),
+            "byFeature": {feature: firestore.Increment(1)},
+            "byEdition": {("enterprise" if org_id else (profile.get("edition") or "researchers")): firestore.Increment(1)},
+        }, merge=True)
     except Exception:  # noqa: BLE001
         pass
 
 
 def mark_active(uid: str) -> None:
-    """Counts a seat-day for enterprise members who open the app."""
+    """Counts today's active user, and a seat-day for enterprise members."""
     try:
         org_id = user_profile(uid).get("orgId")
+        _db().document(f"stats/{_today()}").set({"active": {uid: True}}, merge=True)
         if org_id:
             _db().document(f"orgs/{org_id}/usage/{_today()}").set(
                 {"seats": {uid: True}, "updatedAt": _now()}, merge=True)

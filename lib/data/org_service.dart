@@ -39,7 +39,7 @@ class OrgService {
     return UsageBill.fromMap((body['invoice'] as Map).cast<String, dynamic>());
   }
 
-  /// Counts today's seat for enterprise members. Fire and forget.
+  /// Counts today's active user (and an enterprise seat). Fire and forget.
   Future<void> pingActivity() async {
     if (Env.demo) return;
     try {

@@ -18,6 +18,8 @@ from typing import Any
 from fetch import UnsafeUrl, fetch_pdf
 from security import get_firestore_client
 
+from metrics import metrics  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("PINDA_MODEL", "claude-sonnet-5-5")
@@ -268,12 +270,16 @@ def stream_text(*, system: str, messages: list[dict[str, Any]], max_tokens: int,
                 getattr(final.usage, "cache_read_input_tokens", 0) or 0) + int(
                 getattr(final.usage, "cache_creation_input_tokens", 0) or 0)
             usage["output"] = int(getattr(final.usage, "output_tokens", 0) or 0)
+        metrics.ai(True)
         yield sse({"type": "done"})
     except AIUnavailable as e:
+        metrics.ai(False)
         yield sse({"type": "error", "message": str(e)})
     except Exception as e:  # noqa: BLE001
         status = getattr(e, "status_code", None)
         logger.warning("Claude stream failed: %s", e)
+        metrics.ai(False)
+        metrics.error(e, "claude:stream")
         busy = status in (429, 529)
         yield sse({"type": "error", "message": "Pinda is busy right now. Try again in a moment." if busy
                    else "Pinda could not finish that answer. Please try again."})
@@ -288,7 +294,12 @@ def complete(*, system: str, prompt: str, max_tokens: int, usage: dict[str, int]
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = {"type": "tool", "name": tool_name}
-    resp = client().messages.create(**kwargs)
+    try:
+        resp = client().messages.create(**kwargs)
+        metrics.ai(True)
+    except Exception:
+        metrics.ai(False)
+        raise
     usage["input"] = usage.get("input", 0) + int(getattr(resp.usage, "input_tokens", 0) or 0)
     usage["output"] = usage.get("output", 0) + int(getattr(resp.usage, "output_tokens", 0) or 0)
     if tools:

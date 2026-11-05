@@ -222,3 +222,127 @@ def test_rating_validation(client):
 
 def test_room_join_validates_code(client):
     assert client.post("/rooms/join", headers=AUTH, json={"code": "abc"}).status_code == 400
+
+
+# ── Admin dashboard and developer API ────────────────────────────────
+
+import hashlib as _hashlib  # noqa: E402
+import time as _time  # noqa: E402
+
+import devapi  # noqa: E402
+import flags  # noqa: E402
+import staff as staff_mod  # noqa: E402
+
+ADMIN_ENV = {
+    "ADMIN_USERNAME": "founder-anthony",
+    "ADMIN_PASSWORD_HASH": staff_mod.hash_password("Correct-Horse-9!"),
+    "ADMIN_KEY": "k" * 24,
+    "SESSION_SECRET": "s" * 40,
+    "DEV_API_SECRET": "d" * 40,
+}
+
+
+@pytest.fixture()
+def admin_client():
+    with mock.patch.dict(os.environ, ADMIN_ENV), mock.patch("app.init_firebase"), \
+         mock.patch.object(staff_mod.Staff, "_read_lock", return_value={}), \
+         mock.patch.object(staff_mod.Staff, "_write_lock"):
+        import app as app_module
+        flask_app = app_module.create_app()
+        flask_app.testing = True
+        yield flask_app.test_client()
+
+
+def _login(c):
+    r = c.post("/admin/api/login", json={"username": "founder-anthony", "password": "Correct-Horse-9!"})
+    assert r.status_code == 200
+    return r.get_json()["token"]
+
+
+def test_admin_page_is_served_with_strict_headers(admin_client):
+    r = admin_client.get("/admin")
+    assert r.status_code == 200 and b"DSCVR Admin" in r.data
+    assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
+    assert r.headers["Cache-Control"] == "no-store"
+
+
+def test_admin_login_rejects_wrong_password(admin_client):
+    r = admin_client.post("/admin/api/login", json={"username": "founder-anthony", "password": "nope"})
+    assert r.status_code == 401 and r.get_json()["error"] == "bad_credentials"
+    r = admin_client.post("/admin/api/login", json={"username": "someone-else", "password": "Correct-Horse-9!"})
+    assert r.status_code == 401
+
+
+def test_admin_api_needs_session_and_key(admin_client):
+    assert admin_client.get("/admin/api/overview").status_code == 401
+    token = _login(admin_client)
+    auth = {"Authorization": "Bearer " + token}
+    r = admin_client.get("/admin/api/ping", headers={**auth, "X-Admin-Key": "wrong"})
+    assert r.status_code == 401 and r.get_json()["error"] == "bad_admin_key"
+    r = admin_client.get("/admin/api/ping", headers={**auth, "X-Admin-Key": "k" * 24})
+    assert r.status_code == 200 and r.get_json()["username"] == "founder-anthony"
+    assert admin_client.get("/admin/api/ping", headers={"Authorization": "Bearer forged", "X-Admin-Key": "k" * 24}).status_code == 401
+
+
+def test_admin_flags_validate_limit(admin_client):
+    h = {"Authorization": "Bearer " + _login(admin_client), "X-Admin-Key": "k" * 24}
+    assert admin_client.post("/admin/api/flags", json={"freeDailyAi": 5000}, headers=h).status_code == 400
+    with mock.patch.object(flags, "update", return_value={"freeDailyAi": 10, "shared": True}) as up:
+        r = admin_client.post("/admin/api/flags", json={"freeDailyAi": 10}, headers=h)
+    assert r.status_code == 200 and up.call_args[0][0] == {"freeDailyAi": 10}
+
+
+def _signed(c, method, path, body=None, secret="d" * 40, ts=None, nonce=None):
+    raw = json.dumps(body).encode() if body is not None else b""
+    ts = ts or str(int(_time.time()))
+    nonce = nonce or os.urandom(12).hex()
+    sig = devapi.sign(secret, method, path, ts, nonce, raw)
+    headers = {"X-Dev-Time": ts, "X-Dev-Nonce": nonce, "X-Dev-Sig": sig, "Content-Type": "application/json"}
+    return c.open(path, method=method, data=raw if body is not None else None, headers=headers)
+
+
+def test_dev_api_refuses_unsigned_bad_and_replayed(admin_client):
+    assert admin_client.get("/internal/dev/diag").status_code == 401
+    assert _signed(admin_client, "GET", "/internal/dev/diag", secret="x" * 40).status_code == 401
+    old = str(int(_time.time()) - 600)
+    assert _signed(admin_client, "GET", "/internal/dev/diag", ts=old).status_code == 401
+    nonce = os.urandom(12).hex()
+    assert _signed(admin_client, "GET", "/internal/dev/diag", nonce=nonce).status_code == 200
+    assert _signed(admin_client, "GET", "/internal/dev/diag", nonce=nonce).status_code == 401
+
+
+def test_dev_api_diag_reports_config_without_secrets(admin_client):
+    d = _signed(admin_client, "GET", "/internal/dev/diag").get_json()
+    assert d["checks"]["adminKeyStrong"] and d["checks"]["sessionSecretStrong"]
+    assert "metrics" in d and "requests" in d["metrics"]
+    text = json.dumps(d)
+    assert "k" * 24 not in text and "d" * 40 not in text
+
+
+def test_dev_api_is_off_without_a_secret():
+    env = {**ADMIN_ENV, "DEV_API_SECRET": ""}
+    with mock.patch.dict(os.environ, env), mock.patch("app.init_firebase"):
+        import app as app_module
+        c = app_module.create_app().test_client()
+        assert c.get("/internal/dev/diag").status_code == 404
+
+
+def test_maintenance_blocks_ai_and_writes(client):
+    with mock.patch.object(flags, "get", return_value={**flags.DEFAULTS, "maintenance": {"on": True, "scope": "all", "message": "Back soon"}}):
+        r = client.post("/pinda", json={"messages": [{"role": "user", "text": "hi"}]}, headers=AUTH)
+        assert r.status_code == 503 and r.get_json()["error"] == "Back soon"
+        assert client.post("/ratings", json={"key": "arxiv:1", "stars": 5}, headers=AUTH).status_code == 503
+        assert client.get("/health").status_code == 200
+
+
+def test_ai_pause_blocks_only_ai(client):
+    with mock.patch.object(flags, "get", return_value={**flags.DEFAULTS, "aiPaused": True}):
+        assert client.post("/pinda", json={}, headers=AUTH).status_code == 503
+        assert client.post("/ratings", json={"key": "x", "stars": 9}, headers=AUTH).status_code == 400
+
+
+def test_free_limit_override():
+    with mock.patch.object(flags, "get", return_value={**flags.DEFAULTS, "freeDailyAi": 5}):
+        assert flags.free_daily_ai(40) == 5
+    with mock.patch.object(flags, "get", return_value=dict(flags.DEFAULTS)):
+        assert flags.free_daily_ai(40) == 40

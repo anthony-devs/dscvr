@@ -43,11 +43,18 @@ import os
 import uuid
 from urllib.parse import quote
 
-from flask import Flask, Response, g, jsonify, request, stream_with_context
+import time
+
+from flask import Flask, Response, g, got_request_exception, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 import ai
+import flags
 import orgs
+from admin import make_admin
+from devapi import make_devapi
+from metrics import metrics
+from staff import Staff
 from config import Config
 from discover import arxiv_by_id, cached, parse_arxiv_id, related_papers, s2_key_for, search_arxiv, search_semantic_scholar
 from fetch import UnsafeUrl, fetch_pdf
@@ -66,6 +73,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SCOPES = {"general", "category", "topic", "material", "selection"}
+AI_PATHS = {"/pinda", "/reports/draft", "/sessions/summary", "/parliament"}
+# Paths that keep working during maintenance: staff tools, and signals that cost nothing.
+MAINTENANCE_OPEN = ("/admin", "/internal/dev", "/health", "/healthz", "/pricing", "/activity")
 
 
 def _ids(value) -> list[str]:
@@ -102,6 +112,36 @@ def create_app(config: Config | None = None) -> Flask:
     )
     init_firebase(config.FIREBASE_PROJECT_ID)
 
+    staff = Staff()
+    app.register_blueprint(make_admin(staff))
+    app.register_blueprint(make_devapi(staff))
+
+    @app.before_request
+    def _start_and_gate():
+        g.t0 = time.perf_counter()
+        path = request.path
+        if request.method == "OPTIONS" or path.startswith(MAINTENANCE_OPEN):
+            return None
+        if path in AI_PATHS:
+            if (why := flags.ai_block_message()):
+                return jsonify(error=why, maintenance=True), 503
+        m = flags.maintenance()
+        if m and m.get("scope") == "all" and request.method == "POST":
+            return jsonify(error=m.get("message") or "DSCVR is being updated. Back shortly.", maintenance=True), 503
+        return None
+
+    @app.after_request
+    def _measure(resp):
+        t0 = g.get("t0")
+        if t0 is not None:
+            metrics.record(request.path, resp.status_code, (time.perf_counter() - t0) * 1000)
+        return resp
+
+    def _on_exception(sender, exception, **extra):
+        metrics.error(exception, request.path)
+
+    got_request_exception.connect(_on_exception, app, weak=False)
+
     def limited(endpoint: str, identity: str | None = None):
         err = check_rate(identity or g.uid, endpoint)
         return (jsonify(error=err), 429) if err else None
@@ -113,8 +153,9 @@ def create_app(config: Config | None = None) -> Flask:
     # ── Health & pricing ─────────────────────────────────────────────
 
     @app.route("/health")
+    @app.route("/healthz")
     def health():
-        return jsonify(status="ok", service="dscvr-server", ai=bool(os.getenv("ANTHROPIC_API_KEY")))
+        return jsonify(ok=True, status="ok", service="dscvr-server", ai=bool(os.getenv("ANTHROPIC_API_KEY")))
 
     @app.route("/pricing")
     @app.route("/payments/pricing")

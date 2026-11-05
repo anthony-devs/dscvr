@@ -86,7 +86,7 @@ class _DscvrAppState extends State<DscvrApp> {
     } catch (e) {
       debugPrint('Device registration failed: $e');
     }
-    if (_session.user.inOrg) unawaited(_orgs.pingActivity());
+    unawaited(_orgs.pingActivity());
   }
 
   @override
