@@ -22,10 +22,13 @@ import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
 GoRouter buildRouter(SessionController session) {
   NoTransitionPage<void> page(GoRouterState s, Widget child) => NoTransitionPage(key: s.pageKey, child: child);
 
   return GoRouter(
+    navigatorKey: _rootKey,
     initialLocation: '/recent',
     refreshListenable: session,
     redirect: (context, state) {
@@ -59,10 +62,12 @@ GoRouter buildRouter(SessionController session) {
       GoRoute(path: '/onboarding', pageBuilder: (_, s) => page(s, const OnboardingPage())),
       GoRoute(
         path: '/m/:id',
+        parentNavigatorKey: _rootKey,
         pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: ReaderPage(itemId: s.params['id']!, dictate: s.queryParams['dictate'] == '1')),
       ),
       GoRoute(
         path: '/reports/:id',
+        parentNavigatorKey: _rootKey,
         pageBuilder: (_, s) => MaterialPage(
           key: s.pageKey,
           child: ReportEditorPage(reportId: s.params['id']!, draftOnOpen: s.queryParams['draft'] == '1'),
@@ -70,10 +75,12 @@ GoRouter buildRouter(SessionController session) {
       ),
       GoRoute(
         path: '/sessions/:id',
+        parentNavigatorKey: _rootKey,
         pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: FocusPage(sessionId: s.params['id']!)),
       ),
       GoRoute(
         path: '/rooms/:id',
+        parentNavigatorKey: _rootKey,
         pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: RoomPage(roomId: s.params['id']!)),
       ),
       ShellRoute(
