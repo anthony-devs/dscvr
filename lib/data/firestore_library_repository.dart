@@ -5,6 +5,7 @@ import 'package:dscvr/config/env.dart';
 import 'package:dscvr/data/library_repository.dart';
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/models/pinda.dart';
+import 'package:dscvr/models/workspace.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class FirestoreLibraryRepository implements LibraryRepository {
@@ -24,6 +25,8 @@ class FirestoreLibraryRepository implements LibraryRepository {
   CollectionReference<Map<String, dynamic>> get _topics => _user.collection('topics');
   CollectionReference<Map<String, dynamic>> get _items => _user.collection('materials');
   CollectionReference<Map<String, dynamic>> get _conversations => _user.collection('conversations');
+  CollectionReference<Map<String, dynamic>> get _reports => _user.collection('reports');
+  CollectionReference<Map<String, dynamic>> get _sessions => _user.collection('sessions');
 
   @override
   String newId() => _items.doc().id;
@@ -168,6 +171,14 @@ class FirestoreLibraryRepository implements LibraryRepository {
       _items.doc(id).update({'inReadingList': value});
 
   @override
+  Future<void> setRating(String id, int stars) =>
+      _items.doc(id).update({'rating': stars.clamp(0, 5), 'updatedAt': FieldValue.serverTimestamp()});
+
+  @override
+  Future<void> attachPdf(String id, {required String storagePath, required String pdfUrl}) =>
+      _items.doc(id).update({'storagePath': storagePath, 'pdfUrl': pdfUrl, 'updatedAt': FieldValue.serverTimestamp()});
+
+  @override
   Future<(String, String)> uploadPdf({
     required String itemId,
     required String fileName,
@@ -250,4 +261,42 @@ class FirestoreLibraryRepository implements LibraryRepository {
     final msgs = await _conversations.doc(conversationId).collection('messages').get();
     await _deleteDocs([...msgs.docs.map((d) => d.reference), _conversations.doc(conversationId)]);
   }
+
+  // ── Reports ────────────────────────────────────────────────────────────────
+
+  @override
+  Stream<List<Report>> watchReports() => _reports
+      .orderBy('updatedAt', descending: true)
+      .limit(200)
+      .snapshots()
+      .map((s) => s.docs.map((d) => Report.fromMap(d.id, d.data())).toList());
+
+  @override
+  Future<Report?> getReport(String id) async {
+    final d = await _reports.doc(id).get();
+    final data = d.data();
+    return data == null ? null : Report.fromMap(d.id, data);
+  }
+
+  @override
+  Future<void> saveReport(Report report) => _reports.doc(report.id).set(report.toMap(), SetOptions(merge: true));
+
+  @override
+  Future<void> deleteReport(String id) => _reports.doc(id).delete();
+
+  // ── Focus sessions ─────────────────────────────────────────────────────────
+
+  @override
+  Stream<List<FocusSession>> watchSessions() => _sessions
+      .orderBy('startedAt', descending: true)
+      .limit(100)
+      .snapshots()
+      .map((s) => s.docs.map((d) => FocusSession.fromMap(d.id, d.data())).toList());
+
+  @override
+  Future<void> saveSession(FocusSession session) =>
+      _sessions.doc(session.id).set(session.toMap(), SetOptions(merge: true));
+
+  @override
+  Future<void> deleteSession(String id) => _sessions.doc(id).delete();
 }

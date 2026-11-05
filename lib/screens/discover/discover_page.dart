@@ -8,6 +8,9 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/ui/ui.dart';
+import 'package:dscvr/data/research_service.dart';
+import 'package:dscvr/models/workspace.dart';
+import 'package:dscvr/widgets/star_rating.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -65,7 +68,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
       setState(() {
         _papers = results;
         _summary = s;
+        _ratings = const {};
       });
+      _loadRatings(results, id);
     } catch (e) {
       if (!mounted || id != _request) return;
       setState(() {
@@ -75,6 +80,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
     } finally {
       if (mounted && id == _request) setState(() => _loading = false);
     }
+  }
+
+  Map<String, PaperRating> _ratings = const {};
+
+  Future<void> _loadRatings(List<Paper> papers, int id) async {
+    final r = await context.services.research.ratings([for (final p in papers) ResearchService.paperKey(p)]);
+    if (mounted && id == _request) setState(() => _ratings = r);
   }
 
   void _search() {
@@ -154,7 +166,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
       else if (_papers.isEmpty)
         const EmptyState(icon: Ic.discover, title: 'No papers found', message: 'Try different words or another source.')
       else
-        for (final p in _papers) _PaperRow(paper: p),
+        for (final p in _papers)
+          _PaperRow(
+            paper: p,
+            rating: _ratings[ResearchService.paperKey(p)],
+            onRated: (r) => setState(() => _ratings = {..._ratings, ResearchService.paperKey(p): r}),
+          ),
     ]);
   }
 }
@@ -205,8 +222,10 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _PaperRow extends StatefulWidget {
-  const _PaperRow({required this.paper});
+  const _PaperRow({required this.paper, this.rating, required this.onRated});
   final Paper paper;
+  final PaperRating? rating;
+  final ValueChanged<PaperRating> onRated;
 
   @override
   State<_PaperRow> createState() => _PaperRowState();
@@ -214,6 +233,17 @@ class _PaperRow extends StatefulWidget {
 
 class _PaperRowState extends State<_PaperRow> {
   bool _expanded = false;
+
+  Future<void> _rate(int stars) async {
+    if (stars == 0) return;
+    try {
+      final r = await context.services.research.rate(ResearchService.paperKey(widget.paper), stars, widget.paper.title);
+      widget.onRated(r);
+      if (mounted) toast(context, 'Thanks for rating', description: 'Your rating helps others find good papers.');
+    } catch (e) {
+      if (mounted) toast(context, e.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -236,9 +266,12 @@ class _PaperRowState extends State<_PaperRow> {
           p.authors.length > 6 ? '${p.authors.take(6).join(', ')}, et al.' : p.authors.join(', '),
           style: AppTheme.sans(fontSize: 13, color: c.inkMuted),
         ),
-        if (meta.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(meta, style: context.text.labelSmall),
+        if (meta.isNotEmpty || (widget.rating?.count ?? 0) > 0) ...[
+          const SizedBox(height: 6),
+          Wrap(spacing: 10, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            if (widget.rating != null) RatingBadge(average: widget.rating!.average, count: widget.rating!.count),
+            if (meta.isNotEmpty) Text(meta, style: context.text.labelSmall),
+          ]),
         ],
         if (p.summary.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -257,6 +290,10 @@ class _PaperRowState extends State<_PaperRow> {
             PillButton(label: 'PDF', icon: Ic.pdf, onTap: () => launchUrl(Uri.parse(p.pdfUrl!), mode: LaunchMode.externalApplication)),
           if (p.url != null)
             PillButton(label: p.sourceLabel, icon: Ic.external, onTap: () => launchUrl(Uri.parse(p.url!), mode: LaunchMode.externalApplication)),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 6),
+            child: StarRating(value: widget.rating?.mine ?? 0, size: 16, onChanged: _rate),
+          ),
         ]),
       ]),
     );

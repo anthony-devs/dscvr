@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/models/auth.dart';
+import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/subscription.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -57,13 +58,30 @@ class SessionController extends ChangeNotifier {
     required String displayName,
     required String role,
     required List<String> interests,
+    required Edition edition,
   }) async {
     if (Env.demo) {
-      _set(_user.copyWith(displayName: displayName, role: role, interests: interests, onboarded: true));
+      _set(_user.copyWith(displayName: displayName, role: role, interests: interests, onboarded: true, edition: edition));
       return;
     }
     await _auth!.completeOnboarding(
-        uid: _user.id, displayName: displayName, role: role, interests: interests);
+        uid: _user.id, displayName: displayName, role: role, interests: interests, edition: edition);
+  }
+
+  Edition get edition => _user.edition;
+
+  /// The profile is streamed live from Firestore, so server-side changes
+  /// (joining or leaving an organisation) arrive on their own. This waits
+  /// briefly so callers can rely on the new state being visible.
+  Future<void> refreshProfile() => Future<void>.delayed(const Duration(milliseconds: 400));
+
+  Future<void> setEdition(Edition edition) async {
+    if (edition == Edition.enterprise || _user.inOrg) return;
+    if (Env.demo) {
+      _set(_user.copyWith(edition: edition));
+      return;
+    }
+    await _auth!.setEdition(_user.id, edition);
   }
 
   /// Re-fetch the user's subscription from Firestore and update local state.

@@ -1,3 +1,4 @@
+import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/file.dart';
 import 'package:dscvr/models/subscription.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +26,11 @@ class DSCVRUser {
   final String role;
   final List<String> interests;
   final bool onboarded;
+
+  // Edition and organisation (enterprise)
+  final Edition edition;
+  final String? orgId;
+  final String? orgRole;
 
   // Preferences
   final bool darkMode;
@@ -58,8 +64,14 @@ class DSCVRUser {
     this.role = 'Researcher',
     this.interests = const [],
     this.onboarded = false,
+    this.edition = Edition.researchers,
+    this.orgId,
+    this.orgRole,
     required this.createdAt,
   }) : subscription = subscription ?? Subscription.free_;
+
+  bool get inOrg => orgId != null && orgId!.isNotEmpty;
+  bool get isOrgAdmin => inOrg && orgRole == 'admin';
 
   String get firstName {
     final t = displayName.trim();
@@ -115,6 +127,7 @@ class DSCVRUser {
     String? role,
     List<String>? interests,
     bool? onboarded,
+    Edition? edition,
   }) =>
       DSCVRUser(
         id: id,
@@ -132,6 +145,9 @@ class DSCVRUser {
         role: role ?? this.role,
         interests: interests ?? this.interests,
         onboarded: onboarded ?? this.onboarded,
+        edition: edition ?? this.edition,
+        orgId: orgId,
+        orgRole: orgRole,
         createdAt: createdAt,
       );
 
@@ -150,6 +166,7 @@ class DSCVRUser {
         'role': role,
         'interests': interests,
         'onboarded': onboarded,
+        'edition': edition.name,
         'subscription': subscription.toMap(),
         'createdAt': createdAt.toIso8601String(),
       };
@@ -167,6 +184,11 @@ class DSCVRUser {
         role: map['role'] as String? ?? 'Researcher',
         interests: (map['interests'] as List?)?.whereType<String>().toList() ?? const [],
         onboarded: map['onboarded'] as bool? ?? false,
+        edition: (map['orgId'] as String?)?.isNotEmpty == true
+            ? Edition.enterprise
+            : Edition.parse(map['edition'] as String?, role: map['role'] as String?),
+        orgId: map['orgId'] as String?,
+        orgRole: map['orgRole'] as String?,
         darkMode: map['darkMode'] ?? false,
         readerTheme: ReaderTheme.values.firstWhere(
           (e) => e.name == map['readerTheme'],
@@ -257,6 +279,7 @@ class DSCVRAuth {
     required String displayName,
     required String role,
     required List<String> interests,
+    required Edition edition,
   }) async {
     await _firestore.collection('users').doc(uid).set({
       'id': uid,
@@ -264,6 +287,7 @@ class DSCVRAuth {
       'email': _auth.currentUser?.email ?? '',
       'role': role,
       'interests': interests,
+      'edition': edition.name,
       'onboarded': true,
     }, SetOptions(merge: true));
     if (displayName.isNotEmpty) {
@@ -490,6 +514,11 @@ class DSCVRAuth {
   }
  
   /// Updates user preferences (theme, font size, Pinda settings).
+  /// Switches between the Students and Researchers editions. Enterprise is
+  /// set by the server when the user creates or joins an organisation.
+  Future<void> setEdition(String uid, Edition edition) =>
+      _firestore.collection('users').doc(uid).set({'edition': edition.name}, SetOptions(merge: true));
+
   Future<void> updatePreferences({
     required String uid,
     bool? darkMode,

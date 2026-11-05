@@ -19,10 +19,17 @@ class Env {
 
   /// Base URL of the dedicated Flask server (discover proxy, payments).
   /// This server handles CORS for web and provides added security.
-  static const String serverUrl = String.fromEnvironment(
-    'DSCVR_SERVER_URL',
-    defaultValue: 'https://dscvr-server-production.up.railway.app',
-  );
+  static const String _defaultServerUrl = 'https://dscvr-server-production.up.railway.app';
+  static const String _serverUrlDefine = String.fromEnvironment('DSCVR_SERVER_URL');
+
+  /// A typo'd --dart-define (e.g. "dscvr-https://…") silently broke Discover
+  /// once, so anything that isn't a clean https URL falls back to the default.
+  static final String serverUrl = () {
+    final raw = _serverUrlDefine.trim();
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return _defaultServerUrl;
+    return raw.replaceAll(RegExp(r'/+$'), '');
+  }();
 
   static const String storageBucket = 'gs://dscvr-9d362.firebasestorage.app';
 

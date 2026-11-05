@@ -1,7 +1,5 @@
 import 'package:dscvr/data/parliament_service.dart';
 import 'package:dscvr/models/parliament.dart';
-import 'package:dscvr/models/subscription.dart';
-import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/icons.dart';
@@ -68,11 +66,6 @@ class ParliamentPanelState extends State<ParliamentPanel> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final user = context.services.session.user;
-    final isPro = user.subscription.tier != SubscriptionTier.free;
-
-    if (!isPro) return _UpgradeNotice();
-
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       // Input area
       Padding(
@@ -122,41 +115,6 @@ class ParliamentPanelState extends State<ParliamentPanel> {
   }
 }
 
-class _UpgradeNotice extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: c.surfaceMuted,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Ic.scale, size: 28, color: c.inkMuted),
-          ),
-          const SizedBox(height: 16),
-          Text('Parliament Fact-Check', style: AppTheme.serif(fontSize: 18, fontWeight: FontWeight.w600, color: c.ink)),
-          const SizedBox(height: 8),
-          Text(
-            'Multi-perspective claim verification is available on Pro and Team plans.',
-            textAlign: TextAlign.center,
-            style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted, height: 1.4),
-          ),
-          const SizedBox(height: 16),
-          AppButton.primary(
-            onPressed: () => Navigator.of(context).pushNamed('/settings'),
-            label: const Text('See plans'),
-            icon: const Icon(Ic.lightning, size: 14),
-          ),
-        ]),
-      ),
-    );
-  }
-}
 
 class _EmptyView extends StatelessWidget {
   @override

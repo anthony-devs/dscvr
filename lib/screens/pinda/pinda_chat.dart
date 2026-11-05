@@ -1,4 +1,6 @@
+import 'package:dscvr/data/voice_service.dart';
 import 'package:dscvr/models/pinda.dart';
+import 'package:dscvr/state/services.dart';
 import 'package:dscvr/state/pinda_controller.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
@@ -116,6 +118,18 @@ class PindaChatState extends State<PindaChat> {
     widget.controller.send(t);
   }
 
+  /// Hold a conversation by voice: listen, send what was said, and the
+  /// page reads the answer back.
+  Future<void> _toggleMic() async {
+    final voice = context.services.voice;
+    if (voice.listening) {
+      await voice.stop();
+      return;
+    }
+    final ok = await voice.listen(onFinal: (text) => widget.controller.send(text, voice: true));
+    if (!ok && mounted && voice.error != null) toast(context, voice.error!);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -169,6 +183,7 @@ class PindaChatState extends State<PindaChat> {
                   ),
                   padding: const EdgeInsets.fromLTRB(14, 4, 6, 6),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    _ListeningStrip(voice: context.services.voice),
                     CallbackShortcuts(
                       bindings: {
                         const SingleActivator(LogicalKeyboardKey.enter): _submit,
@@ -201,6 +216,22 @@ class PindaChatState extends State<PindaChat> {
                           style: context.text.labelSmall,
                         ),
                       ),
+                      if (!ctl.isStreaming)
+                        ListenableBuilder(
+                          listenable: context.services.voice,
+                          builder: (context, _) {
+                            final v = context.services.voice;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: AppIconButton(
+                                size: 34,
+                                tooltip: v.listening ? 'Stop listening' : 'Ask by voice',
+                                onPressed: _toggleMic,
+                                icon: Icon(v.listening ? Ic.micFill : Ic.mic, size: 17, color: v.listening ? c.danger : null),
+                              ),
+                            );
+                          },
+                        ),
                       ListenableBuilder(
                         listenable: _input,
                         builder: (context, _) => AnimatedSwitcher(
@@ -255,9 +286,10 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) {
     final c = ctx.colors;
+    final edition = ctx.services.session.user.edition;
     final actions = context.scope == PindaScope.general
-        ? const [PindaAction.explain, PindaAction.questions, PindaAction.studyGuide, PindaAction.quiz]
-        : PindaAction.values;
+        ? edition.pindaActions
+        : [...edition.pindaActions, ...PindaAction.values.where((a) => !edition.pindaActions.contains(a))];
     return SingleChildScrollView(
       padding: EdgeInsets.all(compact ? 20 : 32),
       child: Center(
@@ -333,6 +365,8 @@ class _MessageView extends StatelessWidget {
           Text('Pinda', style: AppTheme.sans(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.ink)),
           const Spacer(),
           if (!message.pending && message.text.isNotEmpty)
+            _ReadAloud(text: message.text),
+          if (!message.pending && message.text.isNotEmpty)
             AppIconButton(
               tooltip: 'Copy',
               visualDensity: VisualDensity.compact,
@@ -405,6 +439,84 @@ class _TypingState extends State<_Typing> with SingleTickerProviderStateMixin {
               ),
             ),
         ]),
+      ),
+    );
+  }
+}
+
+
+/// Live transcript shown above the composer while listening.
+class _ListeningStrip extends StatelessWidget {
+  const _ListeningStrip({required this.voice});
+  final VoiceService voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return ListenableBuilder(
+      listenable: voice,
+      builder: (context, _) => AnimatedSize(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        child: !voice.listening
+            ? const SizedBox(width: double.infinity)
+            : Padding(
+                padding: const EdgeInsets.only(top: 10, right: 8),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  VoiceLevel(level: voice.level),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      voice.words.isEmpty ? 'Listening...' : voice.words,
+                      style: AppTheme.sans(fontSize: 14, color: voice.words.isEmpty ? c.inkFaint : c.ink, height: 1.45),
+                    ),
+                  ),
+                ]),
+              ),
+      ),
+    );
+  }
+}
+
+/// Three bars that follow the microphone level.
+class VoiceLevel extends StatelessWidget {
+  const VoiceLevel({super.key, required this.level, this.color});
+  final double level;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final col = color ?? context.colors.danger;
+    return SizedBox(
+      height: 20,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final f in const [0.6, 1.0, 0.75])
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            margin: const EdgeInsets.only(right: 3),
+            width: 3,
+            height: 5 + 15 * (level * f).clamp(0.0, 1.0),
+            decoration: BoxDecoration(color: col, borderRadius: BorderRadius.circular(2)),
+          ),
+      ]),
+    );
+  }
+}
+
+class _ReadAloud extends StatelessWidget {
+  const _ReadAloud({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final voice = context.services.voice;
+    return ListenableBuilder(
+      listenable: voice,
+      builder: (context, _) => AppIconButton(
+        tooltip: voice.speaking ? 'Stop reading' : 'Read aloud',
+        visualDensity: VisualDensity.compact,
+        onPressed: () => voice.speaking ? voice.stopSpeaking() : voice.speak(text),
+        icon: Icon(voice.speaking ? Ic.speakerOff : Ic.speaker, size: 15),
       ),
     );
   }

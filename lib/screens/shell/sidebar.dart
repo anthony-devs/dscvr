@@ -6,6 +6,7 @@ import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/ui/ui.dart';
+import 'package:dscvr/models/edition.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -94,6 +95,15 @@ class _SidebarState extends State<Sidebar> {
                   ),
                   _NavRow(icon: Ic.discover, label: 'Discover', active: widget.location.startsWith('/discover'), onTap: () => _go('/discover')),
                   _NavRow(icon: Ic.pinda, label: 'Pinda', active: widget.location.startsWith('/pinda'), onTap: () => _go('/pinda')),
+                  _NavRow(icon: Ic.report, label: 'Reports', active: widget.location.startsWith('/reports'), onTap: () => _go('/reports')),
+                  _NavRow(
+                    icon: Ic.timer,
+                    label: 'Sessions',
+                    active: widget.location.startsWith('/sessions') || widget.location.startsWith('/rooms'),
+                    onTap: () => _go('/sessions'),
+                  ),
+                  if (user.edition == Edition.enterprise || user.inOrg)
+                    _NavRow(icon: Ic.team, label: 'Team', active: widget.location.startsWith('/team'), onTap: () => _go('/team')),
                   const SizedBox(height: 18),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 0, 4, 6),
@@ -156,7 +166,7 @@ class _SidebarState extends State<Sidebar> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTheme.sans(fontSize: 13, fontWeight: FontWeight.w500, color: c.ink)),
-                      Text(user.role, style: context.text.labelSmall),
+                      Text(user.edition.label, style: context.text.labelSmall),
                     ]),
                   ),
                 ]),

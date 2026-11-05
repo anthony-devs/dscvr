@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:dscvr/data/library_repository.dart';
+import 'package:dscvr/data/voice_service.dart';
 import 'package:dscvr/models/library.dart';
+import 'package:dscvr/screens/pinda/pinda_chat.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
@@ -13,9 +15,12 @@ import 'package:flutter/material.dart';
 
 /// Markdown note editor with live preview and autosave.
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, required this.item, required this.onAsk});
+  const NoteEditor({super.key, required this.item, required this.onAsk, this.dictateOnOpen = false});
   final LibraryItem item;
   final ValueChanged<String> onAsk;
+
+  /// Starts dictation straight away (the "Voice note" shortcut).
+  final bool dictateOnOpen;
 
   @override
   State<NoteEditor> createState() => _NoteEditorState();
@@ -30,18 +35,67 @@ class _NoteEditorState extends State<NoteEditor> {
   Timer? _debounce;
   _SaveState _state = _SaveState.saved;
   late final LibraryRepository _repo;
+  late final VoiceService _voice;
+  bool _dictationOn = false;
 
   @override
   void initState() {
     super.initState();
     _repo = context.services.repo;
+    _voice = context.services.voice;
     _preview = widget.item.content.trim().isNotEmpty;
     _title.addListener(_changed);
     _body.addListener(_changed);
+    if (widget.dictateOnOpen) {
+      _preview = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _toggleDictation());
+    }
+  }
+
+  /// Dictates into the note at the cursor, keeping going through pauses
+  /// so a whole lecture or thought can be captured.
+  Future<void> _toggleDictation() async {
+    if (_dictationOn) {
+      _dictationOn = false;
+      await _voice.stop();
+      return;
+    }
+    if (_preview) setState(() => _preview = false);
+    _dictationOn = true;
+    final ok = await _voice.listen(dictation: true, onFinal: _insertDictation);
+    if (!ok) {
+      _dictationOn = false;
+      if (mounted && _voice.error != null) toast(context, _voice.error!);
+    }
+  }
+
+  void _insertDictation(String text) {
+    final cur = _body.text;
+    final sel = _body.selection;
+    final at = sel.isValid ? sel.start : cur.length;
+    final before = cur.substring(0, at);
+    final sep = before.isEmpty || before.endsWith('\n') ? '' : (before.endsWith(' ') ? '' : ' ');
+    final sentence = text[0].toUpperCase() + text.substring(1);
+    final insert = '$sep$sentence${RegExp(r'[.!?]$').hasMatch(sentence) ? '' : '.'} ';
+    _body.value = TextEditingValue(
+      text: before + insert + cur.substring(at),
+      selection: TextSelection.collapsed(offset: at + insert.length),
+    );
+    // The platform ends a recognition after a long pause; keep going until
+    // the user taps stop.
+    if (mounted && _dictationOn) {
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        if (mounted && _dictationOn && !_voice.listening) {
+          _voice.listen(dictation: true, onFinal: _insertDictation);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _dictationOn = false;
+    if (_voice.listening) _voice.cancel();
     if (_state == _SaveState.dirty) _save();
     _debounce?.cancel();
     _title.dispose();
@@ -130,6 +184,31 @@ class _NoteEditorState extends State<NoteEditor> {
             _ToolButton(icon: Ic.quote, tooltip: 'Quote', onTap: () => _linePrefix('> ')),
           ],
           const Spacer(),
+          ListenableBuilder(
+            listenable: _voice,
+            builder: (context, _) {
+              final v = _voice;
+              return Row(mainAxisSize: MainAxisSize.min, children: [
+                if (v.listening) ...[
+                  VoiceLevel(level: v.level),
+                  const SizedBox(width: 8),
+                  if (!context.isCompact)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Text(v.words.isEmpty ? 'Listening...' : v.words,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.sans(fontSize: 12.5, color: c.inkMuted)),
+                    ),
+                  const SizedBox(width: 6),
+                ],
+                AppIconButton(
+                  tooltip: v.listening ? 'Stop dictating' : 'Dictate',
+                  onPressed: _toggleDictation,
+                  icon: Icon(v.listening ? Ic.micFill : Ic.mic, size: 18, color: v.listening ? c.danger : null),
+                ),
+              ]);
+            },
+          ),
+          const SizedBox(width: 4),
           Text(status, style: AppTheme.sans(fontSize: 12, color: _state == _SaveState.failed ? c.danger : c.inkFaint)),
           const SizedBox(width: 8),
           AppIconButton(

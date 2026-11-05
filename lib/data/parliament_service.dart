@@ -1,11 +1,9 @@
-import 'dart:convert';
-
 import 'package:dscvr/config/env.dart';
+import 'package:dscvr/data/api.dart';
 import 'package:dscvr/models/parliament.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 
-/// Calls the Parliament Cloud Function to fact-check a claim.
+/// Calls the server's Parliament endpoint to fact-check a claim.
 class ParliamentService {
   const ParliamentService();
 
@@ -14,35 +12,9 @@ class ParliamentService {
   Future<ParliamentResult> check(String claim, {String? context}) async {
     if (Env.demo) return _demoResult(claim);
 
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-    if (token == null) throw Exception('Sign in to use Parliament.');
-
-    final resp = await http.post(
-      Uri.parse('${Env.functionsUrl}/parliament'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'claim': claim,
-        if (context != null) 'context': context,
-      }),
-    );
-
-    if (resp.statusCode != 200) {
-      final msg = _errorMsg(resp);
-      throw Exception(msg);
-    }
-
-    return ParliamentResult.fromMap(jsonDecode(resp.body) as Map<String, dynamic>);
-  }
-
-  String _errorMsg(http.Response r) {
-    try {
-      return (jsonDecode(r.body) as Map)['error'] as String? ?? 'Request failed (${r.statusCode})';
-    } catch (_) {
-      return 'Request failed (${r.statusCode})';
-    }
+    final api = DscvrApi(token: () async => FirebaseAuth.instance.currentUser?.getIdToken());
+    final body = await api.post('/parliament', {'claim': claim, 'context': ?context});
+    return ParliamentResult.fromMap(body);
   }
 
   /// In demo mode, return a canned result.

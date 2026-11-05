@@ -3,7 +3,7 @@ const steps = [
     number: "01",
     title: "Save anything",
     description:
-      "Drop a paper URL, upload a PDF, paste a YouTube link, or write a note. DSCVR extracts titles, metadata and readable text automatically.",
+      "Paste an arXiv ID, upload a PDF, drop a link or a YouTube lecture, or dictate a note. DSCVR fills in titles, authors and the full text.",
   },
   {
     number: "02",
@@ -15,13 +15,13 @@ const steps = [
     number: "03",
     title: "Read and highlight",
     description:
-      "A clean reader with adjustable text size, dark mode, and inline highlights. Focus on the content, not the chrome.",
+      "A clean reader with highlights, ratings and related papers beside it. Start a focus session and let the timer keep you honest.",
   },
   {
     number: "04",
-    title: "Ask Pinda",
+    title: "Ask, then write it up",
     description:
-      "Your AI research companion reads your entire library (or a slice of it) and answers questions with citations back to your own materials.",
+      "Pinda answers with citations back to your materials, then drafts the literature review, study notes or comparison you need.",
   },
 ];
 

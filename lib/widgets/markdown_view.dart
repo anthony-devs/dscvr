@@ -107,6 +107,52 @@ class _MarkdownViewState extends State<MarkdownView> {
         continue;
       }
 
+      // Pipe table: a header row, a |---| separator, then rows.
+      if (t.startsWith('|') &&
+          i + 1 < lines.length &&
+          RegExp(r'^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$').hasMatch(lines[i + 1].trim())) {
+        flushPara();
+        List<String> cells(String row) {
+          var r = row.trim();
+          if (r.startsWith('|')) r = r.substring(1);
+          if (r.endsWith('|')) r = r.substring(0, r.length - 1);
+          return r.split('|').map((x) => x.trim()).toList();
+        }
+
+        final header = cells(t);
+        final rows = <List<String>>[];
+        i += 2;
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          rows.add(cells(lines[i]));
+          i++;
+        }
+        final cols = header.length;
+        final small = body.copyWith(fontSize: (body.fontSize ?? 14) - 1);
+        TableRow row(List<String> values, {bool head = false}) => TableRow(
+              decoration: head ? BoxDecoration(color: c.surfaceMuted) : null,
+              children: [
+                for (var k = 0; k < cols; k++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Text.rich(_inline(k < values.length ? values[k] : '',
+                        head ? small.copyWith(fontWeight: FontWeight.w600) : small, c)),
+                  ),
+              ],
+            );
+        blocks.add(_spaced(SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: 120.0 * cols),
+            child: Table(
+              defaultColumnWidth: const IntrinsicColumnWidth(),
+              border: TableBorder.all(color: c.line, borderRadius: BorderRadius.circular(Radii.sm)),
+              children: [row(header, head: true), for (final r in rows) row(r)],
+            ),
+          ),
+        )));
+        continue;
+      }
+
       if (RegExp(r'^(-{3,}|\*{3,})$').hasMatch(t)) {
         flushPara();
         blocks.add(_spaced(Divider(color: c.line)));

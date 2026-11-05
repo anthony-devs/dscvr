@@ -5,9 +5,16 @@ import 'package:dscvr/screens/login.dart';
 import 'package:dscvr/screens/onboarding/onboarding_page.dart';
 import 'package:dscvr/screens/pinda/pinda_page.dart';
 import 'package:dscvr/screens/reader/reader_page.dart';
+import 'package:dscvr/screens/reports/report_editor_page.dart';
+import 'package:dscvr/screens/reports/reports_page.dart';
+import 'package:dscvr/screens/sessions/focus_page.dart';
+import 'package:dscvr/screens/sessions/room_page.dart';
+import 'package:dscvr/screens/sessions/sessions_page.dart';
+import 'package:dscvr/screens/team/team_page.dart';
 import 'package:dscvr/screens/settings/settings_page.dart';
 import 'package:dscvr/screens/signup.dart';
 import 'package:dscvr/screens/shell/app_shell.dart';
+import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/state/session_controller.dart';
 import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
@@ -36,7 +43,10 @@ GoRouter buildRouter(SessionController session) {
           return loc == '/onboarding' ? null : '/onboarding';
         case SessionStatus.ready:
           if (const {'/splash', '/login', '/signup', '/onboarding', '/'}.contains(loc)) {
-            return (from != null && from.startsWith('/') && !from.startsWith('/splash')) ? from : '/recent';
+            if (from != null && from.startsWith('/') && !from.startsWith('/splash')) return from;
+            final u = session.user;
+            if (loc == '/onboarding' && u.edition == Edition.enterprise && !u.inOrg) return '/team';
+            return '/recent';
           }
           return null;
       }
@@ -49,7 +59,22 @@ GoRouter buildRouter(SessionController session) {
       GoRoute(path: '/onboarding', pageBuilder: (_, s) => page(s, const OnboardingPage())),
       GoRoute(
         path: '/m/:id',
-        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: ReaderPage(itemId: s.params['id']!)),
+        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: ReaderPage(itemId: s.params['id']!, dictate: s.queryParams['dictate'] == '1')),
+      ),
+      GoRoute(
+        path: '/reports/:id',
+        pageBuilder: (_, s) => MaterialPage(
+          key: s.pageKey,
+          child: ReportEditorPage(reportId: s.params['id']!, draftOnOpen: s.queryParams['draft'] == '1'),
+        ),
+      ),
+      GoRoute(
+        path: '/sessions/:id',
+        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: FocusPage(sessionId: s.params['id']!)),
+      ),
+      GoRoute(
+        path: '/rooms/:id',
+        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: RoomPage(roomId: s.params['id']!)),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(location: state.location, child: child),
@@ -60,6 +85,9 @@ GoRouter buildRouter(SessionController session) {
           GoRoute(path: '/search', pageBuilder: (_, s) => page(s, const SearchPage())),
           GoRoute(path: '/discover', pageBuilder: (_, s) => page(s, DiscoverPage(initialQuery: s.queryParams['q']))),
           GoRoute(path: '/pinda', pageBuilder: (_, s) => page(s, PindaPage(conversationId: s.queryParams['c']))),
+          GoRoute(path: '/reports', pageBuilder: (_, s) => page(s, const ReportsPage())),
+          GoRoute(path: '/sessions', pageBuilder: (_, s) => page(s, const SessionsPage())),
+          GoRoute(path: '/team', pageBuilder: (_, s) => page(s, const TeamPage())),
           GoRoute(path: '/settings', pageBuilder: (_, s) => page(s, const SettingsPage())),
           GoRoute(
             path: '/c/:cid',

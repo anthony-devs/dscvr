@@ -4,7 +4,11 @@ import 'dart:ui' as ui;
 import 'package:dscvr/data/link_service.dart';
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/models/pinda.dart';
+import 'package:dscvr/models/workspace.dart';
+import 'package:dscvr/screens/add/add_material_sheet.dart';
+import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/item_actions.dart';
+import 'package:dscvr/screens/reader/related_panel.dart';
 import 'package:dscvr/screens/pinda/pinda_chat.dart';
 import 'package:dscvr/screens/reader/notes_panel.dart';
 import 'package:dscvr/screens/reader/note_editor.dart';
@@ -18,18 +22,22 @@ import 'package:dscvr/widgets/embed/embed_view.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/markdown_view.dart';
 import 'package:dscvr/widgets/progress_ring.dart';
+import 'package:dscvr/widgets/star_rating.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum _Pane { read, notes, pinda, parliament }
+enum _Pane { read, notes, pinda, parliament, related }
 
 /// Opens a single material: the content on the left, Pinda and margin
 /// notes on the right (wide screens) or as tabs (phones).
 class ReaderPage extends StatefulWidget {
-  const ReaderPage({super.key, required this.itemId});
+  const ReaderPage({super.key, required this.itemId, this.dictate = false});
   final String itemId;
+
+  /// Opens a note with dictation already running.
+  final bool dictate;
 
   @override
   State<ReaderPage> createState() => _ReaderPageState();
@@ -57,7 +65,26 @@ class _ReaderPageState extends State<ReaderPage> {
       service: s.pinda,
       context: PindaContext(scope: PindaScope.material, id: item.id, label: item.title),
       styleOf: () => s.settings.pindaStyle,
+      onReply: (reply, voice) {
+        if (voice) s.voice.speak(reply.text);
+      },
     );
+  }
+
+  Future<void> _rate(LibraryItem item, int stars) async {
+    final s = context.services;
+    await s.repo.setRating(item.id, stars);
+    final key = item.paperKey;
+    if (key != null && stars > 0) {
+      s.research.rate(key, stars, item.title).catchError((_) => const PaperRating());
+    }
+  }
+
+  Future<void> _savePdf(LibraryItem item) async {
+    final s = context.services;
+    toast(context, 'Saving PDF to your library...');
+    final ok = await s.research.importPdf(s.repo, item);
+    if (mounted) toast(context, ok ? 'PDF saved to your library' : "Couldn't save that PDF", description: ok ? 'It now opens offline and Pinda reads all of it.' : null);
   }
 
   void _markOpened(LibraryItem item) {
@@ -121,7 +148,7 @@ class _ReaderPageState extends State<ReaderPage> {
         }
         _markOpened(item);
         final pinda = _pindaFor(item);
-        final content = _ReaderContent(item: item, onAsk: _askAbout, onNote: _noteFrom, onFactCheck: _factCheck);
+        final content = _ReaderContent(item: item, onAsk: _askAbout, onNote: _noteFrom, onFactCheck: _factCheck, dictate: widget.dictate);
 
         final parliamentPanel = ParliamentPanel(
           key: _parliamentKey,
@@ -233,6 +260,43 @@ class _ReaderPageState extends State<ReaderPage> {
         ]),
       ),
       actions: [
+        if (!context.isCompact)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: StarRating(value: item.rating, size: 17, onChanged: (v) => _rate(item, v)),
+          )
+        else
+          AppIconButton(
+            tooltip: item.rating > 0 ? 'Rated ${item.rating} of 5' : 'Rate',
+            onPressed: () => showAdaptiveSheet<void>(
+              context,
+              builder: (ctx) => Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const SheetHeader(title: 'Rate this'),
+                  const SizedBox(height: 12),
+                  StatefulBuilder(
+                    builder: (ctx, set) => StarRating(
+                      value: context.library.item(item.id)?.rating ?? 0,
+                      size: 34,
+                      spacing: 8,
+                      onChanged: (v) async {
+                        await _rate(item, v);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+            icon: Icon(item.rating > 0 ? Ic.starFill : Ic.star, size: 19, color: item.rating > 0 ? const Color(0xFFE0A526) : null),
+          ),
+        if (item.hasPdf && !item.pdfInLibrary && item.kind != MaterialKind.note)
+          AppIconButton(
+            tooltip: 'Save PDF to your library',
+            onPressed: () => _savePdf(item),
+            icon: const Icon(Ic.download, size: 19),
+          ),
         if (item.kind != MaterialKind.note) _ProgressButton(item: item),
         AppIconButton(
           tooltip: item.inReadingList ? 'Remove from reading list' : 'Add to reading list',
@@ -289,9 +353,11 @@ class _SidePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final related = item.kind == MaterialKind.paper || item.kind == MaterialKind.pdf;
     final activePaneIndex = switch (pane) {
       _Pane.notes => 1,
       _Pane.parliament => 2,
+      _Pane.related => related ? 3 : 0,
       _ => 0,
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -304,8 +370,9 @@ class _SidePanel extends StatelessWidget {
                 (_Pane.pinda, 'Pinda', Ic.pinda),
                 (_Pane.notes, item.noteCount > 0 ? 'Notes  ${item.noteCount}' : 'Notes', Ic.notebook),
                 (_Pane.parliament, 'Check', Ic.scale),
+                if (related) (_Pane.related, 'Related', Ic.discover),
               ],
-              value: pane == _Pane.read ? _Pane.pinda : pane,
+              value: pane == _Pane.read || (pane == _Pane.related && !related) ? _Pane.pinda : pane,
               onChanged: onPane,
             ),
           ),
@@ -315,7 +382,7 @@ class _SidePanel extends StatelessWidget {
       Expanded(
         child: IndexedStack(
           index: activePaneIndex,
-          children: [chat, NotesPanel(item: item), parliament],
+          children: [chat, NotesPanel(item: item), parliament, if (related) RelatedPanel(item: item)],
         ),
       ),
     ]);
@@ -361,8 +428,9 @@ class _ProgressButton extends StatelessWidget {
 
 /// Chooses the right view for the material's kind.
 class _ReaderContent extends StatelessWidget {
-  const _ReaderContent({required this.item, required this.onAsk, required this.onNote, required this.onFactCheck});
+  const _ReaderContent({required this.item, required this.onAsk, required this.onNote, required this.onFactCheck, this.dictate = false});
   final LibraryItem item;
+  final bool dictate;
   final ValueChanged<String> onAsk;
   final ValueChanged<String> onNote;
   final ValueChanged<String> onFactCheck;
@@ -371,7 +439,7 @@ class _ReaderContent extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (item.kind) {
       case MaterialKind.note:
-        return NoteEditor(item: item, onAsk: onAsk);
+        return NoteEditor(item: item, onAsk: onAsk, dictateOnOpen: dictate);
       case MaterialKind.youtube:
         return _VideoView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
       case MaterialKind.pdf:
@@ -583,7 +651,7 @@ class _NoTextNotice extends StatelessWidget {
         Wrap(spacing: 8, runSpacing: 8, children: [
           if (arxivPdf != null && !item.hasPdf)
             AppButton.primary(
-              onPressed: () => context.services.repo.saveItem(LibraryItem.fromMap(item.id, {...item.toMap(), 'pdfUrl': arxivPdf})),
+              onPressed: () => keepPaper(context, LibraryItem.fromMap(item.id, {...item.toMap(), 'pdfUrl': arxivPdf})),
               icon: const Icon(Ic.pdf, size: 16),
               label: const Text('Load PDF'),
             ),

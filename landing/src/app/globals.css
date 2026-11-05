@@ -58,3 +58,26 @@ body {
 .delay-2 { animation-delay: 0.2s; opacity: 0; }
 .delay-3 { animation-delay: 0.3s; opacity: 0; }
 .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+/* Soft light behind the hero */
+.hero-glow {
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 720px;
+  background:
+    radial-gradient(40% 50% at 30% 30%, rgba(139, 92, 246, 0.10), transparent 70%),
+    radial-gradient(35% 45% at 72% 25%, rgba(59, 130, 246, 0.08), transparent 70%),
+    radial-gradient(30% 40% at 55% 60%, rgba(16, 185, 129, 0.06), transparent 70%);
+  pointer-events: none;
+}
+
+/* Voice level bars */
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+.eq { animation: eq 0.9s ease-in-out infinite; transform-origin: bottom; }
+
+@media (prefers-reduced-motion: reduce) {
+  .float-1, .float-2, .float-3, .eq { animation: none; }
+}

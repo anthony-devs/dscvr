@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from typing import Any, Callable
@@ -38,10 +39,29 @@ def cached(key: tuple, fetch: Callable[[], list[dict[str, Any]]]) -> list[dict[s
     return papers
 
 
-def search_arxiv(query: str, sort: str = "relevance", limit: int = 20) -> list[dict[str, Any]]:
+ARXIV_ID = re.compile(
+    r"(?:arxiv\.org/(?:abs|pdf|html)/|arxiv:\s*)?"
+    r"(?P<id>\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)",
+    re.IGNORECASE,
+)
+
+
+def parse_arxiv_id(text: str) -> str | None:
+    """Extracts an arXiv id from an id, abs/pdf URL or 'arXiv:' reference."""
+    m = ARXIV_ID.search(text.strip())
+    return m.group("id") if m else None
+
+
+def arxiv_by_id(arxiv_id: str) -> dict[str, Any] | None:
+    papers = search_arxiv("", limit=1, id_list=arxiv_id)
+    return papers[0] if papers else None
+
+
+def search_arxiv(query: str, sort: str = "relevance", limit: int = 20, id_list: str = "") -> list[dict[str, Any]]:
     """Search arXiv and return a list of normalised paper dicts."""
     params = {
         "search_query": query,
+        "id_list": id_list,
         "start": "0",
         "max_results": str(limit),
         "sortBy": "submittedDate" if sort == "date" else "relevance",
@@ -87,7 +107,7 @@ def search_semantic_scholar(query: str, limit: int = 20) -> list[dict[str, Any]]
     params = {
         "query": query,
         "limit": str(limit),
-        "fields": "title,authors,year,abstract,url,openAccessPdf,venue,citationCount,externalIds",
+        "fields": S2_FIELDS,
     }
     headers = {}
     if _S2_API_KEY:
@@ -118,24 +138,59 @@ def search_semantic_scholar(query: str, limit: int = 20) -> list[dict[str, Any]]
         return search_openalex(query, limit)
     data = resp.json()
 
-    papers: list[dict[str, Any]] = []
-    for p in data.get("data", []):
-        authors = [a.get("name", "") for a in (p.get("authors") or []) if a.get("name")]
-        oap = p.get("openAccessPdf") or {}
-        papers.append({
-            "id": p.get("paperId", ""),
-            "title": _clean(p.get("title", "")),
-            "source": "semantic_scholar",
-            "authors": authors,
-            "year": p.get("year"),
-            "summary": _clean(p.get("abstract", "")),
-            "url": p.get("url"),
-            "pdfUrl": oap.get("url") if oap else None,
-            "venue": p.get("venue") or None,
-            "citations": p.get("citationCount"),
-            "subjects": [],
-        })
-    return papers
+    return [_s2_paper(p) for p in data.get("data", [])]
+
+
+S2_FIELDS = "title,authors,year,abstract,url,openAccessPdf,venue,citationCount,externalIds"
+
+
+def _s2_paper(p: dict[str, Any]) -> dict[str, Any]:
+    authors = [a.get("name", "") for a in (p.get("authors") or []) if a.get("name")]
+    oap = p.get("openAccessPdf") or {}
+    ext = p.get("externalIds") or {}
+    return {
+        "id": p.get("paperId", ""),
+        "title": _clean(p.get("title") or ""),
+        "source": "semantic_scholar",
+        "authors": authors,
+        "year": p.get("year"),
+        "summary": _clean(p.get("abstract") or ""),
+        "url": p.get("url"),
+        "pdfUrl": (oap.get("url") or None) if oap else (f"https://arxiv.org/pdf/{ext['ArXiv']}" if ext.get("ArXiv") else None),
+        "venue": p.get("venue") or None,
+        "citations": p.get("citationCount"),
+        "subjects": [],
+    }
+
+
+def s2_key_for(source: str | None, external_id: str | None) -> str | None:
+    """Builds a Semantic Scholar paper reference for a saved item."""
+    if source == "semantic_scholar" and external_id:
+        return external_id
+    if source == "arxiv" and external_id:
+        return "arXiv:" + re.sub(r"v\d+$", "", external_id)
+    return None
+
+
+def related_papers(ref: str | None, title: str | None, limit: int = 8) -> list[dict[str, Any]]:
+    """Papers related to a reference (S2 recommendations), or a title search
+    when the item has no known id. Falls back to OpenAlex on throttling."""
+    headers = {"x-api-key": _S2_API_KEY} if _S2_API_KEY else {}
+    if ref:
+        try:
+            resp = requests.get(
+                f"https://api.semanticscholar.org/recommendations/v1/papers/forpaper/{ref}",
+                params={"fields": S2_FIELDS, "limit": str(limit)}, timeout=_TIMEOUT, headers=headers)
+            recs = resp.json().get("recommendedPapers", []) if resp.status_code == 200 else []
+            if recs:
+                return [_s2_paper(p) for p in recs]
+            logger.info("S2 recommendations returned %s", resp.status_code)
+        except requests.RequestException as e:
+            logger.info("S2 recommendations failed: %s", e)
+    if title:
+        same = _clean(title).lower()
+        return [p for p in search_semantic_scholar(title, limit + 1) if _clean(p["title"]).lower() != same][:limit]
+    return []
 
 
 def search_openalex(query: str, limit: int = 20) -> list[dict[str, Any]]:

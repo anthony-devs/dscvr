@@ -2,6 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { DEMO_URL, SIGNUP_URL } from "@/lib/site";
+
+const links = [
+  ["Features", "#features"],
+  ["Editions", "#editions"],
+  ["Pinda", "#pinda"],
+  ["Pricing", "#pricing"],
+];
 
 export function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -19,29 +27,21 @@ export function Nav() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-sm text-muted hover:text-foreground transition-colors">
-            Features
-          </a>
-          <a href="#how-it-works" className="text-sm text-muted hover:text-foreground transition-colors">
-            How it works
-          </a>
-          <a href="#pinda" className="text-sm text-muted hover:text-foreground transition-colors">
-            Pinda AI
-          </a>
+          {links.map(([label, href]) => (
+            <a key={href} href={href} className="text-sm text-muted hover:text-foreground transition-colors">{label}</a>
+          ))}
         </div>
 
         {/* CTA */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-5">
+          <a href={DEMO_URL} target="_blank" rel="noopener noreferrer" className="text-sm text-muted hover:text-foreground transition-colors">
+            Demo
+          </a>
           <a
-            href="https://dscvr-9d362.web.app/?demo=true"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={SIGNUP_URL}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background text-sm font-medium rounded-full hover:bg-foreground/90 transition-colors"
           >
-            Try the demo
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 17L17 7M17 7H7M17 7v10" />
-            </svg>
+            Start free
           </a>
         </div>
 
@@ -71,16 +71,11 @@ export function Nav() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden border-t border-border bg-background px-6 py-4 space-y-4">
-          <a href="#features" className="block text-sm text-muted" onClick={() => setMenuOpen(false)}>Features</a>
-          <a href="#how-it-works" className="block text-sm text-muted" onClick={() => setMenuOpen(false)}>How it works</a>
-          <a href="#pinda" className="block text-sm text-muted" onClick={() => setMenuOpen(false)}>Pinda AI</a>
-          <a
-            href="https://dscvr-9d362.web.app/?demo=true"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background text-sm font-medium rounded-full"
-          >
-            Try the demo
+          {links.map(([label, href]) => (
+            <a key={href} href={href} className="block text-sm text-muted" onClick={() => setMenuOpen(false)}>{label}</a>
+          ))}
+          <a href={SIGNUP_URL} className="inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background text-sm font-medium rounded-full">
+            Start free
           </a>
         </div>
       )}

@@ -1,14 +1,16 @@
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/data/firestore_library_repository.dart';
+import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/common.dart';
+import 'package:dscvr/widgets/edition_card.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 
-/// Three short steps: who you are, what you study, how DSCVR works.
+/// Four short steps: which DSCVR, who you are, what you study, how it works.
 /// Selected interests become starter categories in the library.
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -18,7 +20,12 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  static const roles = ['Student', 'Researcher', 'Engineer', 'Writer', 'Educator', 'Curious mind'];
+  static const _rolesFor = {
+    Edition.students: ['High school', 'Undergraduate', 'Masters', 'PhD', 'Self-taught'],
+    Edition.researchers: ['PhD student', 'Postdoc', 'Faculty', 'Industry researcher', 'Independent'],
+    Edition.enterprise: ['Research', 'Product', 'Engineering', 'Strategy', 'Leadership'],
+  };
+  static const _steps = 4;
   static const subjects = [
     'Computer Science', 'Machine Learning', 'Economics', 'Neuroscience', 'Psychology', 'Biology',
     'Physics', 'Mathematics', 'Philosophy', 'History', 'Finance', 'Medicine', 'Design', 'Law',
@@ -28,7 +35,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
   late final _name = TextEditingController(text: context.services.session.user.displayName == 'DSCVR User'
       ? ''
       : context.services.session.user.displayName);
-  String _role = 'Student';
+  Edition _edition = Edition.researchers;
+  String _role = '';
   final List<String> _interests = [];
   bool _saving = false;
 
@@ -50,8 +58,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       }
       await session.completeOnboarding(
         displayName: _name.text.trim().isEmpty ? session.user.displayName : _name.text.trim(),
-        role: _role,
+        role: _role.isEmpty ? _edition.short : _role,
         interests: _interests,
+        edition: _edition,
       );
     } catch (e) {
       if (mounted) {
@@ -65,8 +74,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final canNext = switch (_step) {
-      0 => _name.text.trim().isNotEmpty,
-      1 => _interests.isNotEmpty,
+      1 => _name.text.trim().isNotEmpty,
+      2 => _interests.isNotEmpty,
       _ => true,
     };
     return Scaffold(
@@ -81,7 +90,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 Row(children: [
                   const DscvrMark(size: 30),
                   const Spacer(),
-                  for (var i = 0; i < 3; i++)
+                  for (var i = 0; i < _steps; i++)
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       margin: const EdgeInsets.only(left: 6),
@@ -106,10 +115,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   AppButton.primary(
                     onPressed: !canNext || _saving
                         ? null
-                        : () => _step < 2 ? setState(() => _step++) : _finish(),
+                        : () => _step < _steps - 1 ? setState(() => _step++) : _finish(),
                     child: _saving
                         ? SizedBox(width: 16, height: 16, child: Spinner(size: 16, color: c.inverseInk))
-                        : Text(_step < 2 ? 'Continue' : 'Open my library'),
+                        : Text(_step < _steps - 1
+                            ? 'Continue'
+                            : _edition == Edition.enterprise
+                                ? 'Set up my team'
+                                : 'Open my library'),
                   ),
                 ]),
               ]),
@@ -123,11 +136,32 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _body(DscvrColors c) {
     switch (_step) {
       case 0:
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('Welcome to DSCVR', style: context.text.displaySmall),
           const SizedBox(height: 10),
-          Text('A personal research library with an assistant that has actually read your sources.',
+          Text('A research library with an assistant that has actually read your sources. Which one fits you?',
               style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
+          const SizedBox(height: 24),
+          for (final e in Edition.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: EditionCard(
+                edition: e,
+                selected: _edition == e,
+                onTap: () => setState(() {
+                  _edition = e;
+                  _role = '';
+                }),
+              ),
+            ),
+          Text('Students and Researchers are free. You can switch later in Settings.',
+              style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint)),
+        ]);
+      case 1:
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_edition == Edition.enterprise ? 'About you' : 'Nice to meet you', style: context.text.displaySmall),
+          const SizedBox(height: 10),
+          Text(_edition.tagline, style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
           const SizedBox(height: 28),
           AppField(
             controller: _name,
@@ -138,16 +172,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 22),
-          Text('You are mostly a...', style: context.text.labelMedium),
+          Text(switch (_edition) {
+            Edition.students => 'Where are you studying?',
+            Edition.researchers => 'Your role',
+            Edition.enterprise => 'Your team',
+          }, style: context.text.labelMedium),
           const SizedBox(height: 10),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final r in roles)
+            for (final r in _rolesFor[_edition]!)
               AppChip(label: r, selected: _role == r, onTap: () => setState(() => _role = r)),
           ]),
         ]);
-      case 1:
+      case 2:
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('What do you study?', style: context.text.displaySmall),
+          Text(_edition == Edition.enterprise ? 'What does your team research?' : 'What do you study?',
+              style: context.text.displaySmall),
           const SizedBox(height: 10),
           Text('Each pick becomes a category in your library. You can rename or add more later.',
               style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
@@ -163,11 +202,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ]),
         ]);
       default:
-        final points = [
-          (Ic.library, 'Your library', 'Categories hold topics, topics hold materials: papers, PDFs, articles, notes and lectures.'),
-          (Ic.book, 'Read and annotate', 'A calm reader with margin notes. Select any passage to quote it or ask about it.'),
-          (Ic.pinda, 'Pinda', 'Ask questions about a single paper, a topic, or your entire library. Pinda answers from your sources.'),
-        ];
+        final points = switch (_edition) {
+          Edition.students => [
+              (Ic.library, 'Your library', 'Lecture notes, readings, PDFs and videos, sorted by course and topic.'),
+              (Ic.timer, 'Focus sessions', 'Study in timed sessions, alone or with your group, and get a recap at the end.'),
+              (Ic.pinda, 'Pinda', 'Explanations, study guides and quizzes built from your own course material.'),
+            ],
+          Edition.researchers => [
+              (Ic.discover, 'Discover', 'Search arXiv and Semantic Scholar, then save papers with their PDFs in one tap.'),
+              (Ic.pinda, 'Pinda', 'Ask about one paper or your whole library and get answers that cite your sources.'),
+              (Ic.report, 'Reports', 'Draft literature reviews and summaries from the papers you pick, then edit and export.'),
+            ],
+          Edition.enterprise => [
+              (Ic.team, 'Your organisation', 'Create one for your team or join with an invite code on the next screen.'),
+              (Ic.pinda, 'Pinda for teams', 'Decision-ready answers and reports from your team members\' sources.'),
+              (Ic.chart, 'Pay for what you use', 'Billed per active seat-day and AI usage. Admins see live usage.'),
+            ],
+        };
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('How it works', style: context.text.displaySmall),
           const SizedBox(height: 26),

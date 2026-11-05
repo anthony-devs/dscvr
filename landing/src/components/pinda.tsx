@@ -15,7 +15,7 @@ export function Pinda() {
                   <p className="text-sm font-semibold">Pinda</p>
                   <p className="text-[10px] text-muted">Reading your library</p>
                 </div>
-                <span className="ml-auto text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Coming Soon</span>
+                <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Live</span>
               </div>
 
               {/* Messages */}
@@ -50,6 +50,7 @@ export function Pinda() {
               <div className="px-4 pb-4">
                 <div className="flex items-center gap-2 bg-gray-50 rounded-xl border border-border px-4 py-3">
                   <span className="text-xs text-muted flex-1">Ask about your research...</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-muted"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0014 0M12 18v3" /></svg>
                   <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
                   </div>
@@ -66,16 +67,17 @@ export function Pinda() {
               <span className="italic text-muted/60">answering back.</span>
             </h2>
             <p className="text-muted leading-relaxed mb-8 max-w-md">
-              Pinda reads your saved papers, notes and highlights, then answers questions
-              with citations pointing back to your own materials. Not a generic chatbot —
-              an assistant that knows what you&apos;ve read.
+              Pinda reads your saved papers, PDFs and notes, then answers with citations
+              pointing back to your own materials. Not a generic chatbot. An assistant
+              that knows what you&apos;ve read, and talks like your edition needs it to.
             </p>
             <div className="space-y-4">
               {[
                 "Grounded in your library, not the entire internet",
-                "Scope to a category, topic, or single paper",
-                "Conversational — refine your question naturally",
-                "Powered by Claude for nuanced understanding",
+                "Reads full PDFs, scoped to a topic or a single paper",
+                "Speak your question, hear the answer",
+                "Drafts reports and session recaps from your sources",
+                "Powered by Claude, streaming as it thinks",
               ].map((line, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="mt-0.5 w-5 h-5 rounded-full bg-foreground flex items-center justify-center shrink-0">

@@ -17,8 +17,8 @@ export function Footer() {
           {/* Links */}
           <div className="flex gap-8 text-sm text-muted">
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
-            <a href="#pinda" className="hover:text-foreground transition-colors">Pinda</a>
+            <a href="#editions" className="hover:text-foreground transition-colors">Editions</a>
+            <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
           </div>
 
           {/* Built by */}

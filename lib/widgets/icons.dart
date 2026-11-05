@@ -79,22 +79,22 @@ class Ic {
   static const caretUpDown = IconData(0xe140, fontFamily: 'PhosphorRegular');
   static const pindaFill = IconData(0xe6a2, fontFamily: 'PhosphorFill');
   static const lightning = IconData(0xe2de, fontFamily: 'PhosphorRegular');
-  static const scale = IconData(0xe3f0, fontFamily: 'PhosphorRegular');
-  static const minus = IconData(0xe326, fontFamily: 'PhosphorRegular');
-  static const question = IconData(0xe3ec, fontFamily: 'PhosphorRegular');
-  static const share = IconData(0xe416, fontFamily: 'PhosphorRegular');
-  static const linkSimple = IconData(0xe2e4, fontFamily: 'PhosphorRegular');
-  static const eye = IconData(0xe224, fontFamily: 'PhosphorRegular');
+  static const scale = IconData(0xe750, fontFamily: 'PhosphorRegular');
+  static const minus = IconData(0xe32a, fontFamily: 'PhosphorRegular');
+  static const question = IconData(0xe3e8, fontFamily: 'PhosphorRegular');
+  static const share = IconData(0xe408, fontFamily: 'PhosphorRegular');
+  static const linkSimple = IconData(0xe2e6, fontFamily: 'PhosphorRegular');
+  static const eye = IconData(0xe220, fontFamily: 'PhosphorRegular');
   static const chatCircle = IconData(0xe16c, fontFamily: 'PhosphorRegular');
-  static const gitFork = IconData(0xe278, fontFamily: 'PhosphorRegular');
-  static const clock = IconData(0xe192, fontFamily: 'PhosphorRegular');
-  static const shield = IconData(0xe41e, fontFamily: 'PhosphorRegular');
-  static const wallet = IconData(0xe4d0, fontFamily: 'PhosphorRegular');
+  static const gitFork = IconData(0xe27e, fontFamily: 'PhosphorRegular');
+  static const clock = IconData(0xe19a, fontFamily: 'PhosphorRegular');
+  static const shield = IconData(0xe40c, fontFamily: 'PhosphorRegular');
+  static const wallet = IconData(0xe68a, fontFamily: 'PhosphorRegular');
   static const creditCard = IconData(0xe1d2, fontFamily: 'PhosphorRegular');
-  static const googlePay = IconData(0xe4d0, fontFamily: 'PhosphorRegular'); // wallet glyph as proxy
-  static const crown = IconData(0xe1d6, fontFamily: 'PhosphorRegular');
-  static const star = IconData(0xe458, fontFamily: 'PhosphorRegular');
-  static const starFill = IconData(0xe458, fontFamily: 'PhosphorFill');
+  static const googlePay = IconData(0xe292, fontFamily: 'PhosphorRegular'); // wallet glyph as proxy
+  static const crown = IconData(0xe614, fontFamily: 'PhosphorRegular');
+  static const star = IconData(0xe46a, fontFamily: 'PhosphorRegular');
+  static const starFill = IconData(0xe46a, fontFamily: 'PhosphorFill');
 
   static IconData forKind(MaterialKind k) => switch (k) {
         MaterialKind.paper => paper,
@@ -103,4 +103,36 @@ class Ic {
         MaterialKind.note => note,
         MaterialKind.youtube => video,
       };
+
+  // Editions, voice, sessions, reports, teams.
+  static const mic = IconData(0xe326, fontFamily: 'PhosphorRegular');
+  static const micFill = IconData(0xe326, fontFamily: 'PhosphorFill');
+  static const micOff = IconData(0xe328, fontFamily: 'PhosphorRegular');
+  static const speaker = IconData(0xe44a, fontFamily: 'PhosphorRegular');
+  static const speakerOff = IconData(0xe45a, fontFamily: 'PhosphorRegular');
+  static const waveform = IconData(0xe802, fontFamily: 'PhosphorRegular');
+  static const timer = IconData(0xe492, fontFamily: 'PhosphorRegular');
+  static const pause = IconData(0xe39e, fontFamily: 'PhosphorRegular');
+  static const stopCircle = IconData(0xe46e, fontFamily: 'PhosphorRegular');
+  static const playCircle = IconData(0xe3d2, fontFamily: 'PhosphorRegular');
+  static const users = IconData(0xe4d6, fontFamily: 'PhosphorRegular');
+  static const team = IconData(0xe68e, fontFamily: 'PhosphorRegular');
+  static const userPlus = IconData(0xe4d0, fontFamily: 'PhosphorRegular');
+  static const report = IconData(0xe23a, fontFamily: 'PhosphorRegular');
+  static const enterprise = IconData(0xe102, fontFamily: 'PhosphorRegular');
+  static const students = IconData(0xe62c, fontFamily: 'PhosphorRegular');
+  static const researchers = IconData(0xe79e, fontFamily: 'PhosphorRegular');
+  static const devices = IconData(0xeba4, fontFamily: 'PhosphorRegular');
+  static const phone = IconData(0xe1e0, fontFamily: 'PhosphorRegular');
+  static const desktop = IconData(0xe560, fontFamily: 'PhosphorRegular');
+  static const chart = IconData(0xe150, fontFamily: 'PhosphorRegular');
+  static const export = IconData(0xeaf0, fontFamily: 'PhosphorRegular');
+  static const download = IconData(0xe20c, fontFamily: 'PhosphorRegular');
+  static const bookOpen = IconData(0xe0e6, fontFamily: 'PhosphorRegular');
+  static const live = IconData(0xe0f2, fontFamily: 'PhosphorRegular');
+  static const receipt = IconData(0xe3ec, fontFamily: 'PhosphorRegular');
+  static const lightbulb = IconData(0xe2dc, fontFamily: 'PhosphorRegular');
+  static const headphones = IconData(0xe2a6, fontFamily: 'PhosphorRegular');
+  static const signIn = IconData(0xe428, fontFamily: 'PhosphorRegular');
+  static const exam = IconData(0xe742, fontFamily: 'PhosphorRegular');
 }

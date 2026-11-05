@@ -1,4 +1,7 @@
+import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/library.dart';
+import 'package:dscvr/screens/reports/reports_page.dart';
+import 'package:dscvr/screens/sessions/sessions_page.dart';
 import 'package:dscvr/screens/add/add_material_sheet.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/item_actions.dart';
@@ -50,7 +53,11 @@ class RecentPage extends StatelessWidget {
             style: AppTheme.sans(fontSize: 14, color: c.inkMuted),
           ),
           const SizedBox(height: 22),
-          _QuickActions(),
+          _QuickActions(edition: user.edition),
+          if (user.edition == Edition.enterprise && !user.inOrg) ...[
+            const SizedBox(height: 22),
+            _TeamPrompt(),
+          ],
           if (lib.items.isEmpty) ...[
             const SizedBox(height: 40),
             EmptyState(
@@ -98,14 +105,23 @@ class RecentPage extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
+  const _QuickActions({required this.edition});
+  final Edition edition;
+
   @override
   Widget build(BuildContext context) {
-    final actions = [
-      (Ic.upload, 'Upload PDF', () => showAddMaterial(context, initial: AddTab.pdf)),
-      (Ic.link, 'Save a link', () => showAddMaterial(context, initial: AddTab.link)),
-      (Ic.note, 'New note', () => createNote(context)),
-      (Ic.pinda, 'Ask Pinda', () => context.go('/pinda')),
-    ];
+    final pinda = (Ic.pinda, 'Ask Pinda', () => context.go('/pinda'));
+    final voice = (Ic.mic, 'Voice note', () => createNote(context, voice: true));
+    final focus = (Ic.timer, 'Focus session', () => startFocusFlow(context));
+    final report = (Ic.report, 'New report', () => showNewReport(context));
+    final arxiv = (Ic.bookOpen, 'Add from arXiv', () => showAddMaterial(context, initial: AddTab.paper));
+    final pdf = (Ic.upload, 'Upload PDF', () => showAddMaterial(context, initial: AddTab.pdf));
+    final room = (Ic.users, 'Group session', () => createRoomFlow(context));
+    final actions = switch (edition) {
+      Edition.students => [focus, voice, pdf, room, pinda],
+      Edition.researchers => [arxiv, report, voice, focus, pinda],
+      Edition.enterprise => [report, room, arxiv, voice, pinda],
+    };
     if (context.isCompact) {
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -118,6 +134,34 @@ class _QuickActions extends StatelessWidget {
     return Wrap(spacing: 8, runSpacing: 8, children: [
       for (final a in actions) PillButton(label: a.$2, icon: a.$1, onTap: a.$3),
     ]);
+  }
+}
+
+class _TeamPrompt extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.line),
+      ),
+      child: Row(children: [
+        Icon(Ic.enterprise, size: 20, color: c.ink),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Set up your team', style: context.text.titleMedium),
+            const SizedBox(height: 2),
+            Text('Create an organisation or join one with an invite code.', style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted)),
+          ]),
+        ),
+        const SizedBox(width: 12),
+        AppButton.primary(size: BtnSize.sm, onPressed: () => context.go('/team'), child: const Text('Open Team')),
+      ]),
+    );
   }
 }
 

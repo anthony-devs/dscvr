@@ -167,6 +167,7 @@ class LibraryItem {
     this.noteCount = 0,
     this.colorIndex = 0,
     this.inReadingList = false,
+    this.rating = 0,
     required this.createdAt,
     required this.updatedAt,
     this.lastOpenedAt,
@@ -205,11 +206,23 @@ class LibraryItem {
   final int noteCount;
   final int colorIndex;
   final bool inReadingList;
+
+  /// The user's own 1-5 star rating, 0 when unrated.
+  final int rating;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? lastOpenedAt;
 
   bool get hasPdf => (pdfUrl != null && pdfUrl!.isNotEmpty);
+
+  /// True when the PDF lives in the user's own storage (works offline and
+  /// Pinda reads it in full).
+  bool get pdfInLibrary => storagePath != null && storagePath!.isNotEmpty;
+
+  /// Key used for community ratings, when the item is a known paper.
+  String? get paperKey => (source != null && externalId != null && externalId!.isNotEmpty)
+      ? '$source:${externalId!.replaceAll(RegExp(r'v\d+$'), '')}'
+      : null;
 
   String get authorLine {
     if (authors.isEmpty) return siteName ?? '';
@@ -242,6 +255,7 @@ class LibraryItem {
         noteCount: (m['noteCount'] as num?)?.toInt() ?? 0,
         colorIndex: (m['colorIndex'] as num?)?.toInt() ?? 0,
         inReadingList: m['inReadingList'] as bool? ?? false,
+        rating: ((m['rating'] as num?)?.toInt() ?? 0).clamp(0, 5),
         createdAt: _date(m['createdAt']),
         updatedAt: _date(m['updatedAt']),
         lastOpenedAt: _dateOrNull(m['lastOpenedAt']),
@@ -268,6 +282,7 @@ class LibraryItem {
         'noteCount': noteCount,
         'colorIndex': colorIndex,
         'inReadingList': inReadingList,
+        'rating': rating,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'lastOpenedAt': lastOpenedAt,
@@ -287,6 +302,7 @@ class LibraryItem {
     int? noteCount,
     int? colorIndex,
     bool? inReadingList,
+    int? rating,
     DateTime? lastOpenedAt,
   }) =>
       LibraryItem(
@@ -311,6 +327,7 @@ class LibraryItem {
         noteCount: noteCount ?? this.noteCount,
         colorIndex: colorIndex ?? this.colorIndex,
         inReadingList: inReadingList ?? this.inReadingList,
+        rating: rating ?? this.rating,
         createdAt: createdAt,
         updatedAt: DateTime.now(),
         lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
@@ -357,7 +374,8 @@ enum ItemSort {
   recentlyAccessed('Recently accessed'),
   recentlyAdded('Recently added'),
   title('Title'),
-  year('Year');
+  year('Year'),
+  rating('Rating');
 
   const ItemSort(this.label);
   final String label;
@@ -372,6 +390,8 @@ enum ItemSort {
         return a.title.toLowerCase().compareTo(b.title.toLowerCase());
       case ItemSort.year:
         return (b.year ?? 0).compareTo(a.year ?? 0);
+      case ItemSort.rating:
+        return b.rating.compareTo(a.rating);
     }
   }
 }

@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:math';
 
+import 'package:dscvr/data/api.dart';
 import 'package:dscvr/data/link_service.dart';
+import 'package:dscvr/data/research_service.dart';
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/models/paper.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
@@ -17,7 +20,7 @@ import 'package:go_router/go_router.dart';
 enum AddTab {
   link('Link', Ic.link),
   pdf('PDF', Ic.pdf),
-  paper('Paper', Ic.paper),
+  paper('arXiv', Ic.paper),
   youtube('YouTube', Ic.video);
 
   const AddTab(this.label, this.icon);
@@ -34,7 +37,7 @@ Future<void> showAddMaterial(BuildContext context, {String? categoryId, String? 
 }
 
 /// Creates an empty note in the given (or first) category and opens it.
-Future<void> createNote(BuildContext context, {String? categoryId, String? topicId}) async {
+Future<void> createNote(BuildContext context, {String? categoryId, String? topicId, bool voice = false}) async {
   final lib = context.library;
   final router = GoRouter.of(context);
   var catId = categoryId ?? (lib.categories.isNotEmpty ? lib.categories.first.id : null);
@@ -43,7 +46,7 @@ Future<void> createNote(BuildContext context, {String? categoryId, String? topic
   final item = LibraryItem(
     id: lib.repo.newId(),
     kind: MaterialKind.note,
-    title: 'Untitled note',
+    title: voice ? 'Voice note ${_stamp(now)}' : 'Untitled note',
     categoryId: catId,
     topicId: topicId,
     colorIndex: Random().nextInt(CardPalette.length),
@@ -52,7 +55,13 @@ Future<void> createNote(BuildContext context, {String? categoryId, String? topic
     lastOpenedAt: now,
   );
   await lib.repo.saveItem(item);
-  router.push('/m/${item.id}');
+  router.push(voice ? '/m/${item.id}?dictate=1' : '/m/${item.id}');
+}
+
+String _stamp(DateTime t) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+  return '${t.day} ${months[t.month - 1]}, $h:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'am' : 'pm'}';
 }
 
 class AddMaterialSheet extends StatefulWidget {
@@ -309,8 +318,16 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
       _error = null;
     });
     try {
-      final r = await context.services.discover.search(q);
+      final services = context.services;
+      final List<Paper> r;
+      if (ResearchService.arxivId(q) != null) {
+        r = [await services.research.arxiv(q)];
+      } else {
+        r = await services.discover.search(q);
+      }
       if (mounted) setState(() => _papers = r);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
       if (mounted) setState(() => _error = 'Search failed. Try again in a moment.');
     } finally {
@@ -321,7 +338,8 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
   Future<void> _addPaper(Paper p) async {
     final cat = await _resolveCategory();
     if (cat == null || !mounted) return;
-    await context.library.repo.saveItem(paperToItem(context, p, categoryId: cat, topicId: _topicId));
+    final item = paperToItem(context, p, categoryId: cat, topicId: _topicId);
+    await keepPaper(context, item);
     if (mounted) setState(() => _added.add(p.id));
   }
 
@@ -498,8 +516,8 @@ class _AddMaterialSheetState extends State<AddMaterialSheet> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       AppField(
         controller: _query,
-        label: 'Search arXiv',
-        hint: 'Title, author or topic',
+        label: 'Search or paste an arXiv link',
+        hint: 'Title, author, topic, or arxiv.org/abs/...',
         autofocus: true,
         textInputAction: TextInputAction.search,
         prefixIcon: const Icon(Ic.search, size: 18),
@@ -605,6 +623,20 @@ Future<void> savePaperFlow(BuildContext context, Paper p) async {
     cat = (await lib.repo.createCategory(name: name, colorIndex: lib.nextCategoryColor())).id;
   }
   if (!context.mounted) return;
-  await lib.repo.saveItem(paperToItem(context, p, categoryId: cat!, topicId: topic));
+  final item = paperToItem(context, p, categoryId: cat!, topicId: topic);
+  await keepPaper(context, item);
   if (context.mounted) toast(context, 'Saved to ${lib.category(cat)?.name ?? 'library'}', description: p.title);
+}
+
+/// Saves a paper and, when it has an open PDF, copies the PDF into the
+/// user's own storage in the background so it opens offline and Pinda can
+/// read the whole document.
+Future<void> keepPaper(BuildContext context, LibraryItem item) async {
+  final services = context.services;
+  final repo = services.repo;
+  await repo.saveItem(item);
+  if (!item.hasPdf) return;
+  unawaited(services.research.importPdf(repo, item).then((ok) {
+    if (ok && context.mounted) toast(context, 'PDF saved to your library', description: item.title);
+  }));
 }

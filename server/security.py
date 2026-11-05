@@ -31,7 +31,10 @@ def init_firebase(project_id: str) -> None:
             if raw
             else credentials.ApplicationDefault()
         )
-        _app = firebase_admin.initialize_app(cred, {"projectId": project_id})
+        _app = firebase_admin.initialize_app(cred, {
+            "projectId": project_id,
+            "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", f"{project_id}.firebasestorage.app"),
+        })
     except ValueError:
         # Already initialized
         _app = firebase_admin.get_app()
@@ -121,6 +124,14 @@ LIMITS = {
     "verify":     {"per_min": 10, "per_hour": 60},
     "webhook":    {"per_min": 30, "per_hour": 300},
     "portal":     {"per_min": 10, "per_hour": 60},
+    "pinda":      {"per_min": 12, "per_hour": 200},
+    "report":     {"per_min": 3,  "per_hour": 30},
+    "summary":    {"per_min": 5,  "per_hour": 60},
+    "parliament": {"per_min": 4,  "per_hour": 40},
+    "import":     {"per_min": 10, "per_hour": 120},
+    "rate":       {"per_min": 30, "per_hour": 300},
+    "orgs":       {"per_min": 5,  "per_hour": 30},
+    "rooms":      {"per_min": 10, "per_hour": 60},
 }
 
 

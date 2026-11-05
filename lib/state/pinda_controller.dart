@@ -12,6 +12,7 @@ class PindaController extends ChangeNotifier {
     required this.service,
     required PindaContext context,
     required this.styleOf,
+    this.onReply,
     String? conversationId,
   })  : _context = context,
         _conversationId = conversationId {
@@ -21,6 +22,10 @@ class PindaController extends ChangeNotifier {
   final LibraryRepository repo;
   final PindaService service;
   final String Function() styleOf;
+
+  /// Called when a reply finishes streaming; `voice` is true when the
+  /// question was spoken (so the UI can read the answer aloud).
+  void Function(ChatMessage reply, bool voice)? onReply;
 
   PindaContext _context;
   String? _conversationId;
@@ -72,7 +77,7 @@ class PindaController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> send(String text) async {
+  Future<void> send(String text, {bool voice = false}) async {
     final prompt = text.trim();
     if (prompt.isEmpty || isStreaming) return;
 
@@ -93,7 +98,7 @@ class PindaController extends ChangeNotifier {
     final buffer = StringBuffer();
     final history = _messages.where((m) => !m.pending && m.error == null).toList();
     final completer = Completer<void>();
-    _stream = service.reply(history: history, context: _context, style: styleOf()).listen(
+    _stream = service.reply(history: history, context: _context, style: styleOf(), voice: voice).listen(
       (delta) {
         buffer.write(delta);
         reply = reply.copyWith(text: buffer.toString());
@@ -112,6 +117,7 @@ class PindaController extends ChangeNotifier {
         if (_conversationId != null && reply.text.isNotEmpty) {
           repo.addMessage(_conversationId!, reply).catchError((_) {});
         }
+        if (reply.text.isNotEmpty) onReply?.call(reply, voice);
         if (!completer.isCompleted) completer.complete();
       },
       cancelOnError: true,

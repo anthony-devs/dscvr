@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DSCVR — Your research desk, everywhere.",
+  title: "DSCVR: research, answered",
   description:
-    "Save papers, highlight what matters, and let AI find answers grounded in your own library. Built for researchers who think deeply.",
+    "Pull papers from arXiv, ask Pinda (powered by Claude) about them, and turn what you learn into reports. Free for students and researchers, usage-based for teams.",
   openGraph: {
-    title: "DSCVR — Your research desk, everywhere.",
+    title: "DSCVR: research, answered",
     description:
-      "Save papers, highlight what matters, and let AI find answers grounded in your own library.",
+      "Pull papers from arXiv, ask an AI that has read them, and write it up. Free for students and researchers.",
     type: "website",
   },
 };

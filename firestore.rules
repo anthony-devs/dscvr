@@ -22,9 +22,11 @@ service cloud.firestore {
       allow read: if isOwner(uid);
       // Users can write their profile but NOT the subscription field
       // (that's managed server-side by Stripe webhook).
+      // Org membership is granted only by the server (/orgs, /orgs/join).
       allow update: if isOwner(uid)
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription']));
-      allow create: if isOwner(uid);
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'orgId', 'orgRole']));
+      allow create: if isOwner(uid)
+        && !request.resource.data.keys().hasAny(['orgId', 'orgRole']);
 
       // Usage counters — Cloud Functions only (admin SDK bypasses rules).
       match /meta/{doc} {
@@ -36,7 +38,7 @@ service cloud.firestore {
       match /{collection}/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
-          && collection in ['categories', 'topics', 'materials', 'conversations']
+          && collection in ['categories', 'topics', 'materials', 'conversations', 'reports', 'sessions', 'devices']
           && request.resource.data.size() < 60;
       }
 
@@ -64,6 +66,58 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid;
       allow delete: if isSignedIn()
         && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ── Live group sessions ────────────────────────────────────────
+    // Hosts create rooms; others join by code through the server, which
+    // adds them to memberUids. Members chat, share papers and run the timer.
+    function isMember(room) {
+      return isSignedIn() && request.auth.uid in room.data.memberUids;
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isMember(resource);
+      allow create: if isSignedIn()
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid]
+        && request.resource.data.endedAt == null;
+      // Members may share papers, run the timer, or remove themselves.
+      allow update: if isMember(resource) && (
+        (resource.data.endedAt == null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['papers', 'focusUntil']))
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+            && request.resource.data.memberUids.toSet() == resource.data.memberUids.toSet().difference([request.auth.uid].toSet()))
+        || (resource.data.hostUid == request.auth.uid && resource.data.endedAt == null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endedAt', 'focusUntil']))
+      );
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow read: if isMember(get(/databases/$(database)/documents/rooms/$(roomId)));
+        allow create, update: if request.auth != null && request.auth.uid == memberUid
+          && request.auth.uid in getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.memberUids
+          && request.resource.data.keys().hasOnly(['name', 'lastSeen']);
+        allow delete: if request.auth != null && request.auth.uid == memberUid;
+      }
+
+      match /messages/{msgId} {
+        allow read: if isMember(get(/databases/$(database)/documents/rooms/$(roomId)));
+        allow create: if isMember(get(/databases/$(database)/documents/rooms/$(roomId)))
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 4000;
+        allow update, delete: if false;
+      }
+    }
+
+    // ── Server-managed data ────────────────────────────────────────
+    // Organisations, billing and community ratings are written only by
+    // the server (admin SDK). Org members read their org via the API.
+    match /orgs/{orgId}/{document=**} {
+      allow read, write: if false;
+    }
+    match /papers/{paperId}/{document=**} {
+      allow read, write: if false;
     }
 
     // ── Usage tracking ─────────────────────────────────────────────

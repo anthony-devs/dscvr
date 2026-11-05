@@ -4,7 +4,9 @@ import 'dart:typed_data';
 
 import 'package:dscvr/data/library_repository.dart';
 import 'package:dscvr/models/library.dart';
+import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/pinda.dart';
+import 'package:dscvr/models/workspace.dart';
 
 /// Holds a value and replays it to every new listener.
 class _Live<T> {
@@ -30,6 +32,7 @@ class _Live<T> {
 class DemoLibraryRepository implements LibraryRepository {
   DemoLibraryRepository() {
     _seed();
+    seedReport(_items.value.where((i) => i.kind == MaterialKind.paper).take(2).map((i) => i.id).toList());
   }
 
   final _rand = Random(7);
@@ -39,6 +42,8 @@ class DemoLibraryRepository implements LibraryRepository {
   final _notes = <String, _Live<List<ItemNote>>>{};
   final _conversations = _Live<List<Conversation>>([]);
   final _messages = <String, _Live<List<ChatMessage>>>{};
+  final _reports = _Live<List<Report>>([]);
+  final _sessions = _Live<List<FocusSession>>([]);
   int _counter = 0;
 
   @override
@@ -132,6 +137,16 @@ class DemoLibraryRepository implements LibraryRepository {
 
   @override
   Future<void> setReadingList(String id, bool value) async => _patch(id, (i) => i.copyWith(inReadingList: value));
+
+  @override
+  Future<void> setRating(String id, int stars) async => _patch(id, (i) => i.copyWith(rating: stars.clamp(0, 5)));
+
+  @override
+  Future<void> attachPdf(String id, {required String storagePath, required String pdfUrl}) async {
+    final i = _items.value.where((x) => x.id == id).firstOrNull;
+    if (i == null) return;
+    await saveItem(LibraryItem.fromMap(id, {...i.toMap(), 'storagePath': storagePath, 'pdfUrl': pdfUrl}));
+  }
 
   @override
   Future<(String, String)> uploadPdf({required String itemId, required String fileName, required Uint8List bytes}) async {
@@ -277,6 +292,74 @@ class DemoLibraryRepository implements LibraryRepository {
           quote: 'Multi-head attention allows the model to jointly attend to information from different representation subspaces.',
           createdAt: now.subtract(const Duration(hours: 3))),
       ItemNote(id: 'nn2', text: 'Positional encodings are sinusoidal, not learned. Why?', createdAt: now.subtract(const Duration(days: 1))),
+    ];
+  }
+
+  // ── Reports ──────────────────────────────────────────────────────────────
+
+  @override
+  Stream<List<Report>> watchReports() => _reports.stream;
+
+  @override
+  Future<Report?> getReport(String id) async => _reports.value.where((r) => r.id == id).firstOrNull;
+
+  @override
+  Future<void> saveReport(Report report) async {
+    _reports.value = [report, ..._reports.value.where((r) => r.id != report.id)]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  @override
+  Future<void> deleteReport(String id) async => _reports.value = _reports.value.where((r) => r.id != id).toList();
+
+  // ── Focus sessions ───────────────────────────────────────────────────────
+
+  @override
+  Stream<List<FocusSession>> watchSessions() => _sessions.stream;
+
+  @override
+  Future<void> saveSession(FocusSession session) async {
+    _sessions.value = [session, ..._sessions.value.where((x) => x.id != session.id)]
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+  }
+
+  @override
+  Future<void> deleteSession(String id) async => _sessions.value = _sessions.value.where((x) => x.id != id).toList();
+
+  /// A sample report so the Reports screen isn't empty in previews.
+  void seedReport(List<String> sourceIds) {
+    final now = DateTime.now().subtract(const Duration(hours: 3));
+    _reports.value = [
+      Report(
+        id: 'demo_report_1',
+        title: 'Efficient attention: a short review',
+        kind: ReportKind.literatureReview,
+        sourceIds: sourceIds,
+        body: '''# Efficient attention: a short review
+
+## Overview
+
+Self-attention scales quadratically with sequence length, which drives most of the cost of long-context models [1]. Two lines of work respond to this: changing *how* attention is computed, and changing *what* is attended to [2].
+
+## How the approaches differ
+
+| Approach | Idea | Trade-off |
+| --- | --- | --- |
+| IO-aware kernels | Tile the computation to stay in fast memory | Exact, but hardware-specific |
+| Sparse patterns | Attend to a structured subset of tokens | Cheaper, may miss long-range links |
+
+## Gaps
+
+None of the sources measure quality on documents longer than 64k tokens.
+
+## Sources
+
+[1] Attention Is All You Need, Vaswani et al. (2017)
+[2] FlashAttention, Dao et al. (2022)
+''',
+        createdAt: now,
+        updatedAt: now,
+      ),
     ];
   }
 }

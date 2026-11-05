@@ -1,9 +1,16 @@
 import 'package:dscvr/config/env.dart';
+import 'dart:async';
+
+import 'package:dscvr/data/api.dart';
 import 'package:dscvr/data/demo_library_repository.dart';
 import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/data/firestore_library_repository.dart';
 import 'package:dscvr/data/link_service.dart';
+import 'package:dscvr/data/org_service.dart';
 import 'package:dscvr/data/pinda_service.dart';
+import 'package:dscvr/data/research_service.dart';
+import 'package:dscvr/data/session_service.dart';
+import 'package:dscvr/data/voice_service.dart';
 import 'package:dscvr/router/app_router.dart';
 import 'package:dscvr/state/library_controller.dart';
 import 'package:dscvr/state/services.dart';
@@ -26,7 +33,13 @@ class _DscvrAppState extends State<DscvrApp> {
   final _session = SessionController();
   final _discover = DiscoverService();
   final _links = LinkService();
-  late final PindaService _pinda = Env.demo ? DemoPindaService() : HttpPindaService(token: _session.idToken);
+  late final DscvrApi _api = DscvrApi(token: _session.idToken);
+  late final PindaService _pinda = Env.demo ? DemoPindaService() : HttpPindaService(_api);
+  late final ResearchService _research = ResearchService(_api);
+  late final OrgService _orgs = OrgService(_api);
+  late final SessionService _sessions = SessionService(_api);
+  final VoiceService _voice = VoiceService();
+  StreamSubscription<void>? _deviceWatch;
   late final GoRouter _router = buildRouter(_session);
 
   LibraryController? _library;
@@ -51,12 +64,35 @@ class _DscvrAppState extends State<DscvrApp> {
         ? null
         : LibraryController(Env.demo ? DemoLibraryRepository() : FirestoreLibraryRepository(uid: uid));
     if (mounted) setState(() {});
+    _onSignedIn(uid);
     // Dispose after the frame so nothing still listening crashes mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) => old?.dispose());
   }
 
+  /// Registers this device (so it can be signed out remotely) and counts
+  /// today's seat for enterprise members.
+  Future<void> _onSignedIn(String? uid) async {
+    await _deviceWatch?.cancel();
+    _deviceWatch = null;
+    if (uid == null) return;
+    try {
+      _deviceWatch = await _sessions.registerDevice(uid, onRevoked: () async {
+        await _session.signOut();
+        final ctx = _router.routerDelegate.navigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          Toasts.show(ctx, 'Signed out', description: 'This device was signed out from another device.');
+        }
+      });
+    } catch (e) {
+      debugPrint('Device registration failed: $e');
+    }
+    if (_session.user.inOrg) unawaited(_orgs.pingActivity());
+  }
+
   @override
   void dispose() {
+    _deviceWatch?.cancel();
+    _voice.dispose();
     _session.removeListener(_syncLibrary);
     _session.dispose();
     _library?.dispose();
@@ -71,6 +107,11 @@ class _DscvrAppState extends State<DscvrApp> {
       discover: _discover,
       links: _links,
       pinda: _pinda,
+      api: _api,
+      research: _research,
+      orgs: _orgs,
+      sessions: _sessions,
+      voice: _voice,
       library: _library,
       child: ListenableBuilder(
         listenable: widget.settings,

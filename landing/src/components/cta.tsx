@@ -1,3 +1,5 @@
+import { DEMO_URL, SIGNUP_URL } from "@/lib/site";
+
 export function CTA() {
   return (
     <section className="py-24 md:py-32 bg-foreground text-background relative overflow-hidden">
@@ -13,21 +15,19 @@ export function CTA() {
           <span className="italic text-background/50">More signal.</span>
         </h2>
         <p className="text-background/60 text-lg mb-10 max-w-lg mx-auto">
-          Stop drowning in tabs. Start building a research library that works as hard as you do.
+          Stop drowning in tabs. Build a research desk that reads, listens and writes with you.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <a
-            href="https://dscvr-9d362.web.app/?demo=true"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={SIGNUP_URL}
             className="inline-flex items-center gap-2.5 px-8 py-4 bg-background text-foreground text-sm font-semibold rounded-full hover:bg-background/90 transition-all hover:shadow-lg"
           >
-            Try the demo
+            Start free
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </a>
-          <span className="text-sm text-background/40">No sign-up required</span>
+          <a href={DEMO_URL} target="_blank" rel="noopener noreferrer" className="text-sm text-background/60 hover:text-background underline underline-offset-4">or try the demo, no sign-up</a>
         </div>
       </div>
     </section>

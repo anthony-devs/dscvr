@@ -1,74 +1,57 @@
+import { Icon } from "./icons";
+
 const features = [
   {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-        <path d="M8 7h8M8 11h5" />
-      </svg>
-    ),
-    title: "Your library, your way",
-    description:
-      "Papers, PDFs, links, notes, YouTube lectures. Save them all in one organized space with topics and categories you define.",
+    icon: Icon.paper,
+    title: "arXiv, straight to your desk",
+    description: "Paste an arXiv link or ID. DSCVR pulls the metadata and saves the full PDF into your library, ready to read offline.",
+    tag: "New",
   },
   {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="11" cy="11" r="8" />
-        <path d="M21 21l-4.35-4.35" />
-        <path d="M8 8h6M8 11h4" />
-      </svg>
-    ),
-    title: "Discover new research",
-    description:
-      "Search arXiv and Semantic Scholar directly in the app. No tab-switching, no CORS headaches. One search bar, all the papers.",
+    icon: Icon.graph,
+    title: "Semantic Scholar built in",
+    description: "Search arXiv and Semantic Scholar from one bar, then open any paper's related work without leaving the reader.",
+    tag: "New",
   },
   {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 11l3 3L22 4" />
-        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-      </svg>
-    ),
-    title: "Parliament Fact-Check",
-    description:
-      "Three AI perspectives — Advocate, Skeptic, Analyst — evaluate every claim. Not one opinion. A verdict from a panel.",
+    icon: Icon.pinda,
+    title: "Pinda, powered by Claude",
+    description: "Ask questions across your whole library, one topic or a single paper. Pinda reads the PDFs and cites them back.",
+    tag: "Live",
   },
   {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-        <path d="M8 21h8M12 17v4" />
-      </svg>
-    ),
-    title: "Works everywhere",
-    description:
-      "Install as a PWA on any device. Your library syncs across desktop, tablet and phone. Offline-ready with bundled fonts.",
+    icon: Icon.report,
+    title: "Reports that write with you",
+    description: "Literature reviews, summaries, study notes and comparisons, drafted from the sources you pick. Edit, then export.",
+    tag: "New",
   },
   {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" />
-      </svg>
-    ),
-    title: "Secure by design",
-    description:
-      "Dedicated server with Firebase auth, rate limiting, abuse detection, and token verification on every request. Your data stays yours.",
+    icon: Icon.star,
+    title: "Rate what you read",
+    description: "Star papers and materials, sort your library by what mattered, and see how other readers rated a paper in Discover.",
+    tag: "New",
   },
   {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v-2" />
-        <path d="M8.56 3.44a2 2 0 100 2.83" />
-        <path d="M18 8h.01M18 12h.01M18 16h.01" />
-        <path d="M13 6l3-3 3 3" />
-        <path d="M16 3v10" />
-      </svg>
-    ),
-    title: "Share and collaborate",
-    description:
-      "Figma-style link sharing with view, fork, and comment permissions. Share your research desk with collaborators.",
+    icon: Icon.mic,
+    title: "Talk to your research",
+    description: "Dictate notes while you read and ask Pinda out loud. It can answer back in voice, so your hands stay on the page.",
+    tag: "New",
+  },
+  {
+    icon: Icon.timer,
+    title: "Focus and group sessions",
+    description: "Run a timed focus block with notes, or open a live room to study with others. Pinda writes the recap when you finish.",
+    tag: "New",
+  },
+  {
+    icon: Icon.scale,
+    title: "Parliament fact-check",
+    description: "Three independent AI readers vote on a claim, then a synthesis explains where they agree and where the evidence is thin.",
+  },
+  {
+    icon: Icon.devices,
+    title: "Everywhere you are",
+    description: "Installable on phone, tablet and desktop. Your library syncs, and you can see and sign out every device from settings.",
   },
 ];
 
@@ -76,24 +59,29 @@ export function Features() {
   return (
     <section id="features" className="py-24 md:py-32">
       <div className="max-w-6xl mx-auto px-6">
-        {/* Section heading */}
         <div className="max-w-2xl mb-16 md:mb-20">
           <p className="text-sm font-medium text-muted mb-3 tracking-wide uppercase">Features</p>
           <h2 className="font-serif text-3xl md:text-5xl font-bold tracking-tight leading-tight">
-            Everything a researcher <br className="hidden md:block" />
-            <span className="italic text-muted/60">actually needs.</span>
+            Find it, read it, <br className="hidden md:block" />
+            <span className="italic text-muted/60">understand it, write it up.</span>
           </h2>
         </div>
 
-        {/* Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((f, i) => (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {features.map((f) => (
             <div
-              key={i}
-              className="group p-6 md:p-8 rounded-2xl border border-border bg-white hover:shadow-lg hover:shadow-foreground/5 transition-all duration-300 hover:-translate-y-1"
+              key={f.title}
+              className="group p-6 md:p-7 rounded-2xl border border-border bg-white hover:shadow-lg hover:shadow-foreground/5 transition-all duration-300 hover:-translate-y-1"
             >
-              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-5 text-foreground group-hover:bg-foreground group-hover:text-background transition-colors duration-300">
-                {f.icon}
+              <div className="flex items-start justify-between mb-5">
+                <div className="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center text-foreground group-hover:bg-foreground group-hover:text-background transition-colors duration-300">
+                  <f.icon size={21} />
+                </div>
+                {f.tag && (
+                  <span className="text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full border border-border text-muted">
+                    {f.tag}
+                  </span>
+                )}
               </div>
               <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
               <p className="text-sm text-muted leading-relaxed">{f.description}</p>
