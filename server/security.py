@@ -58,7 +58,9 @@ def verify_token(token: str) -> dict[str, Any] | None:
     """Verify a Firebase ID token. Returns decoded claims or None."""
     try:
         return fb_auth.verify_id_token(token)
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger("auth").warning("token rejected: %s: %s", type(e).__name__, str(e)[:300])
         return None
 
 
