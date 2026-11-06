@@ -18,7 +18,7 @@ plus two private tools:
 | `S2_API_KEY` | Optional Semantic Scholar key |
 | `FREE_DAILY_AI` | Free Pinda requests per day (default 40; the dashboard can override it live) |
 | `SEAT_DAY_USD`, `SEAT_MONTH_CAP_USD`, `AI_INPUT_PER_M_USD`, `AI_OUTPUT_PER_M_USD` | Enterprise prices |
-| `ANTHROPIC_INPUT_PER_M_USD`, `ANTHROPIC_OUTPUT_PER_M_USD` | What Anthropic charges you (default 3 / 15), for the cost chart |
+| `ANTHROPIC_INPUT_PER_M_USD`, `ANTHROPIC_OUTPUT_PER_M_USD` | What Anthropic charges you (default 2 / 10, Claude Sonnet 5.5), for the cost chart |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | Founder sign-in. Make the hash with `python manage.py hash-password` |
 | `ADMIN_KEY` | Second lock for the dashboard (16+ chars, `python manage.py gen-secret`) |
 | `SESSION_SECRET` | Signs dashboard sessions (32+ chars) |

@@ -26,8 +26,8 @@ UI = Path(__file__).parent / "admin_ui" / "index.html"
 CACHE_SECONDS = 60
 EDITIONS = ("students", "researchers", "enterprise")
 # What Anthropic charges you, to show margin against what enterprise pays.
-COST_IN_PER_M = float(os.getenv("ANTHROPIC_INPUT_PER_M_USD", "3.00"))
-COST_OUT_PER_M = float(os.getenv("ANTHROPIC_OUTPUT_PER_M_USD", "15.00"))
+COST_IN_PER_M = float(os.getenv("ANTHROPIC_INPUT_PER_M_USD", "2.00"))
+COST_OUT_PER_M = float(os.getenv("ANTHROPIC_OUTPUT_PER_M_USD", "10.00"))
 
 
 def _db():
