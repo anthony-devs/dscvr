@@ -26,6 +26,14 @@ def init_firebase(project_id: str) -> None:
         # On hosts without a credentials file (Railway), pass the whole
         # service-account JSON in FIREBASE_SERVICE_ACCOUNT_JSON.
         raw = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+        # GOOGLE_APPLICATION_CREDENTIALS must be a file path. If someone pasted
+        # the JSON itself there, use it and clear the variable, otherwise
+        # google.auth tries to open the JSON as a filename and every
+        # Firestore call fails.
+        gac = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+        if gac.startswith("{"):
+            raw = raw or gac
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
         cred = (
             credentials.Certificate(json.loads(raw))
             if raw
