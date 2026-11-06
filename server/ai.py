@@ -23,7 +23,7 @@ from metrics import metrics  # noqa: E402
 logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("PINDA_MODEL", "claude-sonnet-5-5")
-FAST_MODEL = os.getenv("PINDA_FAST_MODEL", MODEL)
+FAST_MODEL = os.getenv("PINDA_FAST_MODEL", "claude-haiku-5-5")
 
 MAX_MATERIAL_CHARS = 120_000
 MAX_COLLECTION_CHARS = 90_000
@@ -260,6 +260,7 @@ def stream_text(*, system: str, messages: list[dict[str, Any]], max_tokens: int,
                 usage: dict[str, int], model: str | None = None) -> Iterator[str]:
     """Yields SSE events for a streamed Claude reply. Fills `usage` with
     token counts when the stream finishes."""
+    usage["model"] = model or MODEL  # type: ignore[assignment]
     try:
         with client().messages.stream(model=model or MODEL, max_tokens=max_tokens,
                                       system=system, messages=messages) as stream:
@@ -286,9 +287,10 @@ def stream_text(*, system: str, messages: list[dict[str, Any]], max_tokens: int,
 
 
 def complete(*, system: str, prompt: str, max_tokens: int, usage: dict[str, int],
-             tools: list[dict[str, Any]] | None = None, tool_name: str | None = None) -> Any:
+             tools: list[dict[str, Any]] | None = None, tool_name: str | None = None, model: str | None = None) -> Any:
+    usage["model"] = model or FAST_MODEL  # type: ignore[assignment]
     kwargs: dict[str, Any] = {
-        "model": FAST_MODEL, "max_tokens": max_tokens, "system": system,
+        "model": model or FAST_MODEL, "max_tokens": max_tokens, "system": system,
         "messages": [{"role": "user", "content": prompt}],
     }
     if tools:
@@ -342,14 +344,14 @@ def report_prompt(kind: str, title: str, instructions: str) -> str:
 # ── Session summaries ────────────────────────────────────────────────
 
 def session_summary(*, title: str, minutes: int, notes: str, items: list[dict[str, Any]],
-                    transcript: str, usage: dict[str, int]) -> str:
+                    transcript: str, usage: dict[str, int], model: str | None = None) -> str:
     sources = "\n\n".join(_describe(i, 1500) for i in items[:12])
     prompt = (f"Summarise this research session titled \"{title}\" ({minutes} minutes).\n\n"
               f"<library>\n{sources}\n</library>\n\n"
               f"<notes>\n{notes[:8000]}\n</notes>\n\n<discussion>\n{transcript[:12000]}\n</discussion>\n\n"
               "Write: one paragraph on what was covered, 3-5 key takeaways as bullets, "
               "and 2-3 concrete next steps. Markdown, no emoji.")
-    return complete(system=SYSTEM, prompt=prompt, max_tokens=900, usage=usage)
+    return complete(system=SYSTEM, prompt=prompt, max_tokens=900, usage=usage, model=model)
 
 
 # ── Parliament ───────────────────────────────────────────────────────
@@ -375,14 +377,14 @@ PARLIAMENT_TOOL = {
 }
 
 
-def parliament(claim: str, context: str, usage: dict[str, int]) -> dict[str, Any]:
+def parliament(claim: str, context: str, usage: dict[str, int], model: str | None = None) -> dict[str, Any]:
     message = (f'Claim to evaluate:\n"{claim}"\n\nContext from the source material:\n{context[:3000]}'
                if context else f'Claim to evaluate:\n"{claim}"')
 
     def vote(role: dict[str, str]) -> dict[str, Any]:
         u: dict[str, int] = {}
         result = complete(system=role["system"], prompt=message, max_tokens=600, usage=u,
-                          tools=[PARLIAMENT_TOOL], tool_name="submit_verdict")
+                          tools=[PARLIAMENT_TOOL], tool_name="submit_verdict", model=model)
         usage["input"] = usage.get("input", 0) + u.get("input", 0)
         usage["output"] = usage.get("output", 0) + u.get("output", 0)
         if not isinstance(result, dict):
@@ -402,6 +404,6 @@ def parliament(claim: str, context: str, usage: dict[str, int]) -> dict[str, Any
                       for v in votes)
     summary = complete(system="You are a fact-check editor. Synthesize the three perspectives into a 2-3 sentence summary. Be direct and clear.",
                        prompt=f'Claim: "{claim}"\n\nVerdicts:\n{lines}\n\nWrite a 2-3 sentence synthesis.',
-                       max_tokens=300, usage=usage)
+                       max_tokens=300, usage=usage, model=model)
     return {"claim": claim, "votes": votes, "consensus": consensus,
             "summary": summary or "Multiple perspectives were considered.", "sources": []}

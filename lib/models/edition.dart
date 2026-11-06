@@ -63,7 +63,8 @@ enum Edition {
   /// Small print under the price block.
   String get priceNote => switch (this) {
         Edition.enterprise => r'Only on days they use DSCVR. Never more than $8 a member a month.',
-        _ => 'No card needed. Switch any time.',
+        Edition.students => r'No card needed. Want more Pinda? Student Plus is $4.99/mo.',
+        Edition.researchers => r'No card needed. Want more Pinda? Research Plus is $9.99/mo.',
       };
 
   static Edition parse(String? v, {String? role}) {
@@ -79,7 +80,7 @@ enum Edition {
   /// Only list things the app really does.
   List<String> get highlights => switch (this) {
         Edition.students => const [
-            'Pinda, your AI tutor: 40 questions a day',
+            'Pinda, your AI tutor, free every day',
             'Pinda explains any reading in plain language',
             'Study notes and summaries from your sources',
             'Study guides and "Quiz me" on your own notes',
@@ -96,7 +97,7 @@ enum Edition {
             'Paste an arXiv link: the full PDF lands in your library',
             'Search arXiv and Semantic Scholar together',
             'Related papers next to everything you read',
-            'Pinda reads your PDFs and cites them: 40 questions a day',
+            'Pinda reads your PDFs and cites them, free every day',
             'Literature reviews drafted from the sources you pick',
             'Executive summaries and paper comparisons',
             'Edit reports, then export them as Markdown',

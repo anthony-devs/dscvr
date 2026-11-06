@@ -160,7 +160,7 @@ def test_pinda_streams_and_meters_usage(client):
     assert r.mimetype == "text/event-stream"
     events = [json.loads(line[5:]) for line in body.splitlines() if line.startswith("data:")]
     assert events == [{"type": "delta", "text": "Hi"}, {"type": "done"}]
-    client.recorded.assert_called_once_with("u1", "pinda", 120, 30)
+    client.recorded.assert_called_once_with("u1", "pinda", 120, 30, plans.FAST_MODEL)
 
 
 def test_pinda_rejects_unknown_scope(client):
@@ -286,10 +286,10 @@ def test_admin_api_needs_session_and_key(admin_client):
 
 def test_admin_flags_validate_limit(admin_client):
     h = {"Authorization": "Bearer " + _login(admin_client), "X-Admin-Key": "k" * 24}
-    assert admin_client.post("/admin/api/flags", json={"freeDailyAi": 5000}, headers=h).status_code == 400
-    with mock.patch.object(flags, "update", return_value={"freeDailyAi": 10, "shared": True}) as up:
-        r = admin_client.post("/admin/api/flags", json={"freeDailyAi": 10}, headers=h)
-    assert r.status_code == 200 and up.call_args[0][0] == {"freeDailyAi": 10}
+    assert admin_client.post("/admin/api/flags", json={"freeDailyUsd": 50}, headers=h).status_code == 400
+    with mock.patch.object(flags, "update", return_value={"freeDailyUsd": 0.2, "shared": True}) as up:
+        r = admin_client.post("/admin/api/flags", json={"freeDailyUsd": 0.2}, headers=h)
+    assert r.status_code == 200 and up.call_args[0][0] == {"freeDailyUsd": 0.2}
 
 
 def _signed(c, method, path, body=None, secret="d" * 40, ts=None, nonce=None):
@@ -342,7 +342,100 @@ def test_ai_pause_blocks_only_ai(client):
 
 
 def test_free_limit_override():
-    with mock.patch.object(flags, "get", return_value={**flags.DEFAULTS, "freeDailyAi": 5}):
-        assert flags.free_daily_ai(40) == 5
+    with mock.patch.object(flags, "get", return_value={**flags.DEFAULTS, "freeDailyUsd": 0.25}):
+        assert flags.free_daily_usd() == 0.25
     with mock.patch.object(flags, "get", return_value=dict(flags.DEFAULTS)):
-        assert flags.free_daily_ai(40) == 40
+        assert flags.free_daily_usd() is None
+
+
+
+# ── Plans, usage meter and Paystack ──────────────────────────────────
+
+import billing  # noqa: E402
+import hashlib as _h  # noqa: E402
+import hmac as _hm  # noqa: E402
+import plans  # noqa: E402
+
+
+def test_plan_of_handles_expiry_and_orgs():
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    assert plans.plan_of({}) == "free"
+    assert plans.plan_of({"orgId": "o1", "plan": "max"}) == "enterprise"
+    assert plans.plan_of({"plan": "research_plus", "planStatus": "active"}) == "research_plus"
+    assert plans.plan_of({"plan": "max", "planStatus": "cancelled", "planEndsAt": now + timedelta(days=3)}) == "max"
+    assert plans.plan_of({"plan": "max", "planStatus": "cancelled", "planEndsAt": now - timedelta(minutes=1)}) == "free"
+    assert plans.plan_of({"plan": "max", "planStatus": "past_due", "planEndsAt": now - timedelta(days=1)}) == "max"  # grace
+    assert plans.plan_of({"plan": "made_up"}) == "free"
+
+
+def test_models_and_costs_by_plan():
+    assert plans.model_for("free", "chat") == plans.FAST_MODEL
+    assert plans.model_for("research_plus", "chat") == plans.FAST_MODEL
+    assert plans.model_for("research_plus", "heavy") == plans.BEST_MODEL
+    assert plans.model_for("max", "chat") == plans.BEST_MODEL
+    assert plans.model_for("enterprise", "chat") == plans.BEST_MODEL
+    assert plans.cost_usd(plans.BEST_MODEL, 1_000_000, 0) > plans.cost_usd(plans.FAST_MODEL, 1_000_000, 0)
+    for p in plans.PAID:  # AI budget stays under the price, so every plan has margin
+        assert plans.PLANS[p]["monthlyUsd"] < plans.PLANS[p]["priceUsd"]
+
+
+class _Doc:
+    def __init__(self, data):
+        self._d = data
+
+    def get(self, **_):
+        return mock.Mock(to_dict=lambda: self._d, exists=True)
+
+
+def _fake_db(usage, profile=None):
+    db = mock.Mock()
+    db.document.side_effect = lambda path: _Doc(usage if path.endswith("meta/usage") else (profile or {}))
+    return db
+
+
+def test_allowance_blocks_when_budget_is_used():
+    today = orgs._today()
+    month = orgs._month()
+    with mock.patch.object(orgs, "user_profile", return_value={}), mock.patch.object(flags, "get", return_value=dict(flags.DEFAULTS)), \
+         mock.patch.object(orgs, "_db", return_value=_fake_db({"day": today, "month": month, "dayCost": 0.01, "monthCost": 0.2})):
+        assert orgs.check_allowance("u1") is None
+    with mock.patch.object(orgs, "user_profile", return_value={}), mock.patch.object(flags, "get", return_value=dict(flags.DEFAULTS)), \
+         mock.patch.object(orgs, "_db", return_value=_fake_db({"day": today, "month": month, "dayCost": 0.5, "monthCost": 0.6})):
+        err = orgs.check_allowance("u1")
+        assert err["code"] == "usage_limit" and err["window"] == "day" and "Upgrade" in err["error"]
+    with mock.patch.object(orgs, "user_profile", return_value={"plan": "max", "planStatus": "active"}), \
+         mock.patch.object(flags, "get", return_value=dict(flags.DEFAULTS)), \
+         mock.patch.object(orgs, "_db", return_value=_fake_db({"day": today, "month": month, "dayCost": 0.5, "monthCost": 0.6})):
+        assert orgs.check_allowance("u1") is None
+    with mock.patch.object(orgs, "user_profile", return_value={"orgId": "o"}), mock.patch.object(flags, "get", return_value=dict(flags.DEFAULTS)):
+        assert orgs.check_allowance("u1") is None
+
+
+def test_ai_routes_return_structured_limit(client):
+    err = {"error": "You've used today's Pinda usage on Free.", "code": "usage_limit", "plan": "free", "window": "day", "resetsAt": "x"}
+    with mock.patch.object(orgs, "check_allowance", return_value=err):
+        r = client.post("/pinda", json={"messages": [{"role": "user", "text": "hi"}]}, headers=AUTH)
+    assert r.status_code == 429 and r.get_json()["code"] == "usage_limit"
+
+
+def test_checkout_is_off_without_paystack(client):
+    with mock.patch.dict(os.environ, {"PAYSTACK_SECRET_KEY": ""}):
+        r = client.post("/billing/checkout", json={"plan": "max"}, headers=AUTH)
+    assert r.status_code == 503
+
+
+def test_paystack_webhook_checks_signature_and_activates(client):
+    secret = "sk_test_" + "x" * 30
+    env = {"PAYSTACK_SECRET_KEY": secret}
+    event = {"event": "charge.success", "data": {"metadata": {"uid": "u42", "plan": "research_plus"}, "customer": {"customer_code": "CUS_1"}}}
+    raw = json.dumps(event).encode()
+    sig = _hm.new(secret.encode(), raw, _h.sha512).hexdigest()
+    with mock.patch.dict(os.environ, env):
+        assert client.post("/billing/paystack/webhook", data=raw, headers={"X-Paystack-Signature": "0" * 128, "Content-Type": "application/json"}).status_code == 401
+        db = mock.Mock()
+        with mock.patch.object(billing, "_db", return_value=db):
+            r = client.post("/billing/paystack/webhook", data=raw, headers={"X-Paystack-Signature": sig, "Content-Type": "application/json"})
+    assert r.status_code == 200 and r.get_json()["result"] == "ok"
+    written = db.document.return_value.set.call_args[0][0]
+    assert written["plan"] == "research_plus" and written["planStatus"] == "active"

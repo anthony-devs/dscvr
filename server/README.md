@@ -16,9 +16,12 @@ plus two private tools:
 | `ANTHROPIC_API_KEY` | Claude key for Pinda, reports, recaps, fact-checks |
 | `PINDA_MODEL` | Optional model override (default `claude-sonnet-5-5`) |
 | `S2_API_KEY` | Optional Semantic Scholar key |
-| `FREE_DAILY_AI` | Free Pinda requests per day (default 40; the dashboard can override it live) |
+| `PINDA_FAST_MODEL` | Model for Free-plan chat and lighter work (default `claude-haiku-5-5`) |
+| `PLAN_<NAME>_PRICE_USD`, `PLAN_<NAME>_DAILY_USD`, `PLAN_<NAME>_MONTHLY_USD` | Plan prices and usage budgets (see `plans.py`); NAME is FREE, STUDENT_PLUS, RESEARCH_PLUS or MAX |
+| `AI_FAST_INPUT_PER_M_USD`, `AI_FAST_OUTPUT_PER_M_USD` | What Anthropic charges for the fast model (default 1 / 5), used by the usage meter |
+| `PAYSTACK_SECRET_KEY`, `PAYSTACK_PLAN_STUDENT_PLUS`, `PAYSTACK_PLAN_RESEARCH_PLUS`, `PAYSTACK_PLAN_MAX`, `PAYSTACK_CALLBACK_URL` | Paid plans (see `billing.py`). Without them, checkout is off |
 | `SEAT_DAY_USD`, `SEAT_MONTH_CAP_USD`, `AI_INPUT_PER_M_USD`, `AI_OUTPUT_PER_M_USD` | Enterprise prices |
-| `ANTHROPIC_INPUT_PER_M_USD`, `ANTHROPIC_OUTPUT_PER_M_USD` | What Anthropic charges you (default 2 / 10, Claude Sonnet 5.5), for the cost chart |
+| `ANTHROPIC_INPUT_PER_M_USD`, `ANTHROPIC_OUTPUT_PER_M_USD` | What Anthropic charges for the best model (default 2 / 10, Claude Sonnet 5.5), for the usage meter and cost chart |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | Founder sign-in. Make the hash with `python manage.py hash-password` |
 | `ADMIN_KEY` | Second lock for the dashboard (16+ chars, `python manage.py gen-secret`) |
 | `SESSION_SECRET` | Signs dashboard sessions (32+ chars) |

@@ -8,6 +8,7 @@ import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/edition_card.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/ui/ui.dart';
+import 'package:dscvr/widgets/subject_picker.dart';
 import 'package:flutter/material.dart';
 
 /// Four short steps: which DSCVR, who you are, what you study, how it works.
@@ -26,10 +27,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
     Edition.enterprise: ['Research', 'Product', 'Engineering', 'Strategy', 'Leadership'],
   };
   static const _steps = 4;
-  static const subjects = [
-    'Computer Science', 'Machine Learning', 'Economics', 'Neuroscience', 'Psychology', 'Biology',
-    'Physics', 'Mathematics', 'Philosophy', 'History', 'Finance', 'Medicine', 'Design', 'Law',
-  ];
 
   int _step = 0;
   late final _name = TextEditingController(text: context.services.session.user.displayName == 'DSCVR User'
@@ -209,16 +206,26 @@ class _OnboardingPageState extends State<OnboardingPage> {
           const SizedBox(height: 10),
           Text('Each pick becomes a category in your library. You can rename or add more later.',
               style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
-          const SizedBox(height: 26),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final s in subjects)
-              AppChip(
-                label: s,
-                selected: _interests.contains(s),
-                leading: _interests.contains(s) ? ColorDot(CategoryPalette.of(_interests.indexOf(s))) : null,
-                onTap: () => setState(() => _interests.contains(s) ? _interests.remove(s) : _interests.add(s)),
-              ),
-          ]),
+          const SizedBox(height: 22),
+          if (_interests.isNotEmpty) ...[
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final s in _interests)
+                AppChip(
+                  label: s,
+                  selected: true,
+                  leading: ColorDot(CategoryPalette.of(_interests.indexOf(s))),
+                  onTap: () => setState(() => _interests.remove(s)),
+                ),
+            ]),
+            const SizedBox(height: 18),
+          ],
+          SubjectSearch(
+            selected: _interests,
+            onToggle: (s) => setState(() {
+              final i = _interests.indexWhere((x) => x.toLowerCase() == s.toLowerCase());
+              i >= 0 ? _interests.removeAt(i) : _interests.add(s);
+            }),
+          ),
         ]);
       default:
         final points = switch (_edition) {

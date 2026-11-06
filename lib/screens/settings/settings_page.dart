@@ -10,6 +10,8 @@ import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dscvr/ui/ui.dart';
+import 'package:dscvr/models/plan.dart';
+import 'package:dscvr/screens/plans/plans_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -92,6 +94,29 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                   value: settings.pindaStyle,
                   onChanged: settings.setPindaStyle,
+                ),
+              ),
+            ],
+          ),
+          _Section(
+            title: 'Plan and usage',
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: ListenableBuilder(
+                  listenable: s.plans,
+                  builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    UsageCard(info: s.plans.info, compact: context.isCompact),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppButton.secondary(
+                        onPressed: () => context.go('/plans'),
+                        icon: const Icon(Ic.crown, size: 15),
+                        label: Text(s.plans.info.plan == Plan.free ? 'See plans' : 'Manage plan'),
+                      ),
+                    ),
+                  ]),
                 ),
               ),
             ],

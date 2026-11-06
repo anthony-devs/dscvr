@@ -221,6 +221,8 @@ class _Breadcrumb extends StatelessWidget {
         return [(label: 'Sessions', path: null, dot: null)];
       case 'team':
         return [(label: 'Team', path: null, dot: null)];
+      case 'plans':
+        return [(label: 'Plans', path: null, dot: null)];
       case 'library':
         return [(label: 'My library', path: null, dot: null)];
       case 'c':

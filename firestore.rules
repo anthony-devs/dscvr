@@ -24,9 +24,10 @@ service cloud.firestore {
       // (that's managed server-side by Stripe webhook).
       // Org membership is granted only by the server (/orgs, /orgs/join).
       allow update: if isOwner(uid)
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'orgId', 'orgRole']));
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'orgId', 'orgRole',
+            'plan', 'planStatus', 'planEndsAt', 'planUpdatedAt', 'planGrantedBy', 'paystack']));
       allow create: if isOwner(uid)
-        && !request.resource.data.keys().hasAny(['orgId', 'orgRole']);
+        && !request.resource.data.keys().hasAny(['orgId', 'orgRole', 'plan', 'planStatus', 'planEndsAt', 'paystack']);
 
       // Usage counters — Cloud Functions only (admin SDK bypasses rules).
       match /meta/{doc} {

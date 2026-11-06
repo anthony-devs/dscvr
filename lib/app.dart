@@ -7,6 +7,7 @@ import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/data/firestore_library_repository.dart';
 import 'package:dscvr/data/link_service.dart';
 import 'package:dscvr/data/org_service.dart';
+import 'package:dscvr/data/plan_service.dart';
 import 'package:dscvr/data/pinda_service.dart';
 import 'package:dscvr/data/research_service.dart';
 import 'package:dscvr/data/session_service.dart';
@@ -37,6 +38,7 @@ class _DscvrAppState extends State<DscvrApp> {
   late final PindaService _pinda = Env.demo ? DemoPindaService() : HttpPindaService(_api);
   late final ResearchService _research = ResearchService(_api);
   late final OrgService _orgs = OrgService(_api);
+  late final PlanService _plans = PlanService(_api);
   late final SessionService _sessions = SessionService(_api);
   final VoiceService _voice = VoiceService();
   StreamSubscription<void>? _deviceWatch;
@@ -74,7 +76,11 @@ class _DscvrAppState extends State<DscvrApp> {
   Future<void> _onSignedIn(String? uid) async {
     await _deviceWatch?.cancel();
     _deviceWatch = null;
-    if (uid == null) return;
+    if (uid == null) {
+      _plans.clear();
+      return;
+    }
+    unawaited(_plans.refresh(force: true));
     try {
       _deviceWatch = await _sessions.registerDevice(uid, onRevoked: () async {
         await _session.signOut();
@@ -93,6 +99,7 @@ class _DscvrAppState extends State<DscvrApp> {
   void dispose() {
     _deviceWatch?.cancel();
     _voice.dispose();
+    _plans.dispose();
     _session.removeListener(_syncLibrary);
     _session.dispose();
     _library?.dispose();
@@ -112,6 +119,7 @@ class _DscvrAppState extends State<DscvrApp> {
       orgs: _orgs,
       sessions: _sessions,
       voice: _voice,
+      plans: _plans,
       library: _library,
       child: ListenableBuilder(
         listenable: widget.settings,

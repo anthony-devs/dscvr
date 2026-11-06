@@ -39,11 +39,9 @@ SEAT_DAY_USD = float(os.getenv("SEAT_DAY_USD", "0.40"))
 SEAT_MONTH_CAP_USD = float(os.getenv("SEAT_MONTH_CAP_USD", "8.00"))
 AI_INPUT_PER_M_USD = float(os.getenv("AI_INPUT_PER_M_USD", "4.00"))
 AI_OUTPUT_PER_M_USD = float(os.getenv("AI_OUTPUT_PER_M_USD", "20.00"))
-FREE_DAILY_AI = int(os.getenv("FREE_DAILY_AI", "40"))
-
 PRICING = {
-    "students": {"price": 0, "aiPerDay": FREE_DAILY_AI},
-    "researchers": {"price": 0, "aiPerDay": FREE_DAILY_AI},
+    "students": {"price": 0, "plan": "free"},
+    "researchers": {"price": 0, "plan": "free"},
     "enterprise": {
         "seatDayUsd": SEAT_DAY_USD,
         "seatMonthCapUsd": SEAT_MONTH_CAP_USD,
@@ -96,35 +94,59 @@ def _forget(uid: str) -> None:
 
 # ── Free allowance + metering ────────────────────────────────────────
 
-def check_allowance(uid: str) -> str | None:
-    """Enterprise members are metered, not limited. Everyone else gets a
-    daily allowance. Returns an error message when it's used up."""
-    if user_profile(uid).get("orgId"):
-        return None
+def check_allowance(uid: str) -> dict[str, Any] | None:
+    """Enterprise members are metered, not limited. Everyone else has a daily
+    and a monthly usage budget for their plan (see plans.py). Returns an
+    error payload when either is used up."""
     import flags
-    limit = flags.free_daily_ai(FREE_DAILY_AI)
-    db = _db()
-    ref = db.document(f"users/{uid}/meta/usage")
-    today = _today()
-
-    @firestore.transactional
-    def txn(tx):
-        snap = ref.get(transaction=tx)
-        data = snap.to_dict() or {}
-        count = data.get("count", 0) if data.get("day") == today else 0
-        if count >= limit:
-            return False
-        tx.set(ref, {"day": today, "count": count + 1, "total": firestore.Increment(1)}, merge=True)
-        return True
-
-    if not txn(db.transaction()):
-        return f"You've used today's {limit} free Pinda requests. They reset at midnight UTC."
+    import plans
+    profile = user_profile(uid)
+    plan = plans.plan_of(profile)
+    caps = plans.budgets(plan, flags.free_daily_usd())
+    if caps is None:
+        return None
+    daily, monthly = caps
+    u = _db().document(f"users/{uid}/meta/usage").get().to_dict() or {}
+    day_cost = float(u.get("dayCost") or 0) if u.get("day") == _today() else 0.0
+    month_cost = float(u.get("monthCost") or 0) if u.get("month") == _month() else 0.0
+    day_reset, month_reset = plans.resets()
+    label = plans.PLANS[plan]["label"]
+    upgrade = "" if plan == "max" else " Upgrade for more."
+    if month_cost >= monthly:
+        return {"error": f"You've used this month's Pinda usage on {label}. It resets in {plans.until(month_reset)}.{upgrade}",
+                "code": "usage_limit", "plan": plan, "window": "month", "resetsAt": month_reset.isoformat()}
+    if day_cost >= daily:
+        return {"error": f"You've used today's Pinda usage on {label}. It resets in {plans.until(day_reset)}.{upgrade}",
+                "code": "usage_limit", "plan": plan, "window": "day", "resetsAt": day_reset.isoformat()}
     return None
 
 
-def record_usage(uid: str, feature: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+def usage_for(uid: str) -> dict[str, Any]:
+    """The usage meter a user sees: percentages and reset times, no dollars."""
+    import flags
+    import plans
+    profile = user_profile(uid, fresh=True)
+    plan = plans.plan_of(profile)
+    caps = plans.budgets(plan, flags.free_daily_usd())
+    u = _db().document(f"users/{uid}/meta/usage").get().to_dict() or {}
+    day_cost = float(u.get("dayCost") or 0) if u.get("day") == _today() else 0.0
+    month_cost = float(u.get("monthCost") or 0) if u.get("month") == _month() else 0.0
+    day_reset, month_reset = plans.resets()
+    meter = None
+    if caps:
+        meter = {"dayPct": min(100, round(day_cost / caps[0] * 100)) if caps[0] else 100,
+                 "monthPct": min(100, round(month_cost / caps[1] * 100)) if caps[1] else 100,
+                 "dayResetsAt": day_reset.isoformat(), "monthResetsAt": month_reset.isoformat()}
+    ends = profile.get("planEndsAt")
+    return {"plan": plan, "planStatus": profile.get("planStatus") or ("active" if plan != "free" else None),
+            "planEndsAt": ends.isoformat() if hasattr(ends, "isoformat") else ends,
+            "usage": meter, "requests": int(u.get("total") or 0)}
+
+
+def record_usage(uid: str, feature: str, input_tokens: int = 0, output_tokens: int = 0, model: str | None = None) -> None:
     """Best-effort metering. Never raises."""
     try:
+        import plans
         profile = user_profile(uid)
         org_id = profile.get("orgId")
         db = _db()
@@ -137,18 +159,34 @@ def record_usage(uid: str, feature: str, input_tokens: int = 0, output_tokens: i
                 "byFeature": {feature: firestore.Increment(1)},
                 "updatedAt": _now(),
             }, merge=True)
-        db.document(f"users/{uid}/meta/usage").set({
-            "inputTokens": firestore.Increment(int(input_tokens)),
-            "outputTokens": firestore.Increment(int(output_tokens)),
-        }, merge=True)
+        cost = plans.cost_usd(model or plans.FAST_MODEL, int(input_tokens), int(output_tokens))
+        ref = db.document(f"users/{uid}/meta/usage")
+        today, month = _today(), _month()
+
+        @firestore.transactional
+        def txn(tx):
+            u = ref.get(transaction=tx).to_dict() or {}
+            tx.set(ref, {
+                "day": today, "month": month,
+                "dayCost": (float(u.get("dayCost") or 0) if u.get("day") == today else 0.0) + cost,
+                "monthCost": (float(u.get("monthCost") or 0) if u.get("month") == month else 0.0) + cost,
+                "total": int(u.get("total") or 0) + 1,
+                "inputTokens": int(u.get("inputTokens") or 0) + int(input_tokens),
+                "outputTokens": int(u.get("outputTokens") or 0) + int(output_tokens),
+                "costUsd": float(u.get("costUsd") or 0) + cost,
+            }, merge=True)
+
+        txn(db.transaction())
         db.document(f"stats/{_today()}").set({
             "active": {uid: True},
             "aiUsers": {uid: True},
             "requests": firestore.Increment(1),
             "inputTokens": firestore.Increment(int(input_tokens)),
             "outputTokens": firestore.Increment(int(output_tokens)),
+            "costUsd": firestore.Increment(cost),
             "byFeature": {feature: firestore.Increment(1)},
             "byEdition": {("enterprise" if org_id else (profile.get("edition") or "researchers")): firestore.Increment(1)},
+            "byPlan": {plans.plan_of(profile): firestore.Increment(1)},
         }, merge=True)
     except Exception:  # noqa: BLE001
         pass

@@ -7,6 +7,7 @@ import 'package:dscvr/widgets/common.dart';
 import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:dscvr/models/edition.dart';
+import 'package:dscvr/models/plan.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -147,6 +148,18 @@ class _SidebarState extends State<Sidebar> {
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(children: [
+                ListenableBuilder(
+                  listenable: context.services.plans,
+                  builder: (context, _) {
+                    final plan = context.services.plans.info.plan;
+                    return _NavRow(
+                      icon: Ic.crown,
+                      label: plan == Plan.free ? 'Upgrade' : plan.label,
+                      active: widget.location.startsWith('/plans'),
+                      onTap: () => _go('/plans'),
+                    );
+                  },
+                ),
                 _NavRow(icon: Ic.settings, label: 'Settings', active: widget.location.startsWith('/settings'), onTap: () => _go('/settings')),
                 const SizedBox(height: 4),
                 Row(children: [

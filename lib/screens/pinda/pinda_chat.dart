@@ -9,6 +9,7 @@ import 'package:dscvr/widgets/icons.dart';
 import 'package:dscvr/widgets/markdown_view.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
 class PindaAvatar extends StatelessWidget {
@@ -395,7 +396,10 @@ class _MessageView extends StatelessWidget {
               Icon(Ic.warning, size: 16, color: c.danger),
               const SizedBox(width: 8),
               Expanded(child: Text(message.error!, style: AppTheme.sans(fontSize: 13, color: c.ink))),
-              AppButton.ghost(onPressed: onRetry, icon: const Icon(Ic.retry, size: 14), label: const Text('Retry')),
+              if (message.error!.contains('Upgrade for more'))
+                AppButton.primary(size: BtnSize.sm, onPressed: () => GoRouter.of(context).go('/plans'), label: const Text('See plans'))
+              else
+                AppButton.ghost(onPressed: onRetry, icon: const Icon(Ic.retry, size: 14), label: const Text('Retry')),
             ]),
           ),
       ]),

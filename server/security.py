@@ -66,6 +66,7 @@ def require_auth(f: Callable) -> Callable:
         if claims is None:
             return jsonify(error="Invalid or expired token."), 401
         g.uid = claims["uid"]
+        g.email = claims.get("email")
         return f(*args, **kwargs)
     return wrapper
 

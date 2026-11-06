@@ -2,38 +2,25 @@ import 'dart:convert';
 
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/models/paper.dart';
+import 'package:dscvr/models/subjects.dart';
+
+export 'package:dscvr/models/subjects.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 
 enum PaperSource {
-  arxiv('arXiv'),
-  semanticScholar('Semantic Scholar');
+  arxiv('arXiv', 'arxiv'),
+  semanticScholar('Semantic Scholar', 'semantic_scholar'),
+  openAlex('All fields', 'openalex');
 
-  const PaperSource(this.label);
+  const PaperSource(this.label, this.key);
   final String label;
-  String get key => this == PaperSource.arxiv ? 'arxiv' : 'semantic_scholar';
+
+  /// Name the server uses for this source.
+  final String key;
 }
 
-/// A subject feed on the Discover page, backed by an arXiv category.
-class Subject {
-  const Subject(this.label, this.arxivQuery);
-  final String label;
-  final String arxivQuery;
-
-  static const all = <Subject>[
-    Subject('Artificial Intelligence', 'cat:cs.AI'),
-    Subject('Machine Learning', 'cat:cs.LG'),
-    Subject('Language', 'cat:cs.CL'),
-    Subject('Computer Vision', 'cat:cs.CV'),
-    Subject('Neuroscience', 'cat:q-bio.NC'),
-    Subject('Economics', 'cat:econ.GN OR cat:econ.TH'),
-    Subject('Physics', 'cat:physics.gen-ph OR cat:quant-ph'),
-    Subject('Mathematics', 'cat:math.ST OR cat:math.PR'),
-    Subject('Biology', 'cat:q-bio.GN OR cat:q-bio.BM'),
-    Subject('Finance', 'cat:q-fin.GN OR cat:q-fin.ST'),
-  ];
-}
 
 /// Searches arXiv and Semantic Scholar.
 ///
@@ -49,8 +36,11 @@ class DiscoverService {
     return _fetch(source, q, sortByDate: false, limit: limit);
   }
 
-  Future<List<Paper>> latest(Subject subject, {int limit = 20}) =>
-      _fetch(PaperSource.arxiv, subject.arxivQuery, sortByDate: true, limit: limit);
+  /// Newest papers in a subject: arXiv preprints where arXiv covers the
+  /// subject, otherwise recent journal articles from OpenAlex (any field).
+  Future<List<Paper>> latest(Subject subject, {int limit = 20}) => subject.usesArxiv
+      ? _fetch(PaperSource.arxiv, subject.arxiv!, sortByDate: true, limit: limit)
+      : _fetch(PaperSource.openAlex, subject.label, sortByDate: true, limit: limit);
 
   /// Results are cached for 10 minutes so switching subjects back and forth
   /// is instant and we stay well inside the providers' rate limits.
@@ -74,7 +64,7 @@ class DiscoverService {
     // Browsers block direct calls to arXiv and Semantic Scholar (no CORS
     // headers, plus shared rate limits), so the web build always goes through
     // the DSCVR server. Native apps try the provider first and fall back.
-    if (!kIsWeb) {
+    if (!kIsWeb && source != PaperSource.openAlex) {
       try {
         return await _direct(source, q, sortByDate: sortByDate, limit: limit);
       } catch (_) {

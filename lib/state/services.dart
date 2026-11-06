@@ -4,6 +4,7 @@ import 'package:dscvr/data/library_repository.dart';
 import 'package:dscvr/data/link_service.dart';
 import 'package:dscvr/data/org_service.dart';
 import 'package:dscvr/data/pinda_service.dart';
+import 'package:dscvr/data/plan_service.dart';
 import 'package:dscvr/data/research_service.dart';
 import 'package:dscvr/data/session_service.dart';
 import 'package:dscvr/data/voice_service.dart';
@@ -26,6 +27,7 @@ class Services extends InheritedWidget {
     required this.orgs,
     required this.sessions,
     required this.voice,
+    required this.plans,
     required this.library,
     required super.child,
   });
@@ -40,6 +42,7 @@ class Services extends InheritedWidget {
   final OrgService orgs;
   final SessionService sessions;
   final VoiceService voice;
+  final PlanService plans;
 
   /// Null until a user is signed in and onboarded.
   final LibraryController? library;

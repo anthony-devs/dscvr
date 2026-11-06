@@ -5,7 +5,7 @@ Endpoints:
   GET   /pricing                     Public pricing (all editions)
 
   Research
-  GET   /discover                    arXiv / Semantic Scholar search proxy
+  GET   /discover                    arXiv / Semantic Scholar / OpenAlex search proxy
   GET   /arxiv?ref=                  One arXiv paper by id or URL
   GET   /related                     Related papers (Semantic Scholar)
   POST  /pdf/import                  Copy a public PDF into the user's storage
@@ -15,6 +15,13 @@ Endpoints:
   POST  /parliament                  Three-perspective fact-check
   POST  /reports/draft               Streamed cited report from chosen sources (SSE)
   POST  /sessions/summary            Summary of a focus or group session
+
+  Plans (Paystack)
+  GET   /billing/me                  Plan, usage meter, available plans
+  POST  /billing/checkout            Paystack payment page for a plan
+  POST  /billing/verify              Confirm a payment after returning from Paystack
+  POST  /billing/cancel              Stop renewal at the end of the paid month
+  POST  /billing/paystack/webhook    Paystack events (signed)
 
   Ratings
   GET   /ratings?keys=a,b            Community ratings for papers
@@ -50,13 +57,15 @@ from flask_cors import CORS
 
 import ai
 import flags
+import billing
 import orgs
+import plans
 from admin import make_admin
 from devapi import make_devapi
 from metrics import metrics
 from staff import Staff
 from config import Config
-from discover import arxiv_by_id, cached, parse_arxiv_id, related_papers, s2_key_for, search_arxiv, search_semantic_scholar
+from discover import arxiv_by_id, cached, parse_arxiv_id, related_papers, s2_key_for, search_arxiv, search_semantic_scholar, search_openalex
 from fetch import UnsafeUrl, fetch_pdf
 from payments import verify_google_pay_token
 from security import (
@@ -75,7 +84,7 @@ logger = logging.getLogger(__name__)
 SCOPES = {"general", "category", "topic", "material", "selection"}
 AI_PATHS = {"/pinda", "/reports/draft", "/sessions/summary", "/parliament"}
 # Paths that keep working during maintenance: staff tools, and signals that cost nothing.
-MAINTENANCE_OPEN = ("/admin", "/internal/dev", "/health", "/healthz", "/pricing", "/activity")
+MAINTENANCE_OPEN = ("/admin", "/internal/dev", "/health", "/healthz", "/pricing", "/activity", "/billing/paystack")
 
 
 def _ids(value) -> list[str]:
@@ -160,7 +169,7 @@ def create_app(config: Config | None = None) -> Flask:
     @app.route("/pricing")
     @app.route("/payments/pricing")
     def pricing():
-        return jsonify(pricing=orgs.PRICING, currency="usd")
+        return jsonify(pricing=orgs.PRICING, plans=plans.public_plans(), currency="usd")
 
     # ── Research ─────────────────────────────────────────────────────
 
@@ -181,6 +190,8 @@ def create_app(config: Config | None = None) -> Flask:
         try:
             if source == "semantic_scholar":
                 papers = cached(("s2", q, limit), lambda: search_semantic_scholar(q, limit))
+            elif source == "openalex":
+                papers = cached(("oa", q, sort, limit), lambda: search_openalex(q, limit, sort))
             else:
                 papers = cached(("arxiv", q, sort, limit), lambda: search_arxiv(q, sort, limit))
             resp = jsonify(papers=papers)
@@ -262,7 +273,7 @@ def create_app(config: Config | None = None) -> Flask:
         if (r := limited(endpoint)):
             return r
         if (err := orgs.check_allowance(g.uid)):
-            return jsonify(error=err), 429
+            return jsonify(err), 429
         return None
 
     @app.route("/pinda", methods=["POST"])
@@ -289,10 +300,12 @@ def create_app(config: Config | None = None) -> Flask:
         system = ai.system_prompt(style, _edition(uid), voice=voice)
         max_tokens = 700 if voice else (1500 if style == "concise" else 4096)
 
+        model = plans.model_for(plans.plan_of(orgs.user_profile(uid)), "chat")
+
         def run():
             usage: dict[str, int] = {}
-            yield from ai.stream_text(system=system, messages=messages, max_tokens=max_tokens, usage=usage)
-            orgs.record_usage(uid, "voice" if voice else "pinda", usage.get("input", 0), usage.get("output", 0))
+            yield from ai.stream_text(system=system, messages=messages, max_tokens=max_tokens, usage=usage, model=model)
+            orgs.record_usage(uid, "voice" if voice else "pinda", usage.get("input", 0), usage.get("output", 0), model)
 
         return _sse_response(run())
 
@@ -316,10 +329,12 @@ def create_app(config: Config | None = None) -> Flask:
         messages = [{"role": "user", "content": [*context, {"type": "text", "text": prompt}]}]
         system = ai.REPORT_SYSTEM + "\n\n" + ai.EDITION.get(_edition(uid), "")
 
+        model = plans.model_for(plans.plan_of(orgs.user_profile(uid)), "heavy")
+
         def run():
             usage: dict[str, int] = {}
-            yield from ai.stream_text(system=system, messages=messages, max_tokens=6000, usage=usage)
-            orgs.record_usage(uid, "report", usage.get("input", 0), usage.get("output", 0))
+            yield from ai.stream_text(system=system, messages=messages, max_tokens=6000, usage=usage, model=model)
+            orgs.record_usage(uid, "report", usage.get("input", 0), usage.get("output", 0), model)
 
         return _sse_response(run())
 
@@ -330,8 +345,10 @@ def create_app(config: Config | None = None) -> Flask:
             return r
         body = request.get_json(silent=True) or {}
         usage: dict[str, int] = {}
+        model = plans.model_for(plans.plan_of(orgs.user_profile(g.uid)), "heavy")
         try:
             summary = ai.session_summary(
+                model=model,
                 title=sanitize(body.get("title", ""), 200) or "Research session",
                 minutes=max(0, min(int(body.get("minutes") or 0), 24 * 60)),
                 notes=sanitize(body.get("notes", ""), 8000),
@@ -344,7 +361,7 @@ def create_app(config: Config | None = None) -> Flask:
         except Exception:  # noqa: BLE001
             logger.exception("session summary failed")
             return jsonify(error="Could not summarise this session."), 502
-        orgs.record_usage(g.uid, "summary", usage.get("input", 0), usage.get("output", 0))
+        orgs.record_usage(g.uid, "summary", usage.get("input", 0), usage.get("output", 0), model)
         return jsonify(summary=summary)
 
     @app.route("/parliament", methods=["POST"])
@@ -357,15 +374,64 @@ def create_app(config: Config | None = None) -> Flask:
         if len(claim) < 5:
             return jsonify(error="Provide a claim (5-2000 characters)."), 400
         usage: dict[str, int] = {}
+        model = plans.model_for(plans.plan_of(orgs.user_profile(g.uid)), "heavy")
         try:
-            result = ai.parliament(claim, sanitize(body.get("context", ""), 5000), usage)
+            result = ai.parliament(claim, sanitize(body.get("context", ""), 5000), usage, model)
         except ai.AIUnavailable as e:
             return jsonify(error=str(e)), 503
         except Exception:  # noqa: BLE001
             logger.exception("parliament failed")
             return jsonify(error="Parliament could not evaluate that claim. Try again."), 502
-        orgs.record_usage(g.uid, "parliament", usage.get("input", 0), usage.get("output", 0))
+        orgs.record_usage(g.uid, "parliament", usage.get("input", 0), usage.get("output", 0), model)
         return jsonify(result)
+
+    # ── Plans and billing ────────────────────────────────────────────
+
+    @app.errorhandler(billing.BillingError)
+    def _billing_error(e: billing.BillingError):
+        return jsonify(error=str(e)), e.status
+
+    @app.route("/billing/me")
+    @require_auth
+    def billing_me():
+        return jsonify({**orgs.usage_for(g.uid), "plans": plans.public_plans(), "paymentsEnabled": billing.enabled()})
+
+    @app.route("/billing/checkout", methods=["POST"])
+    @require_auth
+    def billing_checkout():
+        if (r := limited("orgs")):
+            return r
+        body = request.get_json(silent=True) or {}
+        return jsonify(billing.checkout(g.uid, g.get("email"), sanitize(body.get("plan", ""), 40)))
+
+    @app.route("/billing/verify", methods=["POST"])
+    @require_auth
+    def billing_verify():
+        if (r := limited("orgs")):
+            return r
+        ref = sanitize((request.get_json(silent=True) or {}).get("reference", ""), 120)
+        if not ref:
+            return jsonify(error="Missing payment reference."), 400
+        return jsonify(billing.verify(g.uid, ref))
+
+    @app.route("/billing/cancel", methods=["POST"])
+    @require_auth
+    def billing_cancel():
+        if (r := limited("orgs")):
+            return r
+        return jsonify(billing.cancel(g.uid))
+
+    @app.route("/billing/paystack/webhook", methods=["POST"])
+    def paystack_webhook():
+        raw = request.get_data(cache=True)
+        if len(raw) > 256 * 1024 or not billing.valid_signature(raw, request.headers.get("X-Paystack-Signature", "")):
+            return jsonify(error="Bad signature."), 401
+        try:
+            result = billing.handle_event(request.get_json(silent=True) or {})
+        except Exception:  # noqa: BLE001
+            logger.exception("paystack webhook failed")
+            return jsonify(error="Could not process event."), 500
+        return jsonify(result=result)
 
     # ── Ratings ──────────────────────────────────────────────────────
 

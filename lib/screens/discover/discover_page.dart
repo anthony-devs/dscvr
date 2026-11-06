@@ -11,6 +11,7 @@ import 'package:dscvr/ui/ui.dart';
 import 'package:dscvr/data/research_service.dart';
 import 'package:dscvr/models/workspace.dart';
 import 'package:dscvr/widgets/star_rating.dart';
+import 'package:dscvr/widgets/subject_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -42,9 +43,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _q.text = q;
       _search();
     } else {
-      final interests = context.services.session.user.interests;
-      _subject = Subject.all.firstWhere((s) => interests.contains(s.label), orElse: () => Subject.all.first);
-      _loadSubject(_subject!);
+      final mine = _mySubjects();
+      _loadSubject(mine.isNotEmpty ? mine.first : Subject.lookup('Computer Science')!);
     }
   }
 
@@ -97,6 +97,35 @@ class _DiscoverPageState extends State<DiscoverPage> {
     _run(() => svc.search(q, source: _source), summary: svc.summary(q));
   }
 
+  /// Subjects picked here this visit, on top of the user's own.
+  final List<Subject> _picked = [];
+
+  /// The user's library categories and sign-up subjects, so every field works.
+  List<Subject> _mySubjects() {
+    final names = <String>[
+      ...context.library.categories.map((c) => c.name),
+      ...context.services.session.user.interests,
+    ];
+    final out = <Subject>[];
+    for (final n in names) {
+      if (n.trim().isEmpty) continue;
+      final s = Subject.custom(n);
+      if (!out.contains(s)) out.add(s);
+    }
+    for (final s in _picked) {
+      if (!out.contains(s)) out.add(s);
+    }
+    return out;
+  }
+
+  Future<void> _moreSubjects() async {
+    final label = await pickSubject(context);
+    if (label == null || !mounted) return;
+    final s = Subject.custom(label);
+    if (!_picked.contains(s)) _picked.add(s);
+    _loadSubject(s);
+  }
+
   void _loadSubject(Subject s) {
     setState(() {
       _subject = s;
@@ -141,13 +170,25 @@ class _DiscoverPageState extends State<DiscoverPage> {
             if (_q.text.trim().isNotEmpty) _search();
           },
         ),
+        AppButton.ghost(
+          size: BtnSize.sm,
+          onPressed: () {
+            final q = _q.text.trim().isNotEmpty ? _q.text.trim() : (_subject?.label ?? '');
+            launchUrl(Uri.https('scholar.google.com', '/scholar', {if (q.isNotEmpty) 'q': q}), mode: LaunchMode.externalApplication);
+          },
+          icon: const Icon(Ic.external, size: 14),
+          label: const Text('Open in Google Scholar'),
+        ),
       ]),
       const SizedBox(height: 22),
-      SectionLabel('Latest by subject'),
+      SectionLabel('Latest in your subjects'),
       const SizedBox(height: 12),
       Wrap(spacing: 6, runSpacing: 6, children: [
-        for (final s in Subject.all)
+        for (final s in _mySubjects())
           AppChip(label: s.label, selected: _subject == s, onTap: () => _loadSubject(s)),
+        if (_subject != null && !_mySubjects().contains(_subject))
+          AppChip(label: _subject!.label, selected: true, onTap: () {}),
+        AppChip(label: 'More subjects', leading: const Icon(Ic.add, size: 13), selected: false, onTap: _moreSubjects),
       ]),
       const SizedBox(height: 26),
       if (_summary != null && _summary!.extract.isNotEmpty) ...[
@@ -155,7 +196,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         const SizedBox(height: 22),
       ],
       SectionLabel(
-        _subject != null ? 'New in ${_subject!.label} on arXiv' : 'Results',
+        _subject != null
+            ? (_subject!.usesArxiv ? 'New in ${_subject!.label} on arXiv' : 'New in ${_subject!.label} across journals')
+            : 'Results',
         count: _loading ? null : _papers.length,
       ),
       const SizedBox(height: 6),

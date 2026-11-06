@@ -11,6 +11,7 @@ import 'package:dscvr/screens/sessions/focus_page.dart';
 import 'package:dscvr/screens/sessions/room_page.dart';
 import 'package:dscvr/screens/sessions/sessions_page.dart';
 import 'package:dscvr/screens/team/team_page.dart';
+import 'package:dscvr/screens/plans/plans_page.dart';
 import 'package:dscvr/screens/settings/settings_page.dart';
 import 'package:dscvr/screens/signup.dart';
 import 'package:dscvr/screens/shell/app_shell.dart';
@@ -95,6 +96,7 @@ GoRouter buildRouter(SessionController session) {
           GoRoute(path: '/reports', pageBuilder: (_, s) => page(s, const ReportsPage())),
           GoRoute(path: '/sessions', pageBuilder: (_, s) => page(s, const SessionsPage())),
           GoRoute(path: '/team', pageBuilder: (_, s) => page(s, const TeamPage())),
+          GoRoute(path: '/plans', pageBuilder: (_, s) => page(s, PlansPage(reference: s.queryParams['reference']))),
           GoRoute(path: '/settings', pageBuilder: (_, s) => page(s, const SettingsPage())),
           GoRoute(
             path: '/c/:cid',

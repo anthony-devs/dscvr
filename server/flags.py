@@ -17,7 +17,7 @@ DEFAULTS: dict[str, Any] = {
     "maintenance": {"on": False, "scope": "all", "message": ""},
     "aiPaused": False,
     "aiPausedMessage": "Pinda is taking a short break. Please try again soon.",
-    "freeDailyAi": None,  # None = use FREE_DAILY_AI from the environment
+    "freeDailyUsd": None,  # None = the Free plan's daily usage budget from plans.py
 }
 
 _cache: tuple[float, dict[str, Any]] | None = None
@@ -82,6 +82,7 @@ def ai_block_message() -> str | None:
     return None
 
 
-def free_daily_ai(default: int) -> int:
-    v = get().get("freeDailyAi")
-    return int(v) if isinstance(v, (int, float)) and v >= 0 else default
+def free_daily_usd() -> float | None:
+    """Override for the Free plan's daily usage budget, or None for the default."""
+    v = get().get("freeDailyUsd")
+    return float(v) if isinstance(v, (int, float)) and v >= 0 else None

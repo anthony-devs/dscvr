@@ -193,9 +193,17 @@ def related_papers(ref: str | None, title: str | None, limit: int = 8) -> list[d
     return []
 
 
-def search_openalex(query: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Search OpenAlex (free, no key). Used when Semantic Scholar is throttled."""
+def search_openalex(query: str, limit: int = 20, sort: str = "relevance") -> list[dict[str, Any]]:
+    """Search OpenAlex: free, no key, every discipline. Also the fallback when
+    Semantic Scholar is throttled. sort="date" gives the newest papers (last
+    two years, with an abstract), for subjects arXiv doesn't cover."""
     params = {"search": query, "per_page": str(limit)}
+    if sort == "date":
+        import datetime as _dt
+        today = _dt.date.today()
+        params["sort"] = "publication_date:desc"
+        params["filter"] = (f"from_publication_date:{today.replace(year=today.year - 2).isoformat()},"
+                            f"to_publication_date:{today.isoformat()},has_abstract:true,type:article")
     if _CONTACT:
         params["mailto"] = _CONTACT
     resp = requests.get(

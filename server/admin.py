@@ -19,6 +19,7 @@ from flask import Blueprint, g, jsonify, request
 
 import flags
 import orgs
+import plans
 from security import get_firestore_client
 from staff import Staff, StaffError, client_ip, error_json, html_page
 
@@ -145,7 +146,7 @@ def make_admin(staff: Staff) -> Blueprint:
                 "day": day, "active": sum(1 for v in (s.get("active") or {}).values() if v),
                 "aiUsers": sum(1 for v in (s.get("aiUsers") or {}).values() if v),
                 "requests": int(s.get("requests") or 0), "inputTokens": tin, "outputTokens": tout,
-                "costUsd": _cost(tin, tout), "byFeature": s.get("byFeature") or {}, "byEdition": s.get("byEdition") or {},
+                "costUsd": round(float(s.get("costUsd")), 2) if s.get("costUsd") is not None else _cost(tin, tout), "byFeature": s.get("byFeature") or {}, "byEdition": s.get("byEdition") or {},
             })
         today = series[-1]
         week = series[-7:]
@@ -175,6 +176,7 @@ def make_admin(staff: Staff) -> Blueprint:
                 "new7": _count(users.where("createdAt", ">=", (now - timedelta(days=7)).isoformat())),
                 "new30": _count(users.where("createdAt", ">=", (now - timedelta(days=30)).isoformat())),
                 "byEdition": {e: _count(users.where("edition", "==", e)) for e in EDITIONS},
+                "byPlan": {p: _count(users.where("plan", "==", p)) for p in plans.PAID},
                 "activeToday": today["active"], "activeWeek": len(weekly_active),
             },
             "ai": {
@@ -182,7 +184,7 @@ def make_admin(staff: Staff) -> Blueprint:
                 "costToday": today["costUsd"], "cost30": round(sum(d["costUsd"] for d in series), 2),
                 "tokens30": sum(d["inputTokens"] + d["outputTokens"] for d in series),
                 "byFeature": features, "paused": bool(flags.get().get("aiPaused")),
-                "freeDaily": flags.free_daily_ai(orgs.FREE_DAILY_AI),
+                "freeDailyUsd": plans.budgets("free", flags.free_daily_usd())[0],
             },
             "enterprise": {"orgs": org_count, "month": month, "revenueMonth": round(revenue, 2),
                            "lastMonth": last_month, "revenueLastMonth": round(last_revenue, 2)},
@@ -200,6 +202,7 @@ def make_admin(staff: Staff) -> Blueprint:
 
     def _user_row(uid: str, d: dict) -> dict:
         return {
+            "plan": plans.plan_of(d), "planStatus": d.get("planStatus"),
             "uid": uid, "displayName": d.get("displayName") or "", "email": d.get("email") or "",
             "edition": "enterprise" if d.get("orgId") else (d.get("edition") or "researchers"),
             "role": d.get("role") or "", "orgId": d.get("orgId"), "orgRole": d.get("orgRole"),
@@ -251,6 +254,7 @@ def make_admin(staff: Staff) -> Blueprint:
             auth_info = None
         usage = db.document(f"users/{uid}/meta/usage").get().to_dict() or {}
         today = _now().strftime("%Y-%m-%d")
+        meter = orgs.usage_for(uid)
         counts = {c: _count(db.collection(f"users/{uid}/{c}")) for c in ("materials", "reports", "sessions", "conversations", "categories")}
         devices = [{"id": x.id, "label": (x.to_dict() or {}).get("label"), "platform": (x.to_dict() or {}).get("platform"),
                     "lastActiveAt": _iso((x.to_dict() or {}).get("lastActiveAt")), "revoked": bool((x.to_dict() or {}).get("revoked"))}
@@ -262,9 +266,12 @@ def make_admin(staff: Staff) -> Blueprint:
         tin, tout = int(usage.get("inputTokens") or 0), int(usage.get("outputTokens") or 0)
         return {
             "user": _user_row(uid, d), "interests": d.get("interests") or [], "auth": auth_info, "org": org, "counts": counts,
-            "usage": {"today": int(usage.get("count") or 0) if usage.get("day") == today else 0, "total": int(usage.get("total") or 0),
-                      "inputTokens": tin, "outputTokens": tout, "costUsd": _cost(tin, tout),
-                      "dailyLimit": None if d.get("orgId") else flags.free_daily_ai(orgs.FREE_DAILY_AI)},
+            "usage": {"total": int(usage.get("total") or 0), "inputTokens": tin, "outputTokens": tout,
+                      "costUsd": round(float(usage.get("costUsd") or 0) or _cost(tin, tout), 2),
+                      "todayUsd": round(float(usage.get("dayCost") or 0), 3) if usage.get("day") == today else 0,
+                      "meter": meter.get("usage")},
+            "plan": {"id": meter["plan"], "status": meter.get("planStatus"), "endsAt": meter.get("planEndsAt"),
+                     "paystack": bool((d.get("paystack") or {}).get("subscriptionCode"))},
             "devices": devices,
         }
 
@@ -325,8 +332,31 @@ def make_admin(staff: Staff) -> Blueprint:
     @guarded
     def user_reset(uid: str):
         uid = _clean_id(uid)
-        _db().document(f"users/{uid}/meta/usage").set({"count": 0}, merge=True)
+        _db().document(f"users/{uid}/meta/usage").set({"dayCost": 0, "monthCost": 0}, merge=True)
         audit("user_reset_allowance", uid)
+        return jsonify(ok=True)
+
+    @bp.post("/admin/api/users/<uid>/plan")
+    @guarded
+    def user_plan(uid: str):
+        """Give someone a plan for free for N days (a gift, a refund, a tester),
+        or put them back on Free. Paid Paystack subscriptions are not touched."""
+        uid = _clean_id(uid)
+        d = body()
+        plan = d.get("plan")
+        if plan not in ("free", *plans.PAID):
+            raise StaffError(400, "bad_plan", "Pick free, student_plus, research_plus or max.")
+        if plan == "free":
+            doc = {"plan": "free", "planStatus": None, "planEndsAt": None}
+        else:
+            days = d.get("days", 30)
+            if not isinstance(days, int) or not 1 <= days <= 366:
+                raise StaffError(400, "bad_days", "Give between 1 and 366 days.")
+            # "cancelled" with an end date: it simply expires, nothing renews.
+            doc = {"plan": plan, "planStatus": "cancelled", "planEndsAt": _now() + timedelta(days=days), "planGrantedBy": g.actor}
+        _db().document(f"users/{uid}").set(doc, merge=True)
+        orgs._forget(uid)
+        audit("user_plan", uid, {"plan": plan, "days": d.get("days")})
         return jsonify(ok=True)
 
     # ── organisations ────────────────────────────────────────────────
@@ -466,7 +496,8 @@ def make_admin(staff: Staff) -> Blueprint:
     @guarded
     def flags_get():
         f = flags.get(fresh=True)
-        return jsonify({**f, "envFreeDailyAi": orgs.FREE_DAILY_AI, "model": os.getenv("PINDA_MODEL", "claude-sonnet-5-5"),
+        return jsonify({**f, "defaultFreeDailyUsd": plans.PLANS["free"]["dailyUsd"], "model": plans.BEST_MODEL, "fastModel": plans.FAST_MODEL,
+                        "plans": [{**p} for p in plans.PLANS.values()],
                         "aiKeySet": bool(os.getenv("ANTHROPIC_API_KEY"))})
 
     @bp.post("/admin/api/flags")
@@ -478,18 +509,18 @@ def make_admin(staff: Staff) -> Blueprint:
             fields["aiPaused"] = bool(d["aiPaused"])
         if "aiPausedMessage" in d:
             fields["aiPausedMessage"] = str(d["aiPausedMessage"] or "").strip()[:200] or flags.DEFAULTS["aiPausedMessage"]
-        if "freeDailyAi" in d:
-            v = d["freeDailyAi"]
+        if "freeDailyUsd" in d:
+            v = d["freeDailyUsd"]
             if v in (None, ""):
-                fields["freeDailyAi"] = None
+                fields["freeDailyUsd"] = None
             else:
                 try:
-                    v = int(v)
+                    v = float(v)
                 except (TypeError, ValueError):
-                    raise StaffError(400, "bad_limit", "The daily limit must be a whole number.") from None
-                if not 0 <= v <= 1000:
-                    raise StaffError(400, "bad_limit", "Pick a daily limit from 0 to 1000.")
-                fields["freeDailyAi"] = v
+                    raise StaffError(400, "bad_limit", "The daily budget must be a number of dollars.") from None
+                if not 0 <= v <= 5:
+                    raise StaffError(400, "bad_limit", "Pick a daily budget from $0 to $5 per user.")
+                fields["freeDailyUsd"] = round(v, 3)
         if not fields:
             raise StaffError(400, "nothing", "Nothing to change.")
         out = flags.update(fields, g.actor)

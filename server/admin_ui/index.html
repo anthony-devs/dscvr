@@ -170,6 +170,7 @@ const usd = v => v == null ? '—' : '$' + Number(v).toLocaleString(undefined, {
 const num = v => v == null ? '—' : Number(v).toLocaleString();
 const tok = v => v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : String(v || 0);
 const when = v => { if (!v) return '—'; const d = new Date(typeof v === 'number' ? v : v); if (isNaN(d)) return String(v); const s = (Date.now() - d) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; if (s < 86400 * 30) return Math.floor(s / 86400) + ' d ago'; return d.toLocaleDateString(); };
+const PLAN = {free: 'Free', student_plus: 'Student Plus', research_plus: 'Research Plus', max: 'DSCVR Max', enterprise: 'Enterprise'};
 const ed = e => h('span', {class: 'pill ' + e}, e ? e[0].toUpperCase() + e.slice(1) : '—');
 
 class ApiErr extends Error { constructor(m, s, c) { super(m); this.status = s; this.code = c; } }
@@ -271,7 +272,8 @@ VIEWS.overview = async (view, menu) => {
       card('AI cost (what Anthropic bills you)', h('div', {class: 'stat'}, h('b', {}, usd(a.cost30)), h('em', {}, `${usd(a.costToday)} today · ${tok(a.tokens30)} tokens in ${d.days} days`)), bars(d.series, 'costUsd', usd)),
       card('Editions', h('div', {class: 'legend'}, Object.entries(u.byEdition).flatMap(([k, v]) => [h('div', {}, ed(k), h('div', {class: 'meter', style: 'margin-top:6px'}, h('i', {style: `width:${(v || 0) / totalEd * 100}%`}))), h('b', {}, num(v))]))),
       card('What people use', feats.length ? h('div', {class: 'legend'}, feats.flatMap(([k, v]) => [h('div', {}, k, h('div', {class: 'meter', style: 'margin-top:6px'}, h('i', {style: `width:${v / featMax * 100}%`}))), h('b', {}, num(v))])) : h('div', {class: 'empty'}, 'No AI usage yet.'))),
-    h('p', {class: 's section'}, `Free users get ${a.freeDaily} Pinda requests a day. AI cost uses your Anthropic rates (ANTHROPIC_INPUT_PER_M_USD / ANTHROPIC_OUTPUT_PER_M_USD).`));
+    h('div', {class: 'grid g4 section'}, ['student_plus', 'research_plus', 'max'].map(p => stat({student_plus: 'Student Plus', research_plus: 'Research Plus', max: 'DSCVR Max'}[p], num(u.byPlan?.[p]), 'subscribers')), stat('Free daily budget', usd(a.freeDailyUsd), 'AI cost per user per day')),
+    h('p', {class: 's section'}, 'AI cost uses your Anthropic rates. Set AI_FAST_*_PER_M_USD and ANTHROPIC_*_PER_M_USD on the server if they differ.'));
 };
 
 // ── users ───────────────────────────────────────────────────────────
@@ -287,7 +289,7 @@ VIEWS.users = async (view, menu) => {
     try {
       const d = await api(`/admin/api/users?q=${encodeURIComponent(USERQ)}&edition=${USERED}`);
       put(list, d.users.length ? card(null, h('table', {}, h('tr', {}, h('th', {}, 'User'), h('th', {}, 'Edition'), h('th', {class: 'hide-sm'}, 'Joined')),
-        d.users.map(x => h('tr', {class: 'click', onclick: () => { USERSEL = x.uid; detail(); }}, h('td', {}, h('div', {}, x.displayName || '(no name)'), h('div', {class: 's'}, x.email || x.uid)), h('td', {}, ed(x.edition)), h('td', {class: 's hide-sm'}, when(x.createdAt))))))
+        d.users.map(x => h('tr', {class: 'click', onclick: () => { USERSEL = x.uid; detail(); }}, h('td', {}, h('div', {}, x.displayName || '(no name)'), h('div', {class: 's'}, x.email || x.uid)), h('td', {}, ed(x.edition), x.plan && x.plan !== 'free' && x.plan !== 'enterprise' ? h('span', {class: 'pill good', style: 'margin-left:6px'}, PLAN[x.plan]) : null), h('td', {class: 's hide-sm'}, when(x.createdAt))))))
         : h('div', {class: 'empty'}, 'No users match.'));
     } catch (e) { put(list, h('div', {class: 'err'}, e.message)); }
   }
@@ -308,15 +310,17 @@ VIEWS.users = async (view, menu) => {
           h('dt', {}, 'Sign-in'), h('dd', {}, (au.providers || []).join(', ') || '—', au.emailVerified ? '' : h('span', {class: 's'}, ' · email not verified')),
           h('dt', {}, 'Library'), h('dd', {}, `${num(d.counts.materials)} materials · ${num(d.counts.categories)} categories`),
           h('dt', {}, 'Work'), h('dd', {}, `${num(d.counts.reports)} reports · ${num(d.counts.sessions)} sessions · ${num(d.counts.conversations)} chats`),
-          h('dt', {}, 'Pinda today'), h('dd', {}, d.usage.dailyLimit == null ? `${d.usage.today} (metered)` : `${d.usage.today} of ${d.usage.dailyLimit}`),
-          h('dt', {}, 'AI all time'), h('dd', {}, `${num(d.usage.total)} requests · ${tok(d.usage.inputTokens + d.usage.outputTokens)} tokens · ${usd(d.usage.costUsd)}`),
+          h('dt', {}, 'Plan'), h('dd', {}, PLAN[d.plan.id] || d.plan.id, d.plan.status && d.plan.status !== 'active' ? h('span', {class: 's'}, ` · ${d.plan.status}${d.plan.endsAt ? ' until ' + new Date(d.plan.endsAt).toLocaleDateString() : ''}`) : null, d.plan.paystack ? h('span', {class: 's'}, ' · Paystack') : null),
+          h('dt', {}, 'Usage'), h('dd', {}, d.usage.meter ? `${d.usage.meter.dayPct}% of today · ${d.usage.meter.monthPct}% of this month` : 'Metered (enterprise)'),
+          h('dt', {}, 'AI all time'), h('dd', {}, `${num(d.usage.total)} requests · ${tok(d.usage.inputTokens + d.usage.outputTokens)} tokens · ${usd(d.usage.costUsd)} cost`),
           h('dt', {}, 'User id'), h('dd', {class: 'mono'}, u.uid)),
         h('h2', {style: 'margin-top:18px'}, 'Devices'),
         d.devices.length ? h('table', {}, d.devices.map(x => h('tr', {}, h('td', {}, x.label || x.platform), h('td', {class: 's'}, when(x.lastActiveAt)), h('td', {}, x.revoked ? h('span', {class: 'pill'}, 'Signed out') : h('span', {class: 'pill good'}, 'Signed in'))))) : h('div', {class: 's'}, 'No devices recorded.'),
         h('h2', {style: 'margin-top:18px'}, 'Actions'),
         h('div', {class: 'row'},
           u.edition !== 'enterprise' ? act(u.edition === 'students' ? 'Switch to Researchers' : 'Switch to Students', base + '/edition', {edition: u.edition === 'students' ? 'researchers' : 'students'}, '', 'Edition changed') : null,
-          act('Reset today\'s Pinda limit', base + '/reset-allowance', {}, '', 'Allowance reset'),
+          act('Reset usage meter', base + '/reset-allowance', {}, '', 'Usage reset'),
+          u.edition !== 'enterprise' ? h('button', {class: 'small', onclick: async ev => { const p = prompt('Give which plan? student_plus, research_plus, max, or free to remove', 'research_plus'); if (!p) return; let days = 30; if (p !== 'free') { days = parseInt(prompt('For how many days?', '30') || '0', 10); if (!days) return; } ev.target.disabled = true; try { await api(base + '/plan', {plan: p.trim(), days}); toast(p === 'free' ? 'Back on Free' : `${PLAN[p.trim()] || p} for ${days} days`); detail(); load(); } catch (e) { toast(e.message, true); } ev.target.disabled = false; }}, 'Give a plan') : null,
           act('Sign out everywhere', base + '/signout', {}, '', 'Signed out of every device'),
           au.disabled ? act('Enable account', base + '/disable', {disabled: false}, '', 'Account enabled')
             : h('button', {class: 'small danger', onclick: async ev => { const c = prompt('This blocks sign-in and signs them out everywhere. Type DISABLE to confirm.'); if (c !== 'DISABLE') return; const reason = prompt('Reason (kept in the audit log)') || ''; ev.target.disabled = true; try { await api(base + '/disable', {disabled: true, confirm: c, reason}); toast('Account disabled'); detail(); } catch (e) { toast(e.message, true); } ev.target.disabled = false; }}, 'Disable account'))));
@@ -377,16 +381,18 @@ VIEWS.switches = async (view, menu) => {
     const next = !f.aiPaused; if (next && !confirm('Pause Pinda, reports and fact-checks for every user?')) return;
     try { await api('/admin/api/flags', {aiPaused: next, aiPausedMessage: msg.value}); toast(next ? 'Pinda paused' : 'Pinda is back on'); render(); } catch (e) { toast(e.message, true); } }});
   const msg = h('input', {value: f.aiPausedMessage || '', maxlength: '200'});
-  const limit = h('input', {type: 'number', min: '0', max: '1000', value: f.freeDailyAi ?? '', placeholder: `${f.envFreeDailyAi} (default)`, style: 'max-width:160px'});
+  const limit = h('input', {type: 'number', min: '0', max: '5', step: '0.01', value: f.freeDailyUsd ?? '', placeholder: `${f.defaultFreeDailyUsd} (default)`, style: 'max-width:160px'});
   put(view, header('Switches', 'Changes reach every server within about 15 seconds. No deploy needed.', null, menu),
     !f.aiKeySet ? h('div', {class: 'banner'}, 'ANTHROPIC_API_KEY is not set on the server, so Pinda cannot answer anyone.') : null,
     card(null,
       h('div', {class: 'switch'}, h('div', {}, h('h3', {}, 'Pause Pinda'), h('p', {}, 'Stops all AI: chat, voice, reports, recaps and fact-checks. Use it if costs spike or answers go wrong.')), toggle),
       h('div', {class: 'switch'}, h('div', {style: 'flex:1'}, h('h3', {}, 'Message while paused'), h('p', {}, 'What users see when they ask Pinda.'), h('div', {class: 'row', style: 'margin-top:8px'}, msg, h('button', {class: 'small', onclick: async () => { try { await api('/admin/api/flags', {aiPausedMessage: msg.value}); toast('Saved'); } catch (e) { toast(e.message, true); } }}, 'Save')))),
-      h('div', {class: 'switch'}, h('div', {style: 'flex:1'}, h('h3', {}, 'Free daily Pinda limit'), h('p', {}, 'Requests per day for Students and Researchers. Leave empty to use the server default. Enterprise is metered, not limited.'),
-        h('div', {class: 'row', style: 'margin-top:8px'}, limit, h('button', {class: 'small', onclick: async () => { try { await api('/admin/api/flags', {freeDailyAi: limit.value === '' ? null : Number(limit.value)}); toast('Limit saved'); } catch (e) { toast(e.message, true); } }}, 'Save')))),
+      h('div', {class: 'switch'}, h('div', {style: 'flex:1'}, h('h3', {}, 'Free daily usage budget'), h('p', {}, 'Dollars of AI cost each Free user can use per day (about 10 questions per $0.10 on the fast model). Leave empty for the default. Paid plans and Enterprise are not affected.'),
+        h('div', {class: 'row', style: 'margin-top:8px'}, limit, h('button', {class: 'small', onclick: async () => { try { await api('/admin/api/flags', {freeDailyUsd: limit.value === '' ? null : Number(limit.value)}); toast('Limit saved'); } catch (e) { toast(e.message, true); } }}, 'Save')))),
       h('div', {class: 'switch'}, h('div', {}, h('h3', {}, 'Maintenance mode'), h('p', {}, 'Run from the developer console, because it is used around deploys.')), h('span', {class: 'pill ' + (f.maintenance?.on ? 'warn' : 'good')}, f.maintenance?.on ? 'On · ' + f.maintenance.scope : 'Off'))),
-    h('p', {class: 's section'}, `Model: ${f.model}`));
+    card('Plans', h('table', {}, h('tr', {}, h('th', {}, 'Plan'), h('th', {}, 'Price'), h('th', {}, 'Daily budget'), h('th', {}, 'Monthly budget'), h('th', {}, 'Chat model')),
+      f.plans.map(p => h('tr', {}, h('td', {}, p.label), h('td', {}, usd(p.priceUsd)), h('td', {}, usd(p.dailyUsd)), h('td', {}, usd(p.monthlyUsd)), h('td', {class: 's'}, p.chatModel === 'best' ? f.model : f.fastModel))))),
+    h('p', {class: 's section'}, 'Budgets are your AI cost per user. Change them with PLAN_<NAME>_DAILY_USD / _MONTHLY_USD / _PRICE_USD on the server.'));
 };
 
 // ── audit ───────────────────────────────────────────────────────────
