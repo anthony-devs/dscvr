@@ -11,6 +11,9 @@ enum Edition {
     tagline: 'Study smarter from your own notes, readings and lectures.',
     icon: Ic.students,
     price: 'Free',
+    amount: r'$0',
+    unit: '/forever',
+    forWho: 'Perfect for students and exam prep',
   ),
   researchers(
     label: 'DSCVR Researchers',
@@ -18,6 +21,9 @@ enum Edition {
     tagline: 'Find, read and write up research with an assistant that knows your sources.',
     icon: Ic.researchers,
     price: 'Free',
+    amount: r'$0',
+    unit: '/forever',
+    forWho: 'Perfect for researchers and postgrads',
   ),
   enterprise(
     label: 'DSCVR Enterprise',
@@ -25,15 +31,40 @@ enum Edition {
     tagline: 'A shared research desk for teams, billed only for what you use.',
     icon: Ic.enterprise,
     price: 'Usage-based',
+    amount: r'$0.40',
+    unit: '/member a day',
+    forWho: 'For labs, companies and departments',
   );
 
-  const Edition({required this.label, required this.short, required this.tagline, required this.icon, required this.price});
+  const Edition({
+    required this.label,
+    required this.short,
+    required this.tagline,
+    required this.icon,
+    required this.price,
+    required this.amount,
+    required this.unit,
+    required this.forWho,
+  });
 
   final String label;
   final String short;
   final String tagline;
   final IconData icon;
   final String price;
+
+  /// Big price on the plan card, and what it is per.
+  final String amount;
+  final String unit;
+
+  /// One line under the price: who the plan is for.
+  final String forWho;
+
+  /// Small print under the price block.
+  String get priceNote => switch (this) {
+        Edition.enterprise => r'Only on days they use DSCVR. Never more than $8 a member a month.',
+        _ => 'No card needed. Switch any time.',
+      };
 
   static Edition parse(String? v, {String? role}) {
     for (final e in Edition.values) {
@@ -44,25 +75,50 @@ enum Edition {
     return Edition.researchers;
   }
 
-  /// What the onboarding card promises for each edition.
+  /// Everything the plan includes, shown as a checklist on the plan card.
+  /// Only list things the app really does.
   List<String> get highlights => switch (this) {
         Edition.students => const [
-            'Study guides, flashcards and quizzes from your readings',
-            'Focus sessions with a timer and an end-of-session recap',
-            'Voice notes in lectures, turned into clean notes',
-            'Study groups with live sessions',
+            'Pinda, your AI tutor: 40 questions a day',
+            'Pinda explains any reading in plain language',
+            'Study notes and summaries from your sources',
+            'Study guides and "Quiz me" on your own notes',
+            'Focus sessions with a timer and an AI recap',
+            'Live study rooms with friends: chat and a shared timer',
+            'Voice notes: dictate during lectures',
+            'Ask Pinda out loud and hear the answer',
+            'Save PDFs, links, YouTube lectures and notes',
+            'Notes on any material, organised by subject',
+            'Rate your materials and sort by what mattered',
+            'Phone, tablet and laptop, always in sync',
           ],
         Edition.researchers => const [
-            'arXiv and Semantic Scholar in one search, PDFs saved to your library',
-            'Pinda answers from your papers, with citations',
-            'Literature reviews and reports drafted from your sources',
-            'Parliament fact-check, ratings and related-paper suggestions',
+            'Paste an arXiv link: the full PDF lands in your library',
+            'Search arXiv and Semantic Scholar together',
+            'Related papers next to everything you read',
+            'Pinda reads your PDFs and cites them: 40 questions a day',
+            'Literature reviews drafted from the sources you pick',
+            'Executive summaries and paper comparisons',
+            'Edit reports, then export them as Markdown',
+            'Parliament fact-check: three AI readers vote on a claim',
+            'Rate papers and see how other readers rated them',
+            'Voice notes and spoken questions while you read',
+            'Focus sessions and live research rooms',
+            'Share any material to view, comment or fork',
+            'Every device in sync; sign out any of them remotely',
           ],
         Edition.enterprise => const [
-            'A shared organisation with admins and invite codes',
-            'Everything in Researchers for every member',
-            'Pay per active seat-day and AI usage, nothing up front',
-            'Live usage and monthly invoices for admins',
+            'Everything in Researchers, for every member',
+            'No daily Pinda limit',
+            'One organisation with invite codes',
+            'Admin and member roles',
+            'Team study and research rooms with shared papers',
+            'Live usage dashboard for admins',
+            'One monthly invoice for the whole team',
+            'Pay only for days people use it',
+            r'Capped at $8 a member each month',
+            'AI billed by the tokens you use, no flat fee',
+            'Add or remove members any time',
           ],
       };
 

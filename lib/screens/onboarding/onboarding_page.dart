@@ -85,7 +85,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
+              constraints: BoxConstraints(maxWidth: _step == 0 ? 1100 : 520),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Row(children: [
                   const DscvrMark(size: 30),
@@ -136,27 +136,46 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _body(DscvrColors c) {
     switch (_step) {
       case 0:
-        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Welcome to DSCVR', style: context.text.displaySmall),
-          const SizedBox(height: 10),
-          Text('A research library with an assistant that has actually read your sources. Which one fits you?',
-              style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
-          const SizedBox(height: 24),
-          for (final e in Edition.values)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: EditionCard(
-                edition: e,
-                selected: _edition == e,
-                onTap: () => setState(() {
-                  _edition = e;
-                  _role = '';
-                }),
+        Widget card(Edition e) => EditionCard(
+              edition: e,
+              selected: _edition == e,
+              onTap: () => setState(() {
+                _edition = e;
+                _role = '';
+              }),
+            );
+        return LayoutBuilder(builder: (context, box) {
+          final wide = box.maxWidth >= 860;
+          return Column(
+            crossAxisAlignment: wide ? CrossAxisAlignment.center : CrossAxisAlignment.stretch,
+            children: [
+              Text('Pick your DSCVR', style: context.text.displaySmall, textAlign: wide ? TextAlign.center : TextAlign.start),
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Text(
+                  'A research library with an assistant that has actually read your sources. Choose the one that fits you.',
+                  textAlign: wide ? TextAlign.center : TextAlign.start,
+                  style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55),
+                ),
               ),
-            ),
-          Text('Students and Researchers are free. You can switch later in Settings.',
-              style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint)),
-        ]);
+              const SizedBox(height: 28),
+              if (wide)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  for (final e in Edition.values) ...[
+                    if (e != Edition.values.first) const SizedBox(width: 16),
+                    Expanded(child: card(e)),
+                  ],
+                ])
+              else
+                for (final e in Edition.values) Padding(padding: const EdgeInsets.only(bottom: 14), child: card(e)),
+              const SizedBox(height: 14),
+              Text('You can switch between Students and Researchers any time in Settings.',
+                  textAlign: wide ? TextAlign.center : TextAlign.start,
+                  style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint)),
+            ],
+          );
+        });
       case 1:
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_edition == Edition.enterprise ? 'About you' : 'Nice to meet you', style: context.text.displaySmall),
