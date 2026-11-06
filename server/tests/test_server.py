@@ -439,3 +439,43 @@ def test_paystack_webhook_checks_signature_and_activates(client):
     assert r.status_code == 200 and r.get_json()["result"] == "ok"
     written = db.document.return_value.set.call_args[0][0]
     assert written["plan"] == "research_plus" and written["planStatus"] == "active"
+
+
+def test_stream_falls_back_when_fast_model_is_missing():
+    class NotFound(Exception):
+        status_code = 404
+
+    calls = []
+
+    class FakeStream:
+        def __init__(self, model):
+            self.model = model
+            self.text_stream = iter(["ok"])
+
+        def __enter__(self):
+            if self.model != ai.MODEL:
+                raise NotFound("model: claude-haiku-x not found")
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get_final_message(self):
+            return mock.Mock(usage=mock.Mock(input_tokens=5, output_tokens=2, cache_read_input_tokens=0, cache_creation_input_tokens=0))
+
+    fake = mock.Mock()
+    fake.messages.stream.side_effect = lambda **kw: (calls.append(kw["model"]), FakeStream(kw["model"]))[1]
+    usage = {}
+    with mock.patch.object(ai, "client", return_value=fake):
+        out = "".join(ai.stream_text(system="s", messages=[], max_tokens=10, usage=usage, model="claude-haiku-x"))
+    assert calls == ["claude-haiku-x", ai.MODEL] and '"done"' in out and usage["model"] == ai.MODEL
+
+
+def test_failure_reasons_are_specific():
+    class E(Exception):
+        def __init__(self, msg, code):
+            super().__init__(msg)
+            self.status_code = code
+    assert "out of credit" in ai.failure_reason(E("Your credit balance is too low", 400))
+    assert "key" in ai.failure_reason(E("invalid x-api-key", 401))
+    assert "busy" in ai.failure_reason(E("overloaded", 529))

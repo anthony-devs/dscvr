@@ -256,34 +256,62 @@ def sse(event: dict[str, Any]) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
+def failure_reason(e: Exception) -> str:
+    """A plain explanation of why Claude refused, safe to show to users."""
+    status = getattr(e, "status_code", None)
+    text = str(e).lower()
+    if status in (429, 529) or "overloaded" in text:
+        return "Pinda is busy right now. Try again in a moment."
+    if status == 401 or "authentication" in text or "x-api-key" in text:
+        return "Pinda can't connect: the AI key on the server was rejected. The DSCVR team has been notified."
+    if "credit balance" in text or "billing" in text:
+        return "Pinda is paused: the AI account is out of credit. The DSCVR team has been notified."
+    if status == 404 or "not_found" in text or "model:" in text:
+        return "Pinda's AI model isn't available on this account. The DSCVR team has been notified."
+    if status == 403 or "permission" in text:
+        return "Pinda's AI account doesn't have access to this model. The DSCVR team has been notified."
+    if status == 413 or "too long" in text or "prompt is too long" in text:
+        return "That's too much material for one question. Ask about fewer sources, or one paper at a time."
+    return "Pinda could not finish that answer. Please try again."
+
+
 def stream_text(*, system: str, messages: list[dict[str, Any]], max_tokens: int,
                 usage: dict[str, int], model: str | None = None) -> Iterator[str]:
     """Yields SSE events for a streamed Claude reply. Fills `usage` with
-    token counts when the stream finishes."""
-    usage["model"] = model or MODEL  # type: ignore[assignment]
-    try:
-        with client().messages.stream(model=model or MODEL, max_tokens=max_tokens,
-                                      system=system, messages=messages) as stream:
-            for text in stream.text_stream:
-                yield sse({"type": "delta", "text": text})
-            final = stream.get_final_message()
-            usage["input"] = int(getattr(final.usage, "input_tokens", 0) or 0) + int(
-                getattr(final.usage, "cache_read_input_tokens", 0) or 0) + int(
-                getattr(final.usage, "cache_creation_input_tokens", 0) or 0)
-            usage["output"] = int(getattr(final.usage, "output_tokens", 0) or 0)
-        metrics.ai(True)
-        yield sse({"type": "done"})
-    except AIUnavailable as e:
-        metrics.ai(False)
-        yield sse({"type": "error", "message": str(e)})
-    except Exception as e:  # noqa: BLE001
-        status = getattr(e, "status_code", None)
-        logger.warning("Claude stream failed: %s", e)
-        metrics.ai(False)
-        metrics.error(e, "claude:stream")
-        busy = status in (429, 529)
-        yield sse({"type": "error", "message": "Pinda is busy right now. Try again in a moment." if busy
-                   else "Pinda could not finish that answer. Please try again."})
+    token counts when the stream finishes. If the chosen model doesn't exist on
+    this account, retries once with the main model before giving up."""
+    chosen = model or MODEL
+    for attempt in (0, 1):
+        usage["model"] = chosen  # type: ignore[assignment]
+        started = False
+        try:
+            with client().messages.stream(model=chosen, max_tokens=max_tokens,
+                                          system=system, messages=messages) as stream:
+                for text in stream.text_stream:
+                    started = True
+                    yield sse({"type": "delta", "text": text})
+                final = stream.get_final_message()
+                usage["input"] = int(getattr(final.usage, "input_tokens", 0) or 0) + int(
+                    getattr(final.usage, "cache_read_input_tokens", 0) or 0) + int(
+                    getattr(final.usage, "cache_creation_input_tokens", 0) or 0)
+                usage["output"] = int(getattr(final.usage, "output_tokens", 0) or 0)
+            metrics.ai(True)
+            yield sse({"type": "done"})
+            return
+        except AIUnavailable as e:
+            metrics.ai(False)
+            yield sse({"type": "error", "message": str(e)})
+            return
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Claude stream failed (model %s): %s", chosen, e)
+            metrics.ai(False)
+            metrics.error(e, "claude:stream")
+            if attempt == 0 and not started and getattr(e, "status_code", None) in (400, 404) \
+                    and ("model" in str(e).lower()) and chosen != MODEL:
+                chosen = MODEL
+                continue
+            yield sse({"type": "error", "message": failure_reason(e)})
+            return
 
 
 def complete(*, system: str, prompt: str, max_tokens: int, usage: dict[str, int],
@@ -299,9 +327,15 @@ def complete(*, system: str, prompt: str, max_tokens: int, usage: dict[str, int]
     try:
         resp = client().messages.create(**kwargs)
         metrics.ai(True)
-    except Exception:
+    except Exception as e:  # noqa: BLE001
         metrics.ai(False)
-        raise
+        if getattr(e, "status_code", None) in (400, 404) and "model" in str(e).lower() and kwargs["model"] != MODEL:
+            logger.warning("Model %s unavailable, retrying with %s: %s", kwargs["model"], MODEL, e)
+            kwargs["model"] = MODEL
+            usage["model"] = MODEL  # type: ignore[assignment]
+            resp = client().messages.create(**kwargs)
+        else:
+            raise
     usage["input"] = usage.get("input", 0) + int(getattr(resp.usage, "input_tokens", 0) or 0)
     usage["output"] = usage.get("output", 0) + int(getattr(resp.usage, "output_tokens", 0) or 0)
     if tools:

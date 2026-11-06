@@ -358,9 +358,9 @@ def create_app(config: Config | None = None) -> Flask:
             )
         except ai.AIUnavailable as e:
             return jsonify(error=str(e)), 503
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             logger.exception("session summary failed")
-            return jsonify(error="Could not summarise this session."), 502
+            return jsonify(error=ai.failure_reason(e)), 502
         orgs.record_usage(g.uid, "summary", usage.get("input", 0), usage.get("output", 0), model)
         return jsonify(summary=summary)
 
@@ -379,9 +379,9 @@ def create_app(config: Config | None = None) -> Flask:
             result = ai.parliament(claim, sanitize(body.get("context", ""), 5000), usage, model)
         except ai.AIUnavailable as e:
             return jsonify(error=str(e)), 503
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             logger.exception("parliament failed")
-            return jsonify(error="Parliament could not evaluate that claim. Try again."), 502
+            return jsonify(error=ai.failure_reason(e)), 502
         orgs.record_usage(g.uid, "parliament", usage.get("input", 0), usage.get("output", 0), model)
         return jsonify(result)
 
