@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/file.dart';
 import 'package:dscvr/models/subscription.dart';
@@ -250,27 +251,43 @@ class DSCVRAuth {
   ///
   /// Follows the Firestore profile document live, so edits made during
   /// onboarding or in Settings show up immediately without re-login.
+  /// The signed-in user, with their profile kept live from Firestore.
+  ///
+  /// Each auth change cancels the previous profile listener (switch-map).
+  /// Using asyncExpand here would wait for the profile stream to end, which
+  /// never happens, so a sign-out would never get through.
   Stream<DSCVRUser> get userStream {
-    return _auth.authStateChanges().asyncExpand((firebaseUser) {
-      if (firebaseUser == null) {
-        return Stream.value(DSCVRUser.empty());
-      }
-      final fallback = DSCVRUser.fromFirebaseUser(
-        uid: firebaseUser.uid,
-        email: firebaseUser.email ?? '',
-        displayName: firebaseUser.displayName ?? 'DSCVR User',
-        avatarUrl: firebaseUser.photoURL,
-      );
-      return _firestore
-          .collection('users')
-          .doc(firebaseUser.uid)
-          .snapshots()
-          .map((doc) {
-        final data = doc.data();
-        if (data == null) return fallback;
-        return DSCVRUser.fromMap({...data, 'id': firebaseUser.uid});
-      }).handleError((Object _) => fallback);
-    });
+    late StreamController<DSCVRUser> out;
+    StreamSubscription<User?>? authSub;
+    StreamSubscription<DSCVRUser>? profileSub;
+    out = StreamController<DSCVRUser>(
+      onListen: () {
+        authSub = _auth.authStateChanges().listen((firebaseUser) {
+          profileSub?.cancel();
+          profileSub = null;
+          if (firebaseUser == null) {
+            out.add(DSCVRUser.empty());
+            return;
+          }
+          final fallback = DSCVRUser.fromFirebaseUser(
+            uid: firebaseUser.uid,
+            email: firebaseUser.email ?? '',
+            displayName: firebaseUser.displayName ?? 'DSCVR User',
+            avatarUrl: firebaseUser.photoURL,
+          );
+          profileSub = _firestore.collection('users').doc(firebaseUser.uid).snapshots().map((doc) {
+            final data = doc.data();
+            if (data == null) return fallback;
+            return DSCVRUser.fromMap({...data, 'id': firebaseUser.uid});
+          }).listen(out.add, onError: (Object _) => out.add(fallback));
+        }, onError: out.addError);
+      },
+      onCancel: () async {
+        await profileSub?.cancel();
+        await authSub?.cancel();
+      },
+    );
+    return out.stream;
   }
 
   /// Saves onboarding answers and marks the profile as set up.

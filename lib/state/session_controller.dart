@@ -104,6 +104,8 @@ class SessionController extends ChangeNotifier {
   Future<void> signOut() async {
     if (Env.demo) return;
     await _auth!.signOut();
+    // Don't wait for the auth stream: leave the signed-in screens right away.
+    if (!_user.isEmpty) _set(DSCVRUser.empty());
   }
 
   @override
