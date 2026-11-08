@@ -50,6 +50,12 @@ class LawLibrary {
 
   Uri searchUri(String q) => Uri.parse(_search.replaceAll('{q}', Uri.encodeQueryComponent(q)));
 
+  /// The library's front page, for when there is nothing to search for yet.
+  Uri get homeUri {
+    final u = Uri.parse(_search);
+    return Uri(scheme: u.scheme, host: u.host, path: '/');
+  }
+
   static const nigeria = LawLibrary('NigeriaLII', 'Nigeria', 'https://nigerialii.org/search/?q={q}', reports: 'Judgments and legislation');
   static const ghana = LawLibrary('GhaLII', 'Ghana', 'https://ghalii.org/search/?q={q}', reports: 'Judgments and legislation');
   static const kenya = LawLibrary('Kenya Law', 'Kenya', 'https://new.kenyalaw.org/search/?q={q}', reports: 'Law reports and legislation');
@@ -150,6 +156,12 @@ class LawCountry {
     ]),
     LawCountry('commonwealth', 'Other Commonwealth', [LawLibrary.commonLii, LawLibrary.africanLii]),
   ];
+
+  /// Whether DSCVR itself may search this country's judgments (only UK Find Case Law, under its open licence).
+  bool get searchableJudgments => code == 'uk';
+
+  /// Words for finding open-access legal research about this country's law.
+  String get scholarQuery => '$name law';
 
   static LawCountry byCode(String? code) => all.firstWhere((c) => c.code == code, orElse: () => all.first);
 }

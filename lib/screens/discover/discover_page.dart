@@ -137,6 +137,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
     _loadSubject(s);
   }
 
+  LawCountry get _country => LawCountry.byCode(context.services.settings.lawCountry);
+
+  /// A law subject follows the chosen country: UK judgments are searched here, for every other
+  /// country the libraries are linked (they forbid automated search) and open-access legal
+  /// research about that country's law is shown instead.
+  bool _lawResearchFor(Subject s) => s.feed == Feed.caselaw && !_country.searchableJudgments;
+
   void _loadSubject(Subject s) {
     setState(() {
       _subject = s;
@@ -144,7 +151,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
     });
     final svc = context.services.discover;
     _run(() async {
-      final papers = await svc.latest(s, limit: _limit, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc));
+      final List<Paper> papers;
+      if (_lawResearchFor(s)) {
+        final extra = s.label.toLowerCase() == 'law' ? '' : ' ${s.label}';
+        papers = await svc.search('${_country.scholarQuery}$extra', source: PaperSource.all, limit: _limit, openAccess: _freeOnly);
+      } else {
+        papers = await svc.latest(s, limit: _limit, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc));
+      }
       return _freeOnly ? [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p] : papers;
     });
   }
@@ -163,13 +176,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     return context.services.session.user.profession == Profession.law;
   }
 
-  /// Plain words for the library's own search box, never a feed query like "cat:physics.gen-ph".
-  String get _lawQuery {
-    final typed = _q.text.trim();
-    if (typed.isNotEmpty) return typed;
-    final s = _subject;
-    return (s != null && s.isLaw) ? s.label : 'contract';
-  }
+  /// What the person typed, for the library's own search box. Empty opens the library's front page.
+  String get _lawQuery => _q.text.trim();
 
   @override
   Widget build(BuildContext context) {
@@ -259,6 +267,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
           onCountry: (code) {
             context.services.settings.setLawCountry(code);
             setState(() {});
+            final s = _subject;
+            if (s != null && s.feed == Feed.caselaw && _q.text.trim().isEmpty) _loadSubject(s);
           },
         )),
         const SizedBox(height: 22),
@@ -274,7 +284,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 Feed.europepmc => _subject!.guidelines || _guidelines
                     ? 'Recent guidelines in ${_subject!.label}'
                     : 'Recent in ${_subject!.label} from Europe PMC',
-                Feed.caselaw => 'Latest UK judgments in ${_subject!.label}',
+                Feed.caselaw => _country.searchableJudgments
+                    ? 'Latest UK judgments in ${_subject!.label}'
+                    : 'Open-access legal research on ${_country.name} law',
                 Feed.openalex => 'New in ${_subject!.label} across journals',
               }
             : 'Results',
@@ -320,7 +332,12 @@ class _LawLibraries extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Law reports and judgments', style: context.text.titleMedium),
         const SizedBox(height: 4),
-        Text('Pick a country. Each free library opens with its own search for "$query". Save any judgment to your library with its link or PDF.',
+        Text(
+            country.searchableJudgments
+                ? 'UK judgments are searched below. Other libraries open with their own search${query.isEmpty ? '' : ' for "$query"'}.'
+                : '${country.name} judgments are kept by the libraries below, which do not allow apps to search them. '
+                    '${query.isEmpty ? 'Type a search above and each one opens with your words.' : 'Each one opens with "$query".'} '
+                    'Save any judgment to your library with its link or PDF.',
             style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted, height: 1.5)),
         const SizedBox(height: 12),
         SizedBox(
@@ -338,7 +355,7 @@ class _LawLibraries extends StatelessWidget {
             PillButton(
               label: lib.reports.isEmpty ? lib.name : '${lib.name} · ${lib.reports}',
               icon: Ic.external,
-              onTap: () => launchUrl(lib.searchUri(query), mode: LaunchMode.externalApplication),
+              onTap: () => launchUrl(query.isEmpty ? lib.homeUri : lib.searchUri(query), mode: LaunchMode.externalApplication),
             ),
         ]),
         const SizedBox(height: 12),

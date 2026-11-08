@@ -164,6 +164,13 @@ void main() {
       }
     });
 
+    test('only UK judgments are searched in the app; other countries link out', () {
+      expect([for (final c in LawCountry.all) if (c.searchableJudgments) c.code], ['uk']);
+      expect(LawCountry.byCode('ng').scholarQuery, 'Nigeria law');
+      expect(LawLibrary.nigeria.homeUri.toString(), 'https://nigerialii.org/');
+      expect(LawLibrary.southAfrica.homeUri.host, 'www.saflii.org');
+    });
+
     test('law country and tour flag persist', () async {
       SharedPreferences.setMockInitialValues({});
       final a = SettingsController();
