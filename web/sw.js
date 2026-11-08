@@ -10,7 +10,7 @@
  *
  * Bump VERSION to force-drop old caches.
  */
-const VERSION = 'dscvr-v4';
+const VERSION = 'dscvr-v5';
 const SHELL = ['./', 'index.html', 'flutter_bootstrap.js', 'manifest.json', 'favicon.png?v=2', 'favicon.svg?v=2', 'icons/Icon-192.png?v=2'];
 
 self.addEventListener('install', (event) => {

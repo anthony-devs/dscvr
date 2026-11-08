@@ -39,6 +39,11 @@
     /* Pinda curled up, rocking while the app loads */
     @keyframes roll { 0%, 100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(14deg) scale(.95); } }
     @media (prefers-reduced-motion: reduce) { .mark { animation: none; } }
+    #slow { position: fixed; left: 0; right: 0; bottom: calc(32px + env(safe-area-inset-bottom)); display: none; flex-direction: column;
+            align-items: center; gap: 12px; padding: 0 24px; text-align: center; color: var(--ink);
+            font: 400 14px/1.5 Inter, system-ui, -apple-system, sans-serif; }
+    #slow.on { display: flex; }
+    #slow button { font: 600 14px Inter, system-ui, sans-serif; border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer; background: var(--ink); color: var(--bg); }
     #update { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%);
               z-index: 2147483647; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
               border-radius: 14px; background: var(--ink); color: var(--bg); max-width: calc(100vw - 32px);
@@ -50,8 +55,13 @@
 </head>
 <body>
   <div id="splash" aria-label="Loading DSCVR"><div class="mark"><svg viewBox="0 0 128 128" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="#5B6CFF" stroke="#2F3389" stroke-width="8"/><path d="M22 46 Q37 62 52 46 Q67 62 82 46 Q97 62 106 48" fill="none" stroke="#2F3389" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 74 Q29 90 44 74 Q59 90 74 74" fill="none" stroke="#2F3389" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M78 90 C96 86 112 96 122 110 C110 120 92 120 78 108 Z" fill="#F4CDA5" stroke="#2F3389" stroke-width="8" stroke-linejoin="round"/><circle cx="98" cy="102" r="4.5" fill="#1D1F2B"/></svg></div></div>
+  <div id="slow" role="status"><span>This is taking longer than usual. Your connection may be slow, or this network may be blocking part of DSCVR.</span><button type="button" onclick="location.reload()">Try again</button><span style="opacity:.7">If it keeps happening, switch between Wi-Fi and mobile data.</span></div>
   <script>
+    // If the app has not drawn its first frame after 12 seconds, say so instead of spinning forever.
+    var slowTimer = setTimeout(function () { var e = document.getElementById('slow'); if (e) e.classList.add('on'); }, 12000);
     window.addEventListener('flutter-first-frame', function () {
+      clearTimeout(slowTimer);
+      var sl = document.getElementById('slow'); if (sl) sl.remove();
       var s = document.getElementById('splash');
       if (s) { s.classList.add('hide'); setTimeout(function () { s.remove(); }, 300); }
     });

@@ -21,7 +21,12 @@ Future<void> main() async {
     // loaded and queues writes until the connection returns.
     try {
       FirebaseFirestore.instance.settings =
-          const Settings(persistenceEnabled: true, cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED);
+          const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        // Some networks break Firestore's streaming connection. Fall back to long polling there.
+        webExperimentalAutoDetectLongPolling: true,
+      );
     } catch (e) {
       debugPrint('Offline cache unavailable: $e');
     }
