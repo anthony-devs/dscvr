@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -146,7 +147,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final maybeLib = Services.of(context).library;
     if (maybeLib == null) return Scaffold(backgroundColor: context.colors.background);
     final lib = maybeLib;
-    return ListenableBuilder(
+    return PageTourGate(pageKey: 'reader', child: ListenableBuilder(
       listenable: lib,
       builder: (context, _) {
         final item = lib.item(widget.itemId);
@@ -204,7 +205,7 @@ class _ReaderPageState extends State<ReaderPage> {
                 borderRadius: BorderRadius.circular(Radii.md + 4),
                 child: BackdropFilter(
                   filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Segmented<_Pane>(
+                  child: TourTarget(id: 'reader.tabs', child: Segmented<_Pane>(
                     options: const [
                       (_Pane.read, 'Read', Ic.book),
                       (_Pane.notes, 'Notes', Ic.notebook),
@@ -215,7 +216,7 @@ class _ReaderPageState extends State<ReaderPage> {
                     value: _mobilePane,
                     expand: true,
                     onChanged: (p) => setState(() => _mobilePane = p),
-                  ),
+                  )),
                 ),
               ),
             ),
@@ -248,7 +249,7 @@ class _ReaderPageState extends State<ReaderPage> {
           ]),
         );
       },
-    );
+    ));
   }
 
   Widget _backButton(BuildContext context) => AppIconButton(
@@ -329,12 +330,16 @@ class _ReaderPageState extends State<ReaderPage> {
             onPressed: () => launchUrl(Uri.parse(external), mode: LaunchMode.externalApplication),
             icon: const Icon(Ic.external, size: 19),
           ),
-        if (item.kind != MaterialKind.youtube) _ListenButton(item: item),
-        AppIconButton(
-          tooltip: 'Cite',
-          onPressed: () => showCiteSheet(context, CiteSource.fromItem(item)),
-          icon: const Icon(Ic.quote, size: 19),
+        if (item.kind != MaterialKind.youtube) TourTarget(id: 'reader.listen', child: _ListenButton(item: item)),
+        TourTarget(
+          id: 'reader.cite',
+          child: AppIconButton(
+            tooltip: 'Cite',
+            onPressed: () => showCiteSheet(context, CiteSource.fromItem(item)),
+            icon: const Icon(Ic.quote, size: 19),
+          ),
         ),
+        const PageTourButton(pageKey: 'reader', size: 34),
         Builder(
           builder: (ctx) => AppIconButton(
             tooltip: 'More',
@@ -392,7 +397,7 @@ class _SidePanel extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
         child: Row(children: [
           Expanded(
-            child: Segmented<_Pane>(
+            child: TourTarget(id: 'reader.tabs', child: Segmented<_Pane>(
               // Five tabs fit the panel as text; icons would push the last one off.
               expand: true,
               options: [
@@ -404,7 +409,7 @@ class _SidePanel extends StatelessWidget {
               ],
               value: pane == _Pane.read || (pane == _Pane.related && !related) ? _Pane.pinda : pane,
               onChanged: onPane,
-            ),
+            )),
           ),
         ]),
       ),

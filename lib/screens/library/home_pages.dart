@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/screens/reports/reports_page.dart';
@@ -53,7 +54,7 @@ class RecentPage extends StatelessWidget {
             style: AppTheme.sans(fontSize: 14, color: c.inkMuted),
           ),
           const SizedBox(height: 22),
-          _QuickActions(edition: user.edition),
+          TourTarget(id: 'recent.actions', child: _QuickActions(edition: user.edition)),
           if (user.edition == Edition.enterprise && !user.inOrg) ...[
             const SizedBox(height: 22),
             _TeamPrompt(),
@@ -82,7 +83,9 @@ class RecentPage extends StatelessWidget {
             const SizedBox(height: 30),
             const SectionLabel('Continue reading'),
             const SizedBox(height: 14),
-            SizedBox(
+            TourTarget(
+              id: 'recent.continue',
+              child: SizedBox(
               height: 92,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
@@ -90,13 +93,13 @@ class RecentPage extends StatelessWidget {
                 separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, i) => _ContinueTile(item: inProgress[i]),
               ),
-            ),
+            )),
           ],
           if (recent.isNotEmpty) ...[
             const SizedBox(height: 30),
             SectionLabel('Recently opened', trailing: PillButton(label: 'Library', onTap: () => context.go('/library'))),
             const SizedBox(height: 14),
-            MaterialGrid(children: [for (final i in recent) LibraryCard(key: ValueKey(i.id), item: i)]),
+            TourTarget(id: 'recent.recent', child: MaterialGrid(children: [for (final i in recent) LibraryCard(key: ValueKey(i.id), item: i)])),
           ],
         ]);
       },
@@ -264,7 +267,7 @@ class LibraryIndexPage extends StatelessWidget {
           Text('${lib.items.length} items in ${lib.categories.length} categories',
               style: AppTheme.sans(fontSize: 14.5, color: c.inkMuted)),
           const SizedBox(height: 18),
-          Wrap(spacing: 8, runSpacing: 8, children: [
+          TourTarget(id: 'library.actions', child: Wrap(spacing: 8, runSpacing: 8, children: [
             PillButton(label: 'New category', icon: Ic.folderPlus, onTap: () => showCollectionEditor(context)),
             PillButton(
               label: 'Reading list',
@@ -272,7 +275,7 @@ class LibraryIndexPage extends StatelessWidget {
               trailing: CountBadge(lib.readingList.length),
               onTap: () => context.go('/reading-list'),
             ),
-          ]),
+          ])),
           const SizedBox(height: 24),
           if (lib.categories.isEmpty && lib.loaded)
             EmptyState(
@@ -282,9 +285,12 @@ class LibraryIndexPage extends StatelessWidget {
               action: AppButton.primary(onPressed: () => showCollectionEditor(context), child: const Text('New category')),
             )
           else
-            MaterialGrid(minTileWidth: 260, children: [
-              for (final cat in lib.categories) _CategoryTile(cat: cat, lib: lib),
-            ]),
+            TourTarget(
+              id: 'library.shelves',
+              child: MaterialGrid(minTileWidth: 260, children: [
+                for (final cat in lib.categories) _CategoryTile(cat: cat, lib: lib),
+              ]),
+            ),
         ]);
       },
     );

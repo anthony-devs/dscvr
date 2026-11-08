@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:dscvr/data/voice_service.dart';
 import 'package:dscvr/models/pinda.dart';
@@ -166,7 +167,7 @@ class PindaChatState extends State<PindaChat> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 760),
-                child: Container(
+                child: TourTarget(id: 'pinda.input', child: Container(
                   decoration: BoxDecoration(
                     color: c.surface,
                     borderRadius: BorderRadius.circular(Radii.lg),
@@ -215,12 +216,12 @@ class PindaChatState extends State<PindaChat> {
                             final v = context.services.voice;
                             return Padding(
                               padding: const EdgeInsets.only(right: 6),
-                              child: AppIconButton(
+                              child: TourTarget(id: 'pinda.mic', child: AppIconButton(
                                 size: 34,
                                 tooltip: v.listening ? 'Stop listening' : 'Ask by voice',
                                 onPressed: _toggleMic,
                                 icon: Icon(v.listening ? Ic.micFill : Ic.mic, size: 17, color: v.listening ? c.danger : null),
-                              ),
+                              )),
                             );
                           },
                         ),
@@ -250,7 +251,7 @@ class PindaChatState extends State<PindaChat> {
                       ),
                     ]),
                   ]),
-                ),
+                )),
               ),
             ),
           ),

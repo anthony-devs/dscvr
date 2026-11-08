@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'dart:ui' as ui;
 
 import 'package:dscvr/screens/add/add_material_sheet.dart';
@@ -48,7 +49,7 @@ class AppShell extends StatelessWidget {
       ),
     );
 
-    return TourGate(child: _frame(context, c, background));
+    return TourGate(child: PageTourGate(key: ValueKey(tourKeyFor(location)), pageKey: tourKeyFor(location), child: _frame(context, c, background)));
   }
 
   Widget _frame(BuildContext context, DscvrColors c, BoxDecoration background) {
@@ -78,6 +79,7 @@ class AppShell extends StatelessWidget {
           ),
           title: _Breadcrumb(location: location, compact: true),
           actions: [
+            PageTourButton(pageKey: tourKeyFor(location), size: 34),
             AppIconButton(
               tooltip: 'Search',
               onPressed: () => context.go('/search'),
@@ -85,12 +87,12 @@ class AppShell extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: RoundIconButton(icon: Ic.add, tooltip: 'Add material', onTap: () => _add(context), size: 34),
+              child: TourTarget(id: 'shell.add', child: RoundIconButton(icon: Ic.add, tooltip: 'Add material', onTap: () => _add(context), size: 34)),
             ),
           ],
         ),
         body: DecoratedBox(decoration: background, child: child),
-        bottomNavigationBar: _BottomNav(location: location),
+        bottomNavigationBar: TourTarget(id: 'shell.nav', child: _BottomNav(location: location)),
       );
     }
 
@@ -105,7 +107,7 @@ class AppShell extends StatelessWidget {
           backgroundColor: c.background,
           body: Row(
             children: [
-              SizedBox(width: 256, child: Sidebar(location: location)),
+              TourTarget(id: 'shell.nav', child: SizedBox(width: 256, child: Sidebar(location: location))),
               VerticalDivider(width: 1, color: c.line),
               Expanded(
                 child: DecoratedBox(
@@ -119,18 +121,26 @@ class AppShell extends StatelessWidget {
                           child: Row(
                             children: [
                               Expanded(child: _Breadcrumb(location: location)),
-                              RoundIconButton(
-                                icon: Ic.add,
-                                tooltip: 'Add material',
-                                onTap: () => _add(context),
-                                size: 32,
+                              PageTourButton(pageKey: tourKeyFor(location)),
+                              const SizedBox(width: 8),
+                              TourTarget(
+                                id: 'shell.add',
+                                child: RoundIconButton(
+                                  icon: Ic.add,
+                                  tooltip: 'Add material',
+                                  onTap: () => _add(context),
+                                  size: 32,
+                                ),
                               ),
                               const SizedBox(width: 8),
-                              RoundIconButton(
-                                icon: Ic.pinda,
-                                tooltip: 'Ask Pinda',
-                                onTap: () => context.go('/pinda'),
-                                size: 32,
+                              TourTarget(
+                                id: 'shell.pinda',
+                                child: RoundIconButton(
+                                  icon: Ic.pinda,
+                                  tooltip: 'Ask Pinda',
+                                  onTap: () => context.go('/pinda'),
+                                  size: 32,
+                                ),
                               ),
                             ],
                           ),

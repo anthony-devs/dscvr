@@ -2,6 +2,7 @@ import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/models/citation.dart';
 import 'package:dscvr/models/paper.dart';
 import 'package:dscvr/models/profession.dart';
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/state/settings_controller.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:dscvr/theme/app_theme.dart';
@@ -175,5 +176,24 @@ void main() {
       expect(b.lawCountry, 'gh');
       expect(b.tourSeen, isTrue);
     });
+  });
+
+  test('page tours: every route maps to a tour and the seen flags persist', () async {
+    for (final r in ['/recent', '/library', '/c/abc', '/c/abc/t/x', '/discover', '/pinda', '/alerts', '/settings', '/m/1', '/reports', '/sessions', '/team', '/plans']) {
+      expect(pageTours.containsKey(tourKeyFor(r)), isTrue, reason: r);
+    }
+    for (final e in pageTours.entries) {
+      expect(e.value.first.target, isNull, reason: '${e.key} should open with an intro');
+    }
+    SharedPreferences.setMockInitialValues({});
+    final a = SettingsController();
+    await a.load();
+    expect(a.pageTourSeen('discover'), isFalse);
+    a.markPageTourSeen('discover');
+    final b = SettingsController();
+    await b.load();
+    expect(b.pageTourSeen('discover'), isTrue);
+    b.resetTours();
+    expect(b.pageTourSeen('discover'), isFalse);
   });
 }

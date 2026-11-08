@@ -30,6 +30,7 @@ class SettingsController extends ChangeNotifier {
   double _speechRate = 1.0;
   String _lawCountry = 'ng';
   bool _tourSeen = false;
+  final Set<String> _pageTours = {};
   SharedPreferences? _prefs;
 
   ThemeMode get themeMode => _themeMode;
@@ -57,6 +58,19 @@ class SettingsController extends ChangeNotifier {
   /// Whether the first-run app tour has been shown on this device.
   bool get tourSeen => _tourSeen;
 
+  /// Whether this page's own tour has been shown on this device.
+  bool pageTourSeen(String page) => _pageTours.contains(page);
+
+  void markPageTourSeen(String page) {
+    if (_pageTours.add(page)) _prefs?.setStringList('tour.pages', _pageTours.toList());
+  }
+
+  /// Lets every tour run again (Settings > Help > Take the tour).
+  void resetTours() {
+    _pageTours.clear();
+    _prefs?.remove('tour.pages');
+  }
+
   Future<void> load() async {
     try {
       _prefs = await SharedPreferences.getInstance();
@@ -74,6 +88,9 @@ class SettingsController extends ChangeNotifier {
       _speechRate = (p.getDouble('a11y.speechRate') ?? 1.0).clamp(0.5, 2.0);
       _lawCountry = p.getString('lawCountry') ?? 'ng';
       _tourSeen = p.getBool('tourSeen') ?? false;
+      _pageTours
+        ..clear()
+        ..addAll(p.getStringList('tour.pages') ?? const []);
     } catch (_) {
       // Storage unavailable (private browsing); keep defaults.
     }

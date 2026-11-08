@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/models/pinda.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/pinda/pinda_chat.dart';
@@ -93,7 +94,7 @@ class _PindaPageState extends State<PindaPage> {
     return Container(
       padding: EdgeInsets.fromLTRB(context.isCompact ? 12 : 24, 4, context.isCompact ? 8 : 24, 8),
       child: Row(children: [
-        _scopePicker(),
+        TourTarget(id: 'pinda.scope', child: _scopePicker()),
         const Spacer(),
         if (context.isCompact)
           AppIconButton(
@@ -107,14 +108,14 @@ class _PindaPageState extends State<PindaPage> {
             ),
             icon: Icon(Ic.chats, size: 19, color: c.inkMuted),
           ),
-        AppIconButton(
+        TourTarget(id: 'pinda.speaker', child: AppIconButton(
           tooltip: _speakReplies ? 'Stop reading replies aloud' : 'Read every reply aloud',
           onPressed: () {
             setState(() => _speakReplies = !_speakReplies);
             if (!_speakReplies) context.services.voice.stopSpeaking();
           },
           icon: Icon(_speakReplies ? Ic.speaker : Ic.speakerOff, size: 18, color: _speakReplies ? c.ink : c.inkMuted),
-        ),
+        )),
         ListenableBuilder(
           listenable: _ctl,
           builder: (context, _) => _ctl.messages.isEmpty

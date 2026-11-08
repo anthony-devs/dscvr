@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/profession.dart';
@@ -340,6 +341,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   description: 'A one-minute walk through your library, Discover, Pinda, alerts and accessibility.',
                   child: AppButton.secondary(onPressed: () => showAppTour(context), child: const Text('Take the tour')),
                 ),
+                _Row(
+                  label: 'Page tours',
+                  description: 'Every page explains itself the first time you open it. Tap the ? at the top of a page to replay it, or show them all again.',
+                  child: AppButton.secondary(
+                    onPressed: () {
+                      settings.resetTours();
+                      toast(context, 'Page tours will show again');
+                    },
+                    child: const Text('Show again'),
+                  ),
+                ),
               ],
             ),
             _Section(
@@ -568,7 +580,9 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Padding(
+    return TourTarget(
+      id: 'settings.${title.toLowerCase()}',
+      child: Padding(
       padding: const EdgeInsets.only(bottom: 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -589,7 +603,7 @@ class _Section extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 

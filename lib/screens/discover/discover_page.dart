@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/models/paper.dart';
 import 'package:dscvr/screens/add/add_material_sheet.dart';
@@ -179,7 +180,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       Text('Search open research and save what matters to your library.',
           style: AppTheme.sans(fontSize: 14.5, color: c.inkMuted)),
       const SizedBox(height: 22),
-      Row(children: [
+      TourTarget(id: 'discover.search', child: Row(children: [
         Expanded(
           child: TextField(
             controller: _q,
@@ -194,9 +195,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
           ),
         ),
-      ]),
+      ])),
       const SizedBox(height: 12),
-      Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      TourTarget(id: 'discover.filters', child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
         SizedBox(
           width: 230,
           child: AppSelect<PaperSource>(
@@ -239,34 +240,34 @@ class _DiscoverPageState extends State<DiscoverPage> {
           icon: const Icon(Ic.external, size: 14),
           label: const Text('Open in Google Scholar'),
         ),
-      ]),
+      ])),
       const SizedBox(height: 22),
       SectionLabel('Latest in your subjects'),
       const SizedBox(height: 12),
-      Wrap(spacing: 6, runSpacing: 6, children: [
+      TourTarget(id: 'discover.subjects', child: Wrap(spacing: 6, runSpacing: 6, children: [
         for (final s in _mySubjects())
           AppChip(label: s.label, selected: _subject == s, onTap: () => _loadSubject(s)),
         if (_subject != null && !_mySubjects().contains(_subject))
           AppChip(label: _subject!.label, selected: true, onTap: () {}),
         AppChip(label: 'More subjects', leading: const Icon(Ic.add, size: 13), selected: false, onTap: _moreSubjects),
-      ]),
+      ])),
       const SizedBox(height: 26),
       if (_showLaw) ...[
-        _LawLibraries(
+        TourTarget(id: 'discover.law', child: _LawLibraries(
           query: _lawQuery,
           country: LawCountry.byCode(context.services.settings.lawCountry),
           onCountry: (code) {
             context.services.settings.setLawCountry(code);
             setState(() {});
           },
-        ),
+        )),
         const SizedBox(height: 22),
       ],
       if (_summary != null && _summary!.extract.isNotEmpty) ...[
         _SummaryCard(summary: _summary!, showImage: !_lowData),
         const SizedBox(height: 22),
       ],
-      SectionLabel(
+      TourTarget(id: 'discover.results', child: SectionLabel(
         _subject != null
             ? switch (_subject!.feed) {
                 Feed.arxiv => 'New in ${_subject!.label} on arXiv',
@@ -278,7 +279,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               }
             : 'Results',
         count: _loading ? null : _papers.length,
-      ),
+      )),
       if (!_loading && _subject == null && _source == PaperSource.all && context.services.discover.lastSources.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 6),

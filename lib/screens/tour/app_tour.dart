@@ -20,7 +20,7 @@ class _Step {
 
 const _steps = <_Step>[
   _Step(null, 'Meet Pinda',
-      'DSCVR is your research library. Pinda is the pangolin who reads with you. This takes about a minute, and you can replay it any time from Settings.'),
+      'DSCVR is your research library. Pinda is the pangolin who reads with you. This takes about a minute. After this, every page has its own short tour that starts the first time you open it. Tap the ? at the top of any page to replay that page.'),
   _Step(Ic.library, 'Your library',
       'Collect papers, PDFs, links and notes in categories and topics. Everything stays readable offline, and Pinda only answers from what you have saved.',
       route: '/library', action: 'Open library'),

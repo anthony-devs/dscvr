@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/data/alerts_service.dart';
 import 'package:dscvr/screens/add/add_material_sheet.dart';
 import 'package:dscvr/screens/library/shelf_page.dart';
@@ -52,24 +53,24 @@ class _AlertsPageState extends State<AlertsPage> {
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             const Expanded(child: PageTitle('Alerts')),
             if (user.alertsOn) ...[
-              AppButton.ghost(
+              TourTarget(id: 'alerts.actions', child: AppButton.ghost(
                 size: BtnSize.sm,
                 onPressed: _checking ? null : _checkNow,
                 loading: _checking,
                 icon: const Icon(Ic.retry, size: 14),
                 label: const Text('Check now'),
-              ),
+              )),
               if (unread.isNotEmpty)
                 AppButton.ghost(size: BtnSize.sm, onPressed: () => _svc.markAllRead(items), label: const Text('Mark all read')),
             ],
           ]),
           const SizedBox(height: 8),
-          Text(
+          TourTarget(id: 'alerts.about', child: Text(
             user.alertsOn
                 ? 'New items in ${user.interests.take(8).join(', ')}. Checked once a day.'
                 : 'Get new papers, clinical guidelines and judgments in your subjects, once a day.',
             style: AppTheme.sans(fontSize: 14.5, color: c.inkMuted, height: 1.5),
-          ),
+          )),
           const SizedBox(height: 22),
           if (!user.alertsOn)
             EmptyState(
