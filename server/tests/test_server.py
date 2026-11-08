@@ -340,6 +340,14 @@ def test_sessions_survive_without_session_secret():
         assert b.session(token) == "founder-anthony"
 
 
+def test_admin_shows_what_failed_instead_of_a_blank_500(admin_client):
+    h = {"Authorization": "Bearer " + _login(admin_client)}
+    with mock.patch("admin._db", side_effect=RuntimeError("firestore says no")):
+        r = admin_client.get("/admin/api/users", headers=h)
+    assert r.status_code == 500 and r.get_json()["error"] == "server_error"
+    assert "RuntimeError: firestore says no" in r.get_json()["message"]
+
+
 def test_admin_flags_validate_limit(admin_client):
     h = {"Authorization": "Bearer " + _login(admin_client)}
     assert admin_client.post("/admin/api/flags", json={"freeDailyUsd": 50}, headers=h).status_code == 400

@@ -258,6 +258,7 @@ VIEWS.overview = async (view, menu) => {
   const feats = Object.entries(a.byFeature).sort((x, y) => y[1] - x[1]);
   const featMax = Math.max(1, ...feats.map(f => f[1]));
   put(view, 
+    (d.warnings || []).map(w => h('div', {class: 'banner'}, w)),
     header('Overview', `Last ${d.days} days. Updated ${when(d.generatedAt)}.`, h('button', {class: 'small', onclick: async () => { await api('/admin/api/overview?fresh=1'); render(); }}, 'Refresh'), menu),
     d.maintenance && d.maintenance.on ? h('div', {class: 'banner'}, `Maintenance is ON (${d.maintenance.scope}): ${d.maintenance.message || ''}`) : null,
     a.paused ? h('div', {class: 'banner'}, 'Pinda is paused for everyone. Turn it back on in Switches.') : null,

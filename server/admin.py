@@ -7,6 +7,7 @@ to admin_audit.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -16,12 +17,15 @@ from typing import Any
 
 from firebase_admin import auth as fb_auth, firestore
 from flask import Blueprint, g, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 import flags
 import orgs
 import plans
 from security import get_firestore_client
 from staff import Staff, StaffError, client_ip, error_json, html_page
+
+log = logging.getLogger("admin")
 
 UI = Path(__file__).parent / "admin_ui" / "index.html"
 CACHE_SECONDS = 60
@@ -74,6 +78,14 @@ def make_admin(staff: Staff) -> Blueprint:
     @bp.errorhandler(StaffError)
     def _staff_error(e: StaffError):
         return error_json(e)
+
+    @bp.errorhandler(Exception)
+    def _unexpected(e: Exception):
+        """Signed-in staff see what actually failed (Firestore index, permissions, ...), not just "Internal server error"."""
+        if isinstance(e, HTTPException):
+            return e
+        log.exception("admin %s failed", request.path)
+        return jsonify(error="server_error", message=f"{type(e).__name__}: {str(e)[:400]}"), 500
 
     def cached(key, build):
         hit = _cache.get(key)
@@ -140,8 +152,14 @@ def make_admin(staff: Staff) -> Blueprint:
         users = db.collection("users")
         now = _now()
         start = (now - timedelta(days=days - 1)).strftime("%Y-%m-%d")
-        stats = {s.id: s.to_dict() or {} for s in db.collection("stats")
-                 .where(firestore.FieldPath.document_id(), ">=", start).get()}
+        warnings: list[str] = []
+        try:
+            stats = {s.id: s.to_dict() or {} for s in db.collection("stats")
+                     .where(firestore.FieldPath.document_id(), ">=", start).get()}
+        except Exception as e:  # noqa: BLE001
+            log.exception("admin overview: stats")
+            stats = {}
+            warnings.append(f"Daily stats could not be read ({type(e).__name__}: {str(e)[:160]}).")
         series = []
         for i in range(days):
             day = (now - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d")
@@ -162,7 +180,13 @@ def make_admin(staff: Staff) -> Blueprint:
 
         month, revenue, last_revenue, org_count = now.strftime("%Y-%m"), 0.0, 0.0, 0
         last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
-        for org in db.collection("orgs").select([]).get():
+        try:
+            org_docs = list(db.collection("orgs").select([]).get())
+        except Exception as e:  # noqa: BLE001
+            log.exception("admin overview: orgs")
+            org_docs = []
+            warnings.append(f"Teams could not be read ({type(e).__name__}: {str(e)[:160]}).")
+        for org in org_docs:
             org_count += 1
             try:
                 revenue += orgs.bill_for(orgs.month_usage(org.id, month)[0])["totalUsd"]
@@ -175,7 +199,7 @@ def make_admin(staff: Staff) -> Blueprint:
             weekly_active.update(k for k, v in (day.get("active") or {}).items() if v)
 
         return {
-            "generatedAt": _iso(now), "days": days,
+            "generatedAt": _iso(now), "days": days, "warnings": warnings,
             "users": {
                 "total": _count(users),
                 "new7": _count(users.where("createdAt", ">=", (now - timedelta(days=7)).isoformat())),
