@@ -154,10 +154,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
     return 'Searched ${ok.join(', ')}${busy.isEmpty ? '' : '. Busy right now: ${busy.join(', ')}'}';
   }
 
-  bool get _showLaw =>
-      _source == PaperSource.ukCaseLaw || (_subject?.isLaw ?? false) || context.services.session.user.profession == Profession.law;
+  /// Law libraries show for law subjects and law searches. A lawyer's profile only
+  /// brings them back when no other subject is open, so Physics never shows them.
+  bool get _showLaw {
+    if (_source == PaperSource.ukCaseLaw) return true;
+    if (_subject != null) return _subject!.isLaw;
+    return context.services.session.user.profession == Profession.law;
+  }
 
-  String get _lawQuery => _q.text.trim().isNotEmpty ? _q.text.trim() : (_subject?.searchText ?? 'contract');
+  /// Plain words for the library's own search box, never a feed query like "cat:physics.gen-ph".
+  String get _lawQuery {
+    final typed = _q.text.trim();
+    if (typed.isNotEmpty) return typed;
+    final s = _subject;
+    return (s != null && s.isLaw) ? s.label : 'contract';
+  }
 
   @override
   Widget build(BuildContext context) {
