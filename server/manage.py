@@ -9,7 +9,7 @@ import getpass
 import secrets
 import sys
 
-from staff import hash_password, password_problems
+from passwords import hash_password, password_problems
 
 
 def main(argv: list[str]) -> int:
