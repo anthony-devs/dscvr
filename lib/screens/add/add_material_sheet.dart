@@ -572,7 +572,10 @@ LibraryItem paperToItem(BuildContext context, Paper p, {required String category
     authors: p.authors,
     year: p.year,
     summary: p.summary,
-    url: p.url,
+    // Keep a DOI link when we have one, so "Find a free PDF" and citations work later.
+    url: p.doi != null && !(p.url ?? '').toLowerCase().contains(p.doi!.toLowerCase()) && p.source != 'arxiv'
+        ? 'https://doi.org/${p.doi}'
+        : p.url,
     pdfUrl: p.pdfUrl,
     siteName: p.sourceLabel,
     source: p.source,
@@ -584,7 +587,8 @@ LibraryItem paperToItem(BuildContext context, Paper p, {required String category
 }
 
 /// Lets the user pick a destination for a Discover paper.
-Future<void> savePaperFlow(BuildContext context, Paper p) async {
+/// Returns the saved item, or null if the user cancelled.
+Future<LibraryItem?> savePaperFlow(BuildContext context, Paper p) async {
   final lib = context.library;
   String? cat = lib.categories.isNotEmpty ? lib.categories.first.id : null;
   String? topic;
@@ -617,15 +621,16 @@ Future<void> savePaperFlow(BuildContext context, Paper p) async {
       ]);
     });
   });
-  if (saved != true || !context.mounted) return;
+  if (saved != true || !context.mounted) return null;
   if (cat == null) {
     final name = newCat.text.trim().isEmpty ? 'Papers' : newCat.text.trim();
     cat = (await lib.repo.createCategory(name: name, colorIndex: lib.nextCategoryColor())).id;
   }
-  if (!context.mounted) return;
+  if (!context.mounted) return null;
   final item = paperToItem(context, p, categoryId: cat!, topicId: topic);
   await keepPaper(context, item);
   if (context.mounted) toast(context, 'Saved to ${lib.category(cat)?.name ?? 'library'}', description: p.title);
+  return item;
 }
 
 /// Saves a paper and, when it has an open PDF, copies the PDF into the

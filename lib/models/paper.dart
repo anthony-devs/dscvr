@@ -22,6 +22,7 @@ class Paper {
     this.doi,
     this.pmid,
     this.openAccess = false,
+    this.sources = const [],
   });
 
   final String id;
@@ -49,16 +50,36 @@ class Paper {
   final String? pmid;
   final bool openAccess;
 
-  bool get isJudgment => kind == 'judgment' || source == 'uk_caselaw';
-  bool get isGuideline => kind?.toLowerCase().contains('guideline') ?? false;
+  /// Every source that had this item, when results were merged.
+  final List<String> sources;
 
-  String get sourceLabel => switch (source) {
+  /// Human labels for [sources] (or the single source).
+  List<String> get sourceLabels => [for (final s in (sources.isEmpty ? [source] : sources)) labelFor(s)];
+
+  static String labelFor(String s) => switch (s) {
         'arxiv' => 'arXiv',
         'semantic_scholar' => 'Semantic Scholar',
         'openalex' => 'OpenAlex',
         'europepmc' => 'Europe PMC',
         'uk_caselaw' => 'Find Case Law',
-        _ => source,
+        'crossref' => 'Crossref',
+        'doaj' => 'DOAJ',
+        'zenodo' => 'Zenodo',
+        'plos' => 'PLOS',
+        'core' => 'CORE',
+        _ => s,
+      };
+
+  bool get isJudgment => kind == 'judgment' || source == 'uk_caselaw';
+  bool get isGuideline => kind?.toLowerCase().contains('guideline') ?? false;
+
+  String get sourceLabel => labelFor(source);
+
+  Map<String, dynamic> toMap() => {
+        'id': id, 'title': title, 'source': source, 'authors': authors, 'year': year, 'summary': summary,
+        'url': url, 'pdfUrl': pdfUrl, 'venue': venue, 'citations': citations, 'subjects': subjects, 'kind': kind,
+        'citation': citation, 'court': court, 'date': date, 'doi': doi, 'pmid': pmid, 'openAccess': openAccess,
+        'sources': sources,
       };
 
   factory Paper.fromMap(Map<String, dynamic> m) => Paper(
@@ -80,6 +101,7 @@ class Paper {
         doi: m['doi'] as String?,
         pmid: m['pmid'] as String?,
         openAccess: m['openAccess'] as bool? ?? false,
+        sources: (m['sources'] as List?)?.whereType<String>().toList() ?? const [],
       );
 }
 

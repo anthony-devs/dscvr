@@ -142,6 +142,7 @@ LIMITS = {
     "study":      {"per_min": 6,  "per_hour": 60},
     "alerts":     {"per_min": 2,  "per_hour": 6},
     "import":     {"per_min": 10, "per_hour": 120},
+    "pdfview":    {"per_min": 20, "per_hour": 300},
     "rate":       {"per_min": 30, "per_hour": 300},
     "orgs":       {"per_min": 5,  "per_hour": 30},
     "rooms":      {"per_min": 10, "per_hour": 60},

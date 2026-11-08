@@ -11,6 +11,7 @@ import 'package:dscvr/screens/library/item_actions.dart';
 import 'package:dscvr/screens/reader/related_panel.dart';
 import 'package:dscvr/screens/reader/study_panel.dart';
 import 'package:dscvr/widgets/cite_sheet.dart';
+import 'package:dscvr/widgets/pdf/dscvr_pdf_viewer.dart';
 import 'package:dscvr/screens/pinda/pinda_chat.dart';
 import 'package:dscvr/screens/reader/notes_panel.dart';
 import 'package:dscvr/screens/reader/note_editor.dart';
@@ -35,8 +36,11 @@ enum _Pane { read, notes, pinda, study, parliament, related }
 /// Opens a single material: the content on the left, Pinda and margin
 /// notes on the right (wide screens) or as tabs (phones).
 class ReaderPage extends StatefulWidget {
-  const ReaderPage({super.key, required this.itemId, this.dictate = false});
+  const ReaderPage({super.key, required this.itemId, this.dictate = false, this.ask});
   final String itemId;
+
+  /// A passage to ask Pinda about as soon as the item opens.
+  final String? ask;
 
   /// Opens a note with dictation already running.
   final bool dictate;
@@ -53,6 +57,18 @@ class _ReaderPageState extends State<ReaderPage> {
   _Pane _sidePane = _Pane.pinda;
   bool _sideOpen = true;
   bool _opened = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final ask = widget.ask;
+    if (ask != null && ask.trim().isNotEmpty) {
+      // Wait for the item and Pinda to be built.
+      Future<void>.delayed(const Duration(milliseconds: 700), () {
+        if (mounted) _askAbout(ask);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -488,8 +504,9 @@ class _ReaderContent extends StatelessWidget {
       case MaterialKind.youtube:
         return _VideoView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
       case MaterialKind.pdf:
-        return item.hasPdf ? _PdfView(item: item) : _DocumentView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
       case MaterialKind.paper:
+        // Papers and PDFs open in DSCVR's own PDF reader whenever there is a PDF.
+        return item.hasPdf ? _PdfView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck) : _DocumentView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
       case MaterialKind.link:
         return _DocumentView(item: item, onAsk: onAsk, onNote: onNote, onFactCheck: onFactCheck);
     }
@@ -665,13 +682,45 @@ class _DocumentViewState extends State<_DocumentView> {
   }
 }
 
-class _NoTextNotice extends StatelessWidget {
+class _NoTextNotice extends StatefulWidget {
   const _NoTextNotice({required this.item});
   final LibraryItem item;
 
   @override
+  State<_NoTextNotice> createState() => _NoTextNoticeState();
+}
+
+class _NoTextNoticeState extends State<_NoTextNotice> {
+  bool _finding = false;
+  String? _none;
+
+  String? get _doi {
+    final m = RegExp(r'10\.\d{4,9}/[^\s?#]+', caseSensitive: false).firstMatch('${widget.item.url ?? ''} ${widget.item.externalId ?? ''}');
+    return m?.group(0);
+  }
+
+  /// Looks for a legal, free copy (Unpaywall) and opens it in the reader.
+  Future<void> _findPdf() async {
+    setState(() {
+      _finding = true;
+      _none = null;
+    });
+    try {
+      final r = await context.services.api.get('/pdf/find', query: {'doi': _doi!});
+      final pdf = r['pdfUrl'] as String?;
+      if (pdf == null || !mounted) return;
+      await keepPaper(context, LibraryItem.fromMap(widget.item.id, {...widget.item.toMap(), 'pdfUrl': pdf}));
+    } catch (e) {
+      if (mounted) setState(() => _none = e.toString());
+    } finally {
+      if (mounted) setState(() => _finding = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final item = widget.item;
     final url = item.url;
     final arxivPdf = item.source == 'arxiv' && item.externalId != null ? 'https://arxiv.org/pdf/${item.externalId}' : null;
     return Container(
@@ -688,7 +737,7 @@ class _NoTextNotice extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           item.kind == MaterialKind.paper
-              ? 'Open the PDF in the reader, or ask Pinda for a summary of the abstract.'
+              ? 'Read the PDF here in DSCVR with Pinda beside you, or ask Pinda about the abstract.'
               : 'Open the original page to read it. Pinda can still use the title and summary.',
           style: context.text.bodySmall,
         ),
@@ -698,7 +747,14 @@ class _NoTextNotice extends StatelessWidget {
             AppButton.primary(
               onPressed: () => keepPaper(context, LibraryItem.fromMap(item.id, {...item.toMap(), 'pdfUrl': arxivPdf})),
               icon: const Icon(Ic.pdf, size: 16),
-              label: const Text('Load PDF'),
+              label: const Text('Read PDF in DSCVR'),
+            ),
+          if (arxivPdf == null && !item.hasPdf && _doi != null && item.kind == MaterialKind.paper)
+            AppButton.primary(
+              onPressed: _finding ? null : _findPdf,
+              loading: _finding,
+              icon: const Icon(Ic.search, size: 16),
+              label: const Text('Find a free PDF'),
             ),
           if (url != null)
             AppButton.secondary(
@@ -707,39 +763,61 @@ class _NoTextNotice extends StatelessWidget {
               label: const Text('Open original'),
             ),
         ]),
+        if (_none != null) ...[
+          const SizedBox(height: 10),
+          Text(_none!, style: AppTheme.sans(fontSize: 13, color: c.inkMuted)),
+        ],
       ]),
     );
   }
 }
 
-class _PdfView extends StatelessWidget {
-  const _PdfView({required this.item});
+class _PdfView extends StatefulWidget {
+  const _PdfView({required this.item, required this.onAsk, required this.onNote, required this.onFactCheck});
   final LibraryItem item;
+  final ValueChanged<String> onAsk;
+  final ValueChanged<String> onNote;
+  final ValueChanged<String> onFactCheck;
+
+  @override
+  State<_PdfView> createState() => _PdfViewState();
+}
+
+class _PdfViewState extends State<_PdfView> {
+  double _saved = -1;
+
+  /// Reading progress follows the page, saved at most every 10%.
+  void _onPage(int page, int count) {
+    if (count <= 0) return;
+    final p = (page / count).clamp(0.0, 1.0);
+    if (p <= widget.item.progress && _saved < 0) return;
+    if ((p - _saved).abs() < 0.1 && p < 1) return;
+    _saved = p;
+    if (p > widget.item.progress) context.services.repo.setProgress(widget.item.id, p);
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: EdgeInsets.fromLTRB(context.isCompact ? 16 : 24, 6, 16, 10),
-        child: Text(item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTheme.serif(fontSize: context.isCompact ? 18 : 22, fontWeight: FontWeight.w600, color: c.ink)),
+    final item = widget.item;
+    return Container(
+      margin: EdgeInsets.fromLTRB(context.isCompact ? 0 : 16, 0, context.isCompact ? 0 : 16, context.isCompact ? 0 : 16),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(context.isCompact ? 0 : Radii.lg),
+        border: Border.all(color: c.line),
       ),
-      Expanded(
-        child: Container(
-          margin: EdgeInsets.fromLTRB(context.isCompact ? 0 : 16, 0, context.isCompact ? 0 : 16, context.isCompact ? 0 : 16),
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(context.isCompact ? 0 : Radii.lg),
-            border: Border.all(color: c.line),
-          ),
-          child: EmbedView(url: item.pdfUrl!, isPdf: true),
-        ),
+      child: DscvrPdfViewer(
+        url: item.pdfUrl!,
+        title: item.title,
+        onAsk: widget.onAsk,
+        onNote: widget.onNote,
+        onFactCheck: widget.onFactCheck,
+        onPage: _onPage,
+        initialPage: 1,
       ),
-    ]);
+    );
   }
 }
 

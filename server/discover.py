@@ -221,6 +221,8 @@ def search_openalex(query: str, limit: int = 20, sort: str = "relevance") -> lis
                             f"to_publication_date:{today.isoformat()},has_abstract:true,type:article")
     if _CONTACT:
         params["mailto"] = _CONTACT
+    if os.getenv("OPENALEX_API_KEY"):
+        params["api_key"] = os.getenv("OPENALEX_API_KEY")
     resp = requests.get(
         "https://api.openalex.org/works",
         params=params,

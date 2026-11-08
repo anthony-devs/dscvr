@@ -61,6 +61,23 @@ class DscvrApi {
     return _decode(res);
   }
 
+  /// Raw bytes (PDFs) from a signed-in endpoint.
+  Future<List<int>> getBytes(String path, {Map<String, String>? query}) async {
+    final http.Response res;
+    try {
+      res = await _client.get(_uri(path, query), headers: await _headers()).timeout(const Duration(seconds: 90));
+    } catch (e) {
+      throw const ApiException("Couldn't reach DSCVR. Check your connection and try again.");
+    }
+    if (res.statusCode != 200) _decode(res);
+    return res.bodyBytes;
+  }
+
+  /// Headers for widgets that fetch by themselves (the PDF viewer).
+  Future<Map<String, String>> authHeaders() => _headers();
+
+  Uri uri(String path, [Map<String, String>? query]) => _uri(path, query);
+
   Map<String, dynamic> _decode(http.Response res) {
     Map<String, dynamic> body = const {};
     try {

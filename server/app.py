@@ -5,7 +5,9 @@ Endpoints:
   GET   /pricing                     Public pricing (all editions)
 
   Research
-  GET   /discover                    arXiv / Semantic Scholar / OpenAlex / Europe PMC / UK case law search
+  GET   /discover                    search: source=all merges every free source; or one source
+  GET   /pdf/find                    free PDF for a DOI (Unpaywall)
+  GET   /pdf/view                    PDF bytes for the in-app viewer
   GET   /arxiv?ref=                  One arXiv paper by id or URL
   GET   /related                     Related papers (Semantic Scholar)
   POST  /pdf/import                  Copy a public PDF into the user's storage
@@ -56,6 +58,7 @@ from flask import Flask, Response, g, got_request_exception, jsonify, request, s
 from flask_cors import CORS
 
 import ai
+import sources
 import flags
 import billing
 import orgs
@@ -197,6 +200,13 @@ def create_app(config: Config | None = None) -> Flask:
         if not q:
             return jsonify(error="Provide q"), 400
         try:
+            if source == "all":
+                only = [x for x in sanitize(request.args.get("only", ""), 200).split(",") if x] or None
+                result = sources.search_all(q, limit, sort, only, open_access=request.args.get("oa") == "1")
+                resp = jsonify(result)
+                resp.cache_control.public = True
+                resp.cache_control.max_age = 600
+                return resp
             if source == "semantic_scholar":
                 papers = cached(("s2", q, limit), lambda: search_semantic_scholar(q, limit))
             elif source == "openalex":
@@ -249,6 +259,45 @@ def create_app(config: Config | None = None) -> Flask:
             logger.warning("Related failed: %s", e)
             return jsonify(error="Related papers are unavailable right now."), 502
         return jsonify(papers=papers)
+
+    @app.route("/pdf/find")
+    @optional_auth
+    def pdf_find():
+        """A free, legal PDF for a DOI (Unpaywall)."""
+        if (r := limited("discover", g.uid or request.remote_addr or "anon")):
+            return r
+        doi = sanitize(request.args.get("doi", ""), 300)
+        try:
+            hit = cached(("unpaywall", doi), lambda: [x] if (x := sources.find_pdf(doi)) else [])
+        except Exception as e:  # noqa: BLE001
+            logger.info("Unpaywall failed: %s", e)
+            return jsonify(error="Couldn't check for a free copy right now."), 502
+        if not hit:
+            return jsonify(error="No free copy of this paper was found."), 404
+        return jsonify(hit[0])
+
+    @app.route("/pdf/view")
+    @require_auth
+    def pdf_view():
+        """Streams a public PDF to the in-app viewer. Browsers can't fetch most
+        publishers' PDFs directly (no CORS), so the server fetches it, with the
+        same private-network guard as imports."""
+        if (r := limited("pdfview")):
+            return r
+        url = sanitize(request.args.get("url", ""), 2000)
+        if not url.startswith(("https://", "http://")):
+            return jsonify(error="Provide a PDF link."), 400
+        try:
+            data = fetch_pdf(url)
+        except UnsafeUrl as e:
+            return jsonify(error=str(e)), 400
+        except Exception as e:  # noqa: BLE001
+            logger.info("PDF view failed for %s: %s", url, e)
+            return jsonify(error="Could not open that PDF. The publisher may not allow it."), 502
+        resp = Response(data, mimetype="application/pdf")
+        resp.headers["Cache-Control"] = "private, max-age=86400"
+        resp.headers["Content-Disposition"] = "inline"
+        return resp
 
     @app.route("/pdf/import", methods=["POST"])
     @require_auth
@@ -312,7 +361,9 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify(error="Ask a question first."), 400
         style = "concise" if body.get("style") == "concise" else "detailed"
         voice = bool(body.get("voice"))
-        system = ai.system_prompt(style, _edition(uid), voice=voice, profession=_profession(uid))
+        name = (orgs.user_profile(uid).get("displayName") or "").strip().split(" ")[0][:40]
+        system = ai.system_prompt(style, _edition(uid), voice=voice, profession=_profession(uid),
+                                  user_name=name if name and name.lower() not in ("dscvr", "user") else None)
         max_tokens = 700 if voice else (1500 if style == "concise" else 4096)
 
         model = plans.model_for(plans.plan_of(orgs.user_profile(uid)), "chat")

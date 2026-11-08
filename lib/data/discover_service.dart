@@ -10,11 +10,16 @@ import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 
 enum PaperSource {
-  openAlex('All fields', 'openalex', 'Journals and books in every discipline'),
-  europePmc('Medicine & health', 'europepmc', 'PubMed, PMC and clinical guidelines'),
+  all('All sources', 'all', 'arXiv, Semantic Scholar, OpenAlex, Europe PMC, Crossref, DOAJ, PLOS, Zenodo and more'),
+  europePmc('Health & clinical', 'europepmc', 'PubMed, PMC and clinical guidelines'),
   ukCaseLaw('UK case law', 'uk_caselaw', 'Judgments from UK courts (Find Case Law)'),
+  // Used for subject feeds; not offered as separate search choices.
+  openAlex('OpenAlex', 'openalex', 'Journals and books in every discipline'),
   arxiv('arXiv', 'arxiv', 'Preprints in science, maths and computing'),
   semanticScholar('Semantic Scholar', 'semantic_scholar', 'Papers with citation counts');
+
+  /// What the search box offers.
+  static const searchable = [all, europePmc, ukCaseLaw];
 
   const PaperSource(this.label, this.key, this.blurb);
   final String label;
@@ -61,10 +66,14 @@ class DiscoverService {
   DiscoverService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
-  Future<List<Paper>> search(String query, {PaperSource source = PaperSource.openAlex, int limit = 20, bool guidelines = false}) {
+  Future<List<Paper>> search(String query,
+      {PaperSource source = PaperSource.all, int limit = 20, bool guidelines = false, bool openAccess = false}) {
     final q = source == PaperSource.arxiv ? 'all:${query.trim()}' : query.trim();
-    return _fetch(source, q, sortByDate: false, limit: limit, guidelines: guidelines);
+    return _fetch(source, q, sortByDate: false, limit: limit, guidelines: guidelines, openAccess: openAccess);
   }
+
+  /// Which sources answered the last combined search ({name: count | "busy"}).
+  Map<String, Object?> lastSources = const {};
 
   /// Newest items in a subject from the subject's feed: arXiv preprints,
   /// Europe PMC for health, UK judgments for law, OpenAlex for the rest.
@@ -78,21 +87,21 @@ class DiscoverService {
   final _cache = <String, (DateTime, List<Paper>)>{};
 
   Future<List<Paper>> _fetch(PaperSource source, String q,
-      {required bool sortByDate, required int limit, bool guidelines = false}) async {
+      {required bool sortByDate, required int limit, bool guidelines = false, bool openAccess = false}) async {
     if (Env.demo) return _demoPapers(q);
 
-    final key = '${source.key}|$q|$sortByDate|$limit|$guidelines';
+    final key = '${source.key}|$q|$sortByDate|$limit|$guidelines|$openAccess';
     final hit = _cache[key];
     if (hit != null && DateTime.now().difference(hit.$1) < _ttl) return hit.$2;
 
-    final papers = await _fetchUncached(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines);
+    final papers = await _fetchUncached(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines, openAccess: openAccess);
     if (_cache.length > 100) _cache.remove(_cache.keys.first);
     _cache[key] = (DateTime.now(), papers);
     return papers;
   }
 
   Future<List<Paper>> _fetchUncached(PaperSource source, String q,
-      {required bool sortByDate, required int limit, bool guidelines = false}) async {
+      {required bool sortByDate, required int limit, bool guidelines = false, bool openAccess = false}) async {
     // Browsers block direct calls to arXiv and Semantic Scholar (no CORS
     // headers, plus shared rate limits), so the web build always goes through
     // the DSCVR server. Native apps try the provider first and fall back.
@@ -103,17 +112,18 @@ class DiscoverService {
         // Fall through to the server.
       }
     }
-    return _viaServer(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines);
+    return _viaServer(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines, openAccess: openAccess);
   }
 
   Future<List<Paper>> _viaServer(PaperSource source, String q,
-      {required bool sortByDate, required int limit, bool guidelines = false}) async {
+      {required bool sortByDate, required int limit, bool guidelines = false, bool openAccess = false}) async {
     final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
       'source': source.key,
       'q': q,
       'sort': sortByDate ? 'date' : 'relevance',
       'limit': '$limit',
       if (guidelines) 'type': 'guidelines',
+      if (openAccess) 'oa': '1',
     });
     final http.Response res;
     try {
@@ -130,7 +140,10 @@ class DiscoverService {
       throw Exception('${source.label} is not responding right now. Try again shortly, or switch source.');
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
+    if (data['sources'] is Map) lastSources = (data['sources'] as Map).cast<String, Object?>();
+    var papers = (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
+    if (openAccess && source != PaperSource.all) papers = [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p];
+    return papers;
   }
 
   Future<List<Paper>> _direct(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
@@ -242,7 +255,9 @@ class DiscoverService {
           year: s.$3,
           summary: s.$4,
           url: 'https://arxiv.org',
+          pdfUrl: i.isEven ? 'https://arxiv.org/pdf/1706.03762' : null,
           subjects: const ['cs.LG'],
+          sources: i.isEven ? const ['arxiv', 'semantic_scholar', 'openalex'] : const ['openalex', 'crossref'],
         ),
     ];
   }

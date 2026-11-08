@@ -14,6 +14,7 @@ import 'package:dscvr/widgets/star_rating.dart';
 import 'package:dscvr/widgets/subject_picker.dart';
 import 'package:dscvr/widgets/cite_sheet.dart';
 import 'package:dscvr/models/profession.dart';
+import 'package:dscvr/screens/reader/pdf_read_page.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,11 +30,8 @@ class DiscoverPage extends StatefulWidget {
 
 class _DiscoverPageState extends State<DiscoverPage> {
   final _q = TextEditingController();
-  late PaperSource _source = switch (context.services.session.user.profession) {
-    Profession.law => PaperSource.ukCaseLaw,
-    final p? when p.isHealth => PaperSource.europePmc,
-    _ => PaperSource.openAlex,
-  };
+  PaperSource _source = PaperSource.all;
+  bool _freeOnly = false;
   bool _guidelines = false;
   Subject? _subject;
   List<Paper> _papers = const [];
@@ -104,7 +102,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (q.isEmpty) return;
     setState(() => _subject = null);
     final svc = context.services.discover;
-    _run(() => svc.search(q, source: _source, limit: _limit, guidelines: _guidelines && _source == PaperSource.europePmc),
+    _run(() => svc.search(q,
+            source: _source, limit: _limit, guidelines: _guidelines && _source == PaperSource.europePmc, openAccess: _freeOnly),
         summary: _lowData || _source == PaperSource.ukCaseLaw ? null : svc.summary(q));
   }
 
@@ -143,7 +142,16 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _q.clear();
     });
     final svc = context.services.discover;
-    _run(() => svc.latest(s, limit: _limit, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc)));
+    _run(() async {
+      final papers = await svc.latest(s, limit: _limit, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc));
+      return _freeOnly ? [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p] : papers;
+    });
+  }
+
+  String _searchedLine(Map<String, Object?> status) {
+    final ok = [for (final e in status.entries) if (e.value is num) Paper.labelFor(e.key)];
+    final busy = [for (final e in status.entries) if (e.value is! num) Paper.labelFor(e.key)];
+    return 'Searched ${ok.join(', ')}${busy.isEmpty ? '' : '. Busy right now: ${busy.join(', ')}'}';
   }
 
   bool get _showLaw =>
@@ -181,7 +189,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         SizedBox(
           width: 230,
           child: AppSelect<PaperSource>(
-            options: [for (final s in PaperSource.values) SelectOption(s, s.label, subtitle: s.blurb)],
+            options: [for (final s in PaperSource.searchable) SelectOption(s, s.label, subtitle: s.blurb)],
             value: _source,
             onChanged: (s) {
               setState(() => _source = s);
@@ -189,6 +197,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
             },
           ),
         ),
+        if (_source != PaperSource.ukCaseLaw)
+          AppChip(
+            label: 'Free PDF only',
+            selected: _freeOnly,
+            onTap: () {
+              setState(() => _freeOnly = !_freeOnly);
+              if (_q.text.trim().isNotEmpty) _search();
+            },
+          ),
         if (_source == PaperSource.europePmc || (_subject?.feed == Feed.europepmc))
           AppChip(
             label: 'Guidelines only',
@@ -244,6 +261,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
             : 'Results',
         count: _loading ? null : _papers.length,
       ),
+      if (!_loading && _subject == null && _source == PaperSource.all && context.services.discover.lastSources.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(_searchedLine(context.services.discover.lastSources), style: context.text.labelSmall),
+        ),
       const SizedBox(height: 6),
       if (_loading)
         const Padding(padding: EdgeInsets.only(top: 18), child: _PaperSkeleton())
@@ -393,13 +415,12 @@ class _PaperRowState extends State<_PaperRow> {
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (badge != null || p.openAccess) ...[
-          Wrap(spacing: 6, children: [
-            if (badge != null) _Tag(badge),
-            if (p.openAccess) const _Tag('Open access'),
-          ]),
-          const SizedBox(height: 8),
-        ],
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final l in p.sourceLabels) _Tag(l, source: true),
+          if (badge != null) _Tag(badge),
+          if (p.openAccess || p.pdfUrl != null) const _Tag('Free to read'),
+        ]),
+        const SizedBox(height: 8),
         Semantics(
           header: true,
           child: Text(p.title, style: AppTheme.serif(fontSize: 18, fontWeight: FontWeight.w600, color: c.ink, height: 1.3)),
@@ -430,9 +451,10 @@ class _PaperRowState extends State<_PaperRow> {
         ],
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          PillButton(label: 'Save to library', icon: Ic.add, onTap: () => savePaperFlow(context, p)),
           if (p.pdfUrl != null)
-            PillButton(label: 'PDF', icon: Ic.pdf, onTap: () => launchUrl(Uri.parse(p.pdfUrl!), mode: LaunchMode.externalApplication)),
+            PillButton(label: 'Read in DSCVR', icon: Ic.bookOpen, onTap: () => openPdfReader(context, p)),
+          if (p.pdfUrl == null && p.doi != null) _FindPdfButton(paper: p),
+          PillButton(label: 'Save to library', icon: Ic.add, onTap: () => savePaperFlow(context, p)),
           if (p.url != null)
             PillButton(label: p.sourceLabel, icon: Ic.external, onTap: () => launchUrl(Uri.parse(p.url!), mode: LaunchMode.externalApplication)),
           PillButton(label: 'Cite', icon: Ic.quote, onTap: () => showCiteSheet(context, CiteSource.fromPaper(p))),
@@ -447,18 +469,62 @@ class _PaperRowState extends State<_PaperRow> {
 }
 
 class _Tag extends StatelessWidget {
-  const _Tag(this.text);
+  const _Tag(this.text, {this.source = false});
   final String text;
+
+  /// Source labels (arXiv, PLOS...) are outlined; kinds are filled.
+  final bool source;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.line)),
-      child: Text(text, style: AppTheme.sans(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.inkMuted)),
+    return Semantics(
+      label: source ? 'Source: $text' : text,
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: source ? Colors.transparent : c.surfaceMuted,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: c.line),
+          ),
+          child: Text(text, style: AppTheme.sans(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.inkMuted)),
+        ),
+      ),
     );
   }
+}
+
+/// Asks the server for a legal free copy (Unpaywall), then opens it.
+class _FindPdfButton extends StatefulWidget {
+  const _FindPdfButton({required this.paper});
+  final Paper paper;
+
+  @override
+  State<_FindPdfButton> createState() => _FindPdfButtonState();
+}
+
+class _FindPdfButtonState extends State<_FindPdfButton> {
+  bool _busy = false;
+
+  Future<void> _find() async {
+    setState(() => _busy = true);
+    try {
+      final r = await context.services.api.get('/pdf/find', query: {'doi': widget.paper.doi!}, auth: false);
+      final url = r['pdfUrl'] as String?;
+      if (url != null && mounted) {
+        openPdfReader(context, Paper.fromMap({...widget.paper.toMap(), 'pdfUrl': url}));
+      }
+    } catch (e) {
+      if (mounted) toast(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      PillButton(label: _busy ? 'Looking…' : 'Find free PDF', icon: Ic.search, onTap: _busy ? () {} : _find);
 }
 
 class _PaperSkeleton extends StatelessWidget {

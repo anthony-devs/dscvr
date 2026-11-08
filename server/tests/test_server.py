@@ -616,3 +616,57 @@ def test_alerts_run_needs_the_cron_secret(client):
             assert client.post("/alerts/run", headers={"X-Cron-Secret": "s3cret"}).status_code == 200
     with mock.patch.dict(os.environ, {"CRON_SECRET": ""}):
         assert client.post("/alerts/run", headers={"X-Cron-Secret": ""}).status_code == 403
+
+
+# ── Pinda's identity and combined search ─────────────────────────────
+
+def test_every_pinda_prompt_carries_its_identity():
+    for prompt in (ai.system_prompt("detailed", "students"), ai.REPORT_SYSTEM, ai.STUDY_SYSTEM):
+        assert "Your name is Pinda" in prompt
+        assert "can't share more detail about the model" in prompt
+        assert "Never claim to be human" in prompt
+    assert "Ada" in ai.system_prompt("concise", None, user_name="Ada")
+
+
+def test_chat_uses_first_name_from_profile(client):
+    seen = {}
+    def fake_stream(**kw):
+        seen["system"] = kw["system"]
+        yield ai.sse({"type": "done"})
+    with mock.patch.object(orgs, "user_profile", return_value={"displayName": "Anthony Ude"}), \
+         mock.patch.object(ai, "build_context", return_value=[]), mock.patch.object(ai, "stream_text", fake_stream):
+        r = client.post("/pinda", json={"messages": [{"role": "user", "text": "who are you?"}]}, headers=AUTH)
+        r.get_data()
+    assert "The user's name is Anthony." in seen["system"] and "Your name is Pinda" in seen["system"]
+
+
+def test_search_all_merges_duplicates_and_keeps_every_source_label():
+    import sources
+    a = {"title": "Malaria vaccine trial", "source": "openalex", "url": "https://doi.org/10.1/abc", "summary": ""}
+    b = {"title": "Malaria Vaccine Trial.", "source": "crossref", "doi": "10.1/ABC", "summary": "Long abstract", "pdfUrl": "https://x/p.pdf"}
+    c = {"title": "Unrelated", "source": "doaj", "summary": "x"}
+    fake = {"openalex": lambda q, n: [a], "crossref": lambda q, n: [b], "doaj": lambda q, n: [c]}
+    with mock.patch.dict(sources.SOURCES, fake, clear=True), mock.patch.object(discover, "cached", lambda k, f: f()):
+        out = sources.search_all("malaria vaccine", 10)
+    first = out["papers"][0]
+    assert first["sources"] == ["openalex", "crossref"]
+    assert first["summary"] == "Long abstract" and first["pdfUrl"] == "https://x/p.pdf" and first["openAccess"]
+    assert len(out["papers"]) == 2 and out["sources"] == {"openalex": 1, "crossref": 1, "doaj": 1}
+
+
+def test_search_all_survives_a_failing_source():
+    import sources
+    def boom(q, n):
+        raise RuntimeError("429 Too Many Requests")
+    fake = {"openalex": boom, "doaj": lambda q, n: [{"title": "Kept", "source": "doaj"}]}
+    with mock.patch.dict(sources.SOURCES, fake, clear=True), mock.patch.object(discover, "cached", lambda k, f: f()):
+        out = sources.search_all("x", 10)
+    assert out["sources"]["openalex"] == "busy" and out["papers"][0]["title"] == "Kept"
+
+
+def test_pdf_view_streams_pdf_and_blocks_private_urls(client):
+    with mock.patch("app.fetch_pdf", return_value=b"%PDF-1.7 hello"):
+        r = client.get("/pdf/view?url=https://arxiv.org/pdf/1706.03762", headers=AUTH)
+    assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data.startswith(b"%PDF")
+    assert client.get("/pdf/view?url=http://127.0.0.1/x.pdf", headers=AUTH).status_code == 400
+    assert client.get("/pdf/view?url=https://arxiv.org/x.pdf").status_code == 401

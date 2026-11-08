@@ -3,3 +3,5 @@
 bool get canDownload => false;
 
 void downloadText(String fileName, String text, {String mime = 'text/markdown'}) {}
+
+void downloadBytes(String fileName, List<int> bytes, {String mime = 'application/pdf'}) {}

@@ -228,10 +228,10 @@ class DemoLibraryRepository implements LibraryRepository {
 
     LibraryItem item(String id, String title, List<String> authors, int year, String cat,
         {String? topic, MaterialKind kind = MaterialKind.paper, String summary = '', String? url,
-        double progress = 0, int notes = 0, int daysAgo = 3, bool readingList = false, String content = '', String? arxiv}) {
+        double progress = 0, int notes = 0, int daysAgo = 3, bool readingList = false, String content = '', String? arxiv, String? pdfUrl}) {
       return LibraryItem(
         id: id, kind: kind, title: title, authors: authors, year: year, categoryId: cat, topicId: topic,
-        summary: summary, url: url, content: content, progress: progress, noteCount: notes,
+        summary: summary, url: url, pdfUrl: pdfUrl, content: content, progress: progress, noteCount: notes,
         colorIndex: _rand.nextInt(10), inReadingList: readingList,
         createdAt: now.subtract(Duration(days: daysAgo + 10)),
         updatedAt: now.subtract(Duration(days: daysAgo)),
@@ -261,7 +261,7 @@ class DemoLibraryRepository implements LibraryRepository {
           summary: 'Combines deep neural networks with Monte Carlo tree search to defeat a human professional at the full game of Go.'),
       item('p5', 'Dropout: A Simple Way to Prevent Neural Networks from Overfitting',
           ['Nitish Srivastava', 'Geoffrey Hinton', 'Alex Krizhevsky', 'Ilya Sutskever', 'Ruslan Salakhutdinov'], 2014, 'cs', topic: 'ml',
-          progress: 0, daysAgo: 8),
+          progress: 0, daysAgo: 8, pdfUrl: 'https://arxiv.org/pdf/1207.0580'),
       item('p6', 'Notes on scaling laws', [], 2026, 'cs', topic: 'llm', kind: MaterialKind.note, daysAgo: 0, progress: 0,
           content: '## Scaling laws\n\nLoss falls as a **power law** in parameters, data and compute.\n\n- Compute-optimal training balances model size and tokens\n- Emergent abilities are often a measurement artefact\n\n> Revisit after reading Chinchilla.',
           summary: 'Loss falls as a power law in parameters, data and compute.'),

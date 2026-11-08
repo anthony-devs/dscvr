@@ -1,3 +1,5 @@
+import 'package:dscvr/models/paper.dart';
+import 'package:dscvr/screens/reader/pdf_read_page.dart';
 import 'package:dscvr/screens/alerts/alerts_page.dart';
 import 'package:dscvr/screens/discover/discover_page.dart';
 import 'package:dscvr/screens/library/home_pages.dart';
@@ -65,7 +67,14 @@ GoRouter buildRouter(SessionController session) {
       GoRoute(
         path: '/m/:id',
         parentNavigatorKey: _rootKey,
-        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: ReaderPage(itemId: s.params['id']!, dictate: s.queryParams['dictate'] == '1')),
+        pageBuilder: (_, s) => MaterialPage(
+            key: s.pageKey,
+            child: ReaderPage(itemId: s.params['id']!, dictate: s.queryParams['dictate'] == '1', ask: s.extra is String ? s.extra as String : null)),
+      ),
+      GoRoute(
+        path: '/read',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: PdfReadPage(paper: s.extra is Paper ? s.extra as Paper : null)),
       ),
       GoRoute(
         path: '/reports/:id',
