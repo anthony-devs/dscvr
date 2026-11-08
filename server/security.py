@@ -139,6 +139,8 @@ LIMITS = {
     "report":     {"per_min": 3,  "per_hour": 30},
     "summary":    {"per_min": 5,  "per_hour": 60},
     "parliament": {"per_min": 4,  "per_hour": 40},
+    "study":      {"per_min": 6,  "per_hour": 60},
+    "alerts":     {"per_min": 2,  "per_hour": 6},
     "import":     {"per_min": 10, "per_hour": 120},
     "rate":       {"per_min": 30, "per_hour": 300},
     "orgs":       {"per_min": 5,  "per_hour": 30},

@@ -160,6 +160,63 @@ class VoiceService extends ChangeNotifier {
     }
   }
 
+  int _readRun = 0;
+  bool _reading = false;
+
+  /// True while a long read-aloud (a paper, a judgment) is playing.
+  bool get reading => _reading;
+
+  /// Reads long text aloud in sentence-sized chunks, so browsers that cut
+  /// off long utterances keep going. [rate] 0.5 to 2.0, 1.0 is normal.
+  Future<void> readAloud(String markdown, {double rate = 1.0}) async {
+    final text = plain(markdown);
+    if (text.isEmpty) return;
+    final run = ++_readRun;
+    final chunks = <String>[];
+    final buf = StringBuffer();
+    for (final sentence in text.split(RegExp(r'(?<=[.!?;:])\s+'))) {
+      if (buf.length + sentence.length > 220 && buf.isNotEmpty) {
+        chunks.add(buf.toString());
+        buf.clear();
+      }
+      buf.write('$sentence ');
+    }
+    if (buf.isNotEmpty) chunks.add(buf.toString());
+    try {
+      await _tts.stop();
+      await _tts.setSpeechRate((kIsWeb ? 1.0 : 0.5) * rate.clamp(0.5, 2.0));
+      await _tts.awaitSpeakCompletion(true);
+      _reading = true;
+      notifyListeners();
+      for (final c in chunks) {
+        if (run != _readRun) return;
+        await _tts.speak(c);
+      }
+    } catch (e) {
+      debugPrint('Read aloud failed: $e');
+    } finally {
+      if (run == _readRun) {
+        _reading = false;
+        _speaking = false;
+        try {
+          await _tts.setSpeechRate(kIsWeb ? 1.0 : 0.5);
+          await _tts.awaitSpeakCompletion(false);
+        } catch (_) {}
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> stopReading() async {
+    _readRun++;
+    _reading = false;
+    try {
+      await _tts.stop();
+    } catch (_) {}
+    _speaking = false;
+    notifyListeners();
+  }
+
   Future<void> stopSpeaking() async {
     if (!_speaking) return;
     try {

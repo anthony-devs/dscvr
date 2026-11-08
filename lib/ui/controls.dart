@@ -2,7 +2,9 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/ui/motion.dart';
 import 'package:dscvr/ui/spinner.dart';
+import 'package:dscvr/widgets/icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 enum BtnVariant { primary, secondary, ghost, danger }
 
@@ -138,6 +140,7 @@ class AppIconButton extends StatelessWidget {
       enabled: enabled,
       scale: 0.9,
       onTap: onPressed,
+      semanticLabel: tooltip,
       builder: (context, hovered, pressed, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         width: dim,
@@ -179,9 +182,12 @@ class AppChip extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       scale: 0.95,
+      selected: selected,
       builder: (context, hovered, pressed, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
+        // At least 36px tall, so it's an easy target on touch screens.
+        constraints: const BoxConstraints(minHeight: 36),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: ShapeDecoration(
           color: selected ? c.ink : (hovered ? c.selection : c.chip),
@@ -202,58 +208,166 @@ class AppChip extends StatelessWidget {
 }
 
 /// Thin-track slider with a soft thumb, iOS style.
-class AppSlider extends StatelessWidget {
-  const AppSlider({super.key, required this.value, required this.min, required this.max, required this.onChanged});
+class AppSlider extends StatefulWidget {
+  const AppSlider({
+    super.key,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+    this.label,
+    this.valueLabel,
+    this.step,
+  });
   final double value;
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
 
+  /// Read by screen readers, e.g. "Text size".
+  final String? label;
+
+  /// How the value is announced, e.g. (v) => "${(v * 100).round()} percent".
+  final String Function(double value)? valueLabel;
+
+  /// Keyboard and screen-reader step; defaults to a tenth of the range.
+  final double? step;
+
+  @override
+  State<AppSlider> createState() => _AppSliderState();
+}
+
+class _AppSliderState extends State<AppSlider> {
+  bool _focused = false;
+
+  double get _step => widget.step ?? (widget.max - widget.min) / 10;
+
+  void _nudge(double d) => widget.onChanged((widget.value + d).clamp(widget.min, widget.max));
+
+  String _say(double v) => widget.valueLabel?.call(v) ?? v.toStringAsFixed(2);
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return LayoutBuilder(builder: (context, box) {
-      const thumb = 22.0;
-      final w = box.maxWidth;
-      final t = ((value - min) / (max - min)).clamp(0.0, 1.0);
-      void set(double dx) {
-        final v = min + ((dx - thumb / 2) / (w - thumb)).clamp(0.0, 1.0) * (max - min);
-        if ((v - value).abs() > 0.001) onChanged(v);
-      }
+    final value = widget.value, min = widget.min, max = widget.max;
+    return Semantics(
+      slider: true,
+      label: widget.label,
+      value: _say(value),
+      increasedValue: _say((value + _step).clamp(min, max)),
+      decreasedValue: _say((value - _step).clamp(min, max)),
+      onIncrease: () => _nudge(_step),
+      onDecrease: () => _nudge(-_step),
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (v) => setState(() => _focused = v),
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.arrowRight): _Nudge(1),
+          SingleActivator(LogicalKeyboardKey.arrowUp): _Nudge(1),
+          SingleActivator(LogicalKeyboardKey.arrowLeft): _Nudge(-1),
+          SingleActivator(LogicalKeyboardKey.arrowDown): _Nudge(-1),
+        },
+        actions: {
+          _Nudge: CallbackAction<_Nudge>(onInvoke: (i) {
+            _nudge(i.dir * _step);
+            return null;
+          }),
+        },
+        child: ExcludeSemantics(
+          child: LayoutBuilder(builder: (context, box) {
+            const thumb = 22.0;
+            final w = box.maxWidth;
+            final t = ((value - min) / (max - min)).clamp(0.0, 1.0);
+            void set(double dx) {
+              final v = min + ((dx - thumb / 2) / (w - thumb)).clamp(0.0, 1.0) * (max - min);
+              if ((v - value).abs() > 0.001) widget.onChanged(v);
+            }
 
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (d) => set(d.localPosition.dx),
-        onHorizontalDragUpdate: (d) => set(d.localPosition.dx),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: SizedBox(
-            height: 32,
-            child: Stack(alignment: Alignment.centerLeft, children: [
-              Container(height: 4, decoration: BoxDecoration(color: c.line, borderRadius: BorderRadius.circular(2))),
-              Container(
-                width: thumb / 2 + t * (w - thumb),
-                height: 4,
-                decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(2)),
-              ),
-              Positioned(
-                left: t * (w - thumb),
-                child: Container(
-                  width: thumb,
-                  height: thumb,
-                  decoration: BoxDecoration(
-                    color: c.isDark ? c.ink : Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.line),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2))],
-                  ),
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (d) => set(d.localPosition.dx),
+              onHorizontalDragUpdate: (d) => set(d.localPosition.dx),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: SizedBox(
+                  height: 32,
+                  child: Stack(alignment: Alignment.centerLeft, children: [
+                    Container(height: 4, decoration: BoxDecoration(color: c.line, borderRadius: BorderRadius.circular(2))),
+                    Container(
+                      width: thumb / 2 + t * (w - thumb),
+                      height: 4,
+                      decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(2)),
+                    ),
+                    Positioned(
+                      left: t * (w - thumb),
+                      child: Container(
+                        width: thumb,
+                        height: thumb,
+                        decoration: BoxDecoration(
+                          color: c.isDark ? c.ink : Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _focused ? const Color(0xFF7AA7FF) : c.line, width: _focused ? 2.5 : 1),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2))],
+                        ),
+                      ),
+                    ),
+                  ]),
                 ),
               ),
-            ]),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+class _Nudge extends Intent {
+  const _Nudge(this.dir);
+  final int dir;
+}
+
+/// iOS-style on/off switch. Announced as a toggle with its label.
+class AppSwitch extends StatelessWidget {
+  const AppSwitch({super.key, required this.value, required this.onChanged, this.label});
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final enabled = onChanged != null;
+    return Semantics(
+      toggled: value,
+      label: label,
+      child: Pressable(
+        enabled: enabled,
+        scale: 0.96,
+        onTap: () => onChanged?.call(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: 46,
+          height: 28,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: value ? c.ink : c.chip,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: value ? c.ink : c.line),
+          ),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: value ? c.inverseInk : (enabled ? c.surface : c.surfaceMuted),
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 3, offset: const Offset(0, 1))],
+            ),
           ),
         ),
-      );
-    });
+      ),
+    );
   }
 }
 
@@ -320,5 +434,66 @@ class AppField extends StatelessWidget {
         ),
       ),
     ]);
+  }
+}
+
+
+/// A large selectable row with a title and subtitle, used for single-choice
+/// lists (field of study, plan options). Announced as a selectable button.
+class ChoiceRow extends StatelessWidget {
+  const ChoiceRow({super.key, required this.title, this.subtitle, required this.selected, required this.onTap, this.leading});
+  final String title;
+  final String? subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Pressable(
+      onTap: onTap,
+      scale: 0.98,
+      selected: selected,
+      semanticLabel: subtitle == null ? title : '$title. $subtitle',
+      builder: (context, hovered, pressed, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: ShapeDecoration(
+          color: selected ? c.selection : (hovered ? c.surfaceMuted : c.surface),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: selected ? c.ink : c.line, width: selected ? 1.5 : 1),
+          ),
+        ),
+        child: child,
+      ),
+      child: ExcludeSemantics(
+        child: Row(children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 12)],
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: AppTheme.sans(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(subtitle!, style: AppTheme.sans(fontSize: 13, color: c.inkMuted)),
+              ],
+            ]),
+          ),
+          const SizedBox(width: 12),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected ? c.ink : Colors.transparent,
+              border: Border.all(color: selected ? c.ink : c.inkFaint, width: 1.5),
+            ),
+            child: selected ? Icon(Ic.check, size: 13, color: c.inverseInk) : null,
+          ),
+        ]),
+      ),
+    );
   }
 }

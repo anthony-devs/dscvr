@@ -1,3 +1,4 @@
+import 'package:dscvr/data/alerts_service.dart';
 import 'package:dscvr/models/library.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/state/services.dart';
@@ -27,6 +28,7 @@ class Sidebar extends StatefulWidget {
 
 class _SidebarState extends State<Sidebar> {
   final Set<String> _expanded = {};
+  late final Stream<int> _unread = AlertsService(context.services.session.user.id).unread();
 
   String? get _activeCategory {
     final m = RegExp(r'^/c/([^/]+)').firstMatch(widget.location);
@@ -95,6 +97,16 @@ class _SidebarState extends State<Sidebar> {
                     onTap: () => _go('/reading-list'),
                   ),
                   _NavRow(icon: Ic.discover, label: 'Discover', active: widget.location.startsWith('/discover'), onTap: () => _go('/discover')),
+                  StreamBuilder<int>(
+                    stream: _unread,
+                    builder: (context, snap) => _NavRow(
+                      icon: Ic.lightning,
+                      label: 'Alerts',
+                      count: snap.data ?? 0,
+                      active: widget.location.startsWith('/alerts'),
+                      onTap: () => _go('/alerts'),
+                    ),
+                  ),
                   _NavRow(icon: Ic.pinda, label: 'Pinda', active: widget.location.startsWith('/pinda'), onTap: () => _go('/pinda')),
                   _NavRow(icon: Ic.report, label: 'Reports', active: widget.location.startsWith('/reports'), onTap: () => _go('/reports')),
                   _NavRow(

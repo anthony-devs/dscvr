@@ -1,6 +1,7 @@
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/data/firestore_library_repository.dart';
 import 'package:dscvr/models/edition.dart';
+import 'package:dscvr/models/profession.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
@@ -11,7 +12,7 @@ import 'package:dscvr/ui/ui.dart';
 import 'package:dscvr/widgets/subject_picker.dart';
 import 'package:flutter/material.dart';
 
-/// Four short steps: which DSCVR, who you are, what you study, how it works.
+/// Five short steps: which DSCVR, who you are, your field, your subjects, how it works.
 /// Selected interests become starter categories in the library.
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -26,7 +27,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     Edition.researchers: ['PhD student', 'Postdoc', 'Faculty', 'Industry researcher', 'Independent'],
     Edition.enterprise: ['Research', 'Product', 'Engineering', 'Strategy', 'Leadership'],
   };
-  static const _steps = 4;
+  static const _steps = 5;
 
   int _step = 0;
   late final _name = TextEditingController(text: context.services.session.user.displayName == 'DSCVR User'
@@ -35,6 +36,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Edition _edition = Edition.researchers;
   String _role = '';
   final List<String> _interests = [];
+  Profession? _profession;
   bool _saving = false;
 
   @override
@@ -58,6 +60,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         role: _role.isEmpty ? _edition.short : _role,
         interests: _interests,
         edition: _edition,
+        profession: _profession,
       );
     } catch (e) {
       if (mounted) {
@@ -72,7 +75,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final c = context.colors;
     final canNext = switch (_step) {
       1 => _name.text.trim().isNotEmpty,
-      2 => _interests.isNotEmpty,
+      2 => _profession != null,
+      3 => _interests.isNotEmpty,
       _ => true,
     };
     return Scaffold(
@@ -201,10 +205,37 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ]);
       case 2:
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_edition == Edition.enterprise ? "What is your team's field?" : 'What field are you in?',
+              style: context.text.displaySmall),
+          const SizedBox(height: 10),
+          Text('DSCVR sets up the right sources, subjects and study tools for it. You can change this later in Settings.',
+              style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
+          const SizedBox(height: 22),
+          for (final p in Profession.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ChoiceRow(
+                title: p.label,
+                subtitle: p.blurb,
+                selected: _profession == p,
+                onTap: () => setState(() {
+                  _profession = p;
+                  // Replace the previous starter set, keep anything typed by hand.
+                  final previous = {for (final q in Profession.values) ...q.starter};
+                  _interests.removeWhere(previous.contains);
+                  for (final s in p.starter.take(6)) {
+                    if (!_interests.contains(s)) _interests.add(s);
+                  }
+                }),
+              ),
+            ),
+        ]);
+      case 3:
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_edition == Edition.enterprise ? 'What does your team research?' : 'What do you study?',
               style: context.text.displaySmall),
           const SizedBox(height: 10),
-          Text('Each pick becomes a category in your library. You can rename or add more later.',
+          Text('We picked a few to start. Each one becomes a category in your library and a feed in Discover. Add, remove or type your own.',
               style: AppTheme.sans(fontSize: 15, color: c.inkMuted, height: 1.55)),
           const SizedBox(height: 22),
           if (_interests.isNotEmpty) ...[
@@ -232,10 +263,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
           Edition.students => [
               (Ic.library, 'Your library', 'Lecture notes, readings, PDFs and videos, sorted by course and topic.'),
               (Ic.timer, 'Focus sessions', 'Study in timed sessions, alone or with your group, and get a recap at the end.'),
-              (Ic.pinda, 'Pinda', 'Explanations, study guides and quizzes built from your own course material.'),
+              (Ic.pinda, 'Pinda', 'Explanations, flashcards, practice questions and case briefs built from your own material.'),
             ],
           Edition.researchers => [
-              (Ic.discover, 'Discover', 'Search arXiv and Semantic Scholar, then save papers with their PDFs in one tap.'),
+              (Ic.discover, 'Discover', 'Search papers, clinical guidelines and case law in every field, then save them with their PDFs in one tap.'),
               (Ic.pinda, 'Pinda', 'Ask about one paper or your whole library and get answers that cite your sources.'),
               (Ic.report, 'Reports', 'Draft literature reviews and summaries from the papers you pick, then edit and export.'),
             ],

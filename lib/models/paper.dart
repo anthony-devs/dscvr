@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-/// A search result from Discover (arXiv or Semantic Scholar).
+/// A search result from Discover: a paper, a guideline or a court judgment.
 @immutable
 class Paper {
   const Paper({
@@ -15,6 +15,13 @@ class Paper {
     this.venue,
     this.citations,
     this.subjects = const [],
+    this.kind,
+    this.citation,
+    this.court,
+    this.date,
+    this.doi,
+    this.pmid,
+    this.openAccess = false,
   });
 
   final String id;
@@ -29,8 +36,30 @@ class Paper {
   final int? citations;
   final List<String> subjects;
 
-  String get sourceLabel =>
-      switch (source) { 'arxiv' => 'arXiv', 'semantic_scholar' => 'Semantic Scholar', 'openalex' => 'OpenAlex', _ => source };
+  /// "judgment", "Practice Guideline", "Review", "Randomized Controlled Trial"...
+  final String? kind;
+
+  /// Neutral or law-report citation, e.g. [2026] UKSC 1.
+  final String? citation;
+  final String? court;
+
+  /// Judgment date (yyyy-mm-dd), when known.
+  final String? date;
+  final String? doi;
+  final String? pmid;
+  final bool openAccess;
+
+  bool get isJudgment => kind == 'judgment' || source == 'uk_caselaw';
+  bool get isGuideline => kind?.toLowerCase().contains('guideline') ?? false;
+
+  String get sourceLabel => switch (source) {
+        'arxiv' => 'arXiv',
+        'semantic_scholar' => 'Semantic Scholar',
+        'openalex' => 'OpenAlex',
+        'europepmc' => 'Europe PMC',
+        'uk_caselaw' => 'Find Case Law',
+        _ => source,
+      };
 
   factory Paper.fromMap(Map<String, dynamic> m) => Paper(
         id: m['id'] as String? ?? '',
@@ -44,6 +73,13 @@ class Paper {
         venue: m['venue'] as String?,
         citations: (m['citations'] as num?)?.toInt(),
         subjects: (m['subjects'] as List?)?.whereType<String>().toList() ?? const [],
+        kind: m['kind'] as String?,
+        citation: m['citation'] as String?,
+        court: m['court'] as String?,
+        date: m['date'] as String?,
+        doi: m['doi'] as String?,
+        pmid: m['pmid'] as String?,
+        openAccess: m['openAccess'] as bool? ?? false,
       );
 }
 

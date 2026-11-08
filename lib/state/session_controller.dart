@@ -1,3 +1,5 @@
+import 'package:dscvr/models/profession.dart';
+import 'package:dscvr/models/subjects.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -59,13 +61,51 @@ class SessionController extends ChangeNotifier {
     required String role,
     required List<String> interests,
     required Edition edition,
+    Profession? profession,
   }) async {
     if (Env.demo) {
-      _set(_user.copyWith(displayName: displayName, role: role, interests: interests, onboarded: true, edition: edition));
+      _set(_user.copyWith(
+          displayName: displayName, role: role, interests: interests, onboarded: true, edition: edition, profession: profession));
       return;
     }
     await _auth!.completeOnboarding(
-        uid: _user.id, displayName: displayName, role: role, interests: interests, edition: edition);
+        uid: _user.id, displayName: displayName, role: role, interests: interests, edition: edition, profession: profession);
+  }
+
+  Future<void> setProfession(Profession p) async {
+    _set(_user.copyWith(profession: p));
+    if (!Env.demo) await _auth!.setProfession(_user.id, p);
+  }
+
+  /// The subjects the user follows (shown first in Discover, used for alerts).
+  Future<void> setInterests(List<String> interests) async {
+    _set(_user.copyWith(interests: interests));
+    if (Env.demo) return;
+    await _auth!.setInterests(_user.id, interests);
+    if (_user.alertsOn) await setAlerts(enabled: true, email: _user.alertsEmail);
+  }
+
+  /// Turns subject alerts on or off. Subjects come from what the user follows.
+  Future<void> setAlerts({required bool enabled, required bool email}) async {
+    _set(_user.copyWith(alertsOn: enabled, alertsEmail: email));
+    if (Env.demo) return;
+    final subjects = [
+      for (final label in _user.interests.take(8))
+        () {
+          final s = Subject.custom(label);
+          return {
+            'label': s.label,
+            'source': switch (s.feed) {
+              Feed.arxiv => 'arxiv',
+              Feed.europepmc => 'europepmc',
+              Feed.caselaw => 'uk_caselaw',
+              Feed.openalex => 'openalex',
+            },
+            'query': s.searchText,
+          };
+        }(),
+    ];
+    await _auth!.setAlerts(_user.id, enabled: enabled, email: email, subjects: subjects);
   }
 
   Edition get edition => _user.edition;

@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/alerts/alerts_page.dart';
 import 'package:dscvr/screens/discover/discover_page.dart';
 import 'package:dscvr/screens/library/home_pages.dart';
 import 'package:dscvr/screens/library/shelf_page.dart';
@@ -98,6 +99,7 @@ GoRouter buildRouter(SessionController session) {
           GoRoute(path: '/team', pageBuilder: (_, s) => page(s, const TeamPage())),
           GoRoute(path: '/plans', pageBuilder: (_, s) => page(s, PlansPage(reference: s.queryParams['reference']))),
           GoRoute(path: '/settings', pageBuilder: (_, s) => page(s, const SettingsPage())),
+          GoRoute(path: '/alerts', pageBuilder: (_, s) => page(s, const AlertsPage())),
           GoRoute(
             path: '/c/:cid',
             pageBuilder: (_, s) => page(s, ShelfPage(categoryId: s.params['cid']!)),

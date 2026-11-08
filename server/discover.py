@@ -1,4 +1,19 @@
-"""Discover proxy: arXiv + Semantic Scholar search that adds CORS headers."""
+"""Discover proxy: one search endpoint for every source DSCVR offers, with CORS.
+
+    arxiv             preprints (sciences, computing, maths, economics)
+    semantic_scholar  papers across fields (falls back to OpenAlex)
+    openalex          every discipline, journals included
+    europepmc         medicine, nursing, pharmacy, public health (PubMed +
+                      PMC + clinical guidelines), free, no key
+    uk_caselaw        UK court judgments from The National Archives' Find
+                      Case Law, under the Open Justice Licence. One request
+                      per user search only: bulk or computational use needs
+                      their transactional licence.
+
+African legal information institutes (NigeriaLII, GhaLII, Kenya Law, SAFLII)
+don't allow automated search or AI use, so the app links out to their own
+search pages instead of calling them from here.
+"""
 from __future__ import annotations
 
 import logging
@@ -252,3 +267,123 @@ def _clean(text: str) -> str:
     """Collapse whitespace and strip."""
     import re
     return re.sub(r"\s+", " ", text).strip()
+
+
+# ── Europe PMC (PubMed, PMC, guidelines) ─────────────────────────────
+
+def search_europepmc(query: str, limit: int = 20, sort: str = "relevance", guidelines: bool = False) -> list[dict[str, Any]]:
+    """Biomedical and health literature. sort="date" gives recent
+    articles (last 12 months). guidelines=True keeps only clinical
+    practice guidelines."""
+    q = query.strip()
+    if sort == "date" and ":" not in q:  # plain words: match the title or abstract, not any field
+        q = f"TITLE_ABS:({q})"
+    if guidelines:
+        q = f"({q}) AND (PUB_TYPE:\"practice guideline\" OR PUB_TYPE:\"guideline\")"
+    if sort == "date":
+        # "Latest" = the most relevant peer-reviewed articles from the last
+        # 12 months. A strict newest-first sort surfaces odd, barely related
+        # items with future issue dates, so relevance ranks within the window.
+        import datetime as _dt
+        today = _dt.date.today()
+        start = today - _dt.timedelta(days=365)
+        q = f"({q}) AND FIRST_PDATE:[{start.isoformat()} TO {today.isoformat()}] AND HAS_ABSTRACT:y AND SRC:MED"
+    params = {"query": q, "format": "json", "pageSize": str(limit), "resultType": "core"}
+    if _CONTACT:
+        params["email"] = _CONTACT
+    resp = requests.get("https://www.ebi.ac.uk/europepmc/webservices/rest/search", params=params,
+                        timeout=_TIMEOUT, headers={"User-Agent": "DSCVR/1.0 (research library)"})
+    resp.raise_for_status()
+    papers: list[dict[str, Any]] = []
+    for r in (resp.json().get("resultList") or {}).get("result", []):
+        pdf = None
+        for u in ((r.get("fullTextUrlList") or {}).get("fullTextUrl") or []):
+            if u.get("documentStyle") == "pdf" and u.get("availabilityCode") in ("OA", "F"):
+                pdf = u.get("url")
+                break
+        src, rid = r.get("source") or "MED", r.get("id") or ""
+        journal = ((r.get("journalInfo") or {}).get("journal") or {}).get("title") or r.get("bookOrReportDetails", {}).get("publisher")
+        types = [t for t in ((r.get("pubTypeList") or {}).get("pubType") or []) if isinstance(t, str)]
+        kind = next((t for t in types if "guideline" in t.lower()), None) or \
+            next((t for t in types if t.lower() in ("review", "systematic review", "meta-analysis", "randomized controlled trial", "case reports")), None)
+        try:
+            year = int(r.get("pubYear")) if r.get("pubYear") else None
+        except ValueError:
+            year = None
+        papers.append({
+            "id": f"{src}:{rid}",
+            "title": _clean((r.get("title") or "").rstrip(".")),
+            "source": "europepmc",
+            "authors": [a.strip() for a in (r.get("authorString") or "").rstrip(".").split(",") if a.strip()][:12],
+            "year": year,
+            "summary": _clean(re.sub(r"<[^>]+>", " ", r.get("abstractText") or "")),
+            "url": f"https://europepmc.org/article/{src}/{rid}",
+            "pdfUrl": pdf,
+            "venue": journal,
+            "citations": r.get("citedByCount"),
+            "doi": r.get("doi"),
+            "pmid": r.get("pmid"),
+            "kind": kind,
+            "openAccess": r.get("isOpenAccess") == "Y",
+            "subjects": [],
+        })
+    return papers
+
+
+# ── UK case law (The National Archives, Find Case Law) ───────────────
+
+UK_COURTS = {"uksc": "UK Supreme Court", "ukpc": "Privy Council", "ewca": "Court of Appeal", "ewhc": "High Court"}
+
+
+def search_uk_caselaw(query: str, limit: int = 20, court: str = "") -> list[dict[str, Any]]:
+    """Judgments of the UK courts, newest first. Returns them in the same
+    shape as papers, with the neutral citation as the venue."""
+    import xml.etree.ElementTree as ET
+    params = {"query": query, "per_page": str(min(limit, 50)), "order": "-date"}
+    if court:
+        params["court"] = court
+    resp = requests.get("https://caselaw.nationalarchives.gov.uk/atom.xml", params=params,
+                        timeout=_TIMEOUT, headers={"User-Agent": "DSCVR/1.0 (research library)"})
+    resp.raise_for_status()
+    ns = {"a": "http://www.w3.org/2005/Atom", "tna": "https://caselaw.nationalarchives.gov.uk"}
+    root = ET.fromstring(resp.content)
+    cases: list[dict[str, Any]] = []
+    for e in root.findall("a:entry", ns):
+        url = pdf = None
+        for link in e.findall("a:link", ns):
+            if link.get("type") == "application/pdf":
+                pdf = link.get("href")
+            elif link.get("rel") == "alternate" and not link.get("type"):
+                url = link.get("href")
+        citation = next((i.text for i in e.findall("tna:identifier", ns) if i.get("type") == "ukncn" and i.text), None)
+        published = (e.findtext("a:published", "", ns) or "")[:10]
+        court_name = (e.findtext("a:author/a:name", "", ns) or "").strip()
+        title = _clean(e.findtext("a:title", "", ns) or "")
+        cases.append({
+            "id": (url or "").split("caselaw.nationalarchives.gov.uk/")[-1] or e.findtext("a:id", "", ns),
+            "title": title,
+            "source": "uk_caselaw",
+            "authors": [court_name] if court_name else [],
+            "year": int(published[:4]) if published[:4].isdigit() else None,
+            "summary": " · ".join(x for x in (court_name, citation, published and f"Judgment handed down {published}") if x),
+            "url": url,
+            "pdfUrl": pdf,
+            "venue": citation,
+            "kind": "judgment",
+            "court": court_name,
+            "citation": citation,
+            "date": published or None,
+            "subjects": [],
+        })
+    return cases
+
+
+# Free legal information institutes we link to but never fetch from.
+LAW_LIBRARIES = [
+    {"id": "nigerialii", "name": "NigeriaLII", "country": "Nigeria", "search": "https://nigerialii.org/search/?q={q}"},
+    {"id": "ghalii", "name": "GhaLII", "country": "Ghana", "search": "https://ghalii.org/search/?q={q}"},
+    {"id": "kenyalaw", "name": "Kenya Law", "country": "Kenya", "search": "https://new.kenyalaw.org/search/?q={q}"},
+    {"id": "saflii", "name": "SAFLII", "country": "South Africa", "search": "https://www.saflii.org/cgi-bin/sinosrch-adw.cgi?query={q}"},
+    {"id": "ulii", "name": "ULII", "country": "Uganda", "search": "https://ulii.org/search/?q={q}"},
+    {"id": "commonlii", "name": "CommonLII", "country": "Commonwealth", "search": "https://www.commonlii.org/cgi-bin/sinosrch.cgi?query={q}"},
+]

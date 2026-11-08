@@ -385,16 +385,18 @@ class _SegmentedState<T> extends State<Segmented<T>> {
     Widget segment(int i) {
       final o = widget.options[i];
       final on = o.$1 == widget.value;
-      return GestureDetector(
+      // Pressable gives each segment keyboard focus, Enter/Space activation
+      // and screen-reader "button, selected" semantics.
+      return Pressable(
         key: _keys[i],
-        behavior: HitTestBehavior.opaque,
+        scale: 0.97,
+        selected: on,
         onTap: () {
           if (on) return;
-          Haptics.selection();
           widget.onChanged(o.$1);
         },
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
+        child: Semantics(
+          inMutuallyExclusiveGroup: true,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [

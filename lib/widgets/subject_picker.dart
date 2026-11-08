@@ -24,6 +24,9 @@ class SubjectSearch extends StatefulWidget {
 class _SubjectSearchState extends State<SubjectSearch> {
   final _q = TextEditingController();
 
+  /// A field picked to browse (Health & Medicine, Law & Government...).
+  String? _field;
+
   @override
   void dispose() {
     _q.dispose();
@@ -36,9 +39,11 @@ class _SubjectSearchState extends State<SubjectSearch> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final q = _q.text.trim();
-    final results = q.isEmpty
-        ? [for (final p in Subject.popular) Subject.lookup(p)!]
-        : Subject.search(q, limit: widget.maxResults);
+    final results = q.isNotEmpty
+        ? Subject.search(q, limit: widget.maxResults)
+        : _field != null
+            ? Subject.inField(_field!)
+            : [for (final p in Subject.popular) Subject.lookup(p)!];
     final exact = q.isNotEmpty && results.any((s) => s.label.toLowerCase() == q.toLowerCase());
     // Selected subjects that aren't in the current list stay visible at the front.
     final extra = [for (final s in widget.selected) if (!results.any((r) => r.label.toLowerCase() == s.toLowerCase())) s];
@@ -59,14 +64,31 @@ class _SubjectSearchState extends State<SubjectSearch> {
         textCapitalization: TextCapitalization.words,
         style: AppTheme.sans(fontSize: 15, color: c.ink),
         decoration: InputDecoration(
-          hintText: 'Search 130+ subjects or type your own',
+          hintText: 'Search ${Subject.catalog.length}+ subjects or type your own',
           prefixIcon: const Icon(Ic.search, size: 18),
           contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         ),
       ),
       const SizedBox(height: 14),
       if (q.isEmpty) ...[
-        Text('Popular', style: AppTheme.sans(fontSize: 12, fontWeight: FontWeight.w600, color: c.inkFaint)),
+        Text('Browse by field', style: AppTheme.sans(fontSize: 12, fontWeight: FontWeight.w600, color: c.inkFaint)),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            for (final f in ['Popular', ...Subject.fields])
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: AppChip(
+                  label: f,
+                  selected: (f == 'Popular' && _field == null) || f == _field,
+                  onTap: () => setState(() => _field = f == 'Popular' ? null : f),
+                ),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        Text(_field ?? 'Popular', style: AppTheme.sans(fontSize: 12, fontWeight: FontWeight.w600, color: c.inkFaint)),
         const SizedBox(height: 8),
       ],
       Wrap(spacing: 8, runSpacing: 8, children: [

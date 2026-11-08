@@ -52,7 +52,7 @@ class DscvrColors extends ThemeExtension<DscvrColors> {
     line: Color(0xFFD4D6DF),          // cool divider
     ink: Color(0xFF1D1F2B),           // deep navy-charcoal
     inkMuted: Color(0xFF5C5F72),      // slate prose
-    inkFaint: Color(0xFF9295A4),      // quiet grey
+    inkFaint: Color(0xFF686B7E),      // quiet grey, 4.8:1 on background (WCAG AA)
     inverseInk: Color(0xFFFCFCFD),
     danger: Color(0xFFC4392C),        // warm red
     success: Color(0xFF2D7D46),
@@ -69,10 +69,45 @@ class DscvrColors extends ThemeExtension<DscvrColors> {
     line: Color(0xFF363845),
     ink: Color(0xFFEBECF2),           // cool off-white
     inkMuted: Color(0xFFA4A7B8),
-    inkFaint: Color(0xFF6E7188),
+    inkFaint: Color(0xFF8E91A6),      // 5.6:1 on background (WCAG AA)
     inverseInk: Color(0xFF131418),
     danger: Color(0xFFE8786A),
     success: Color(0xFF6FC07E),
+    isDark: true,
+  );
+
+  /// For the high-contrast setting: near-black/white text, stronger lines.
+  static const lightHighContrast = DscvrColors(
+    background: Color(0xFFFFFFFF),
+    backgroundTint: Color(0xFFF4F4F6),
+    surface: Color(0xFFFFFFFF),
+    surfaceMuted: Color(0xFFEDEDF1),
+    chip: Color(0xFFDADBE2),
+    selection: Color(0xFFD6DAEA),
+    line: Color(0xFF6B6E80),
+    ink: Color(0xFF000000),
+    inkMuted: Color(0xFF26283A),
+    inkFaint: Color(0xFF3E4152),
+    inverseInk: Color(0xFFFFFFFF),
+    danger: Color(0xFFA51D12),
+    success: Color(0xFF1B5E2F),
+    isDark: false,
+  );
+
+  static const darkHighContrast = DscvrColors(
+    background: Color(0xFF000000),
+    backgroundTint: Color(0xFF0B0B0E),
+    surface: Color(0xFF111217),
+    surfaceMuted: Color(0xFF1C1D24),
+    chip: Color(0xFF2C2E38),
+    selection: Color(0xFF2E3242),
+    line: Color(0xFF9497AB),
+    ink: Color(0xFFFFFFFF),
+    inkMuted: Color(0xFFDCDDE6),
+    inkFaint: Color(0xFFC0C2D0),
+    inverseInk: Color(0xFF000000),
+    danger: Color(0xFFFF9A8C),
+    success: Color(0xFF8FE09D),
     isDark: true,
   );
 

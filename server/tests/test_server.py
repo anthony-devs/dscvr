@@ -479,3 +479,140 @@ def test_failure_reasons_are_specific():
     assert "out of credit" in ai.failure_reason(E("Your credit balance is too low", 400))
     assert "key" in ai.failure_reason(E("invalid x-api-key", 401))
     assert "busy" in ai.failure_reason(E("overloaded", 529))
+
+
+# ── Professional sources ─────────────────────────────────────────────
+
+class _Resp:
+    def __init__(self, data=None, text="", content=b""):
+        self._data, self.text, self.content, self.status_code = data, text, content or text.encode(), 200
+    def json(self):
+        return self._data
+    def raise_for_status(self):
+        pass
+
+
+def test_europepmc_normalises_results_and_builds_queries():
+    data = {"resultList": {"result": [{
+        "id": "123", "source": "MED", "pmid": "123", "doi": "10.1/x", "title": "Malaria in children.",
+        "authorString": "Okafor A, Bello B.", "pubYear": "2025", "abstractText": "<h4>Background</h4>Text here",
+        "journalInfo": {"journal": {"title": "Lancet"}}, "isOpenAccess": "Y",
+        "pubTypeList": {"pubType": ["Journal Article", "Practice Guideline"]},
+        "fullTextUrlList": {"fullTextUrl": [{"documentStyle": "pdf", "availabilityCode": "OA", "url": "https://x/p.pdf"}]},
+    }]}}
+    with mock.patch.object(discover.requests, "get", return_value=_Resp(data)) as get:
+        papers = discover.search_europepmc("malaria", 5, "date", guidelines=True)
+    q = get.call_args.kwargs["params"]["query"]
+    assert "TITLE_ABS:(malaria)" in q and "guideline" in q and "FIRST_PDATE" in q
+    p = papers[0]
+    assert p["title"] == "Malaria in children" and p["authors"] == ["Okafor A", "Bello B"]
+    assert p["venue"] == "Lancet" and p["pdfUrl"] == "https://x/p.pdf" and p["kind"] == "Practice Guideline"
+    assert p["summary"] == "Background Text here" and p["url"] == "https://europepmc.org/article/MED/123"
+
+
+UK_FEED = b"""<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:tna="https://caselaw.nationalarchives.gov.uk">
+<entry><title>A v B</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2026/1" rel="alternate"/>
+<link href="https://assets/x.pdf" rel="alternate" type="application/pdf"/><published>2026-01-02T00:00:00+00:00</published>
+<author><name>United Kingdom Supreme Court</name></author><tna:identifier slug="uksc/2026/1" type="ukncn">[2026] UKSC 1</tna:identifier>
+</entry></feed>"""
+
+
+def test_uk_caselaw_reads_citation_court_and_pdf():
+    with mock.patch.object(discover.requests, "get", return_value=_Resp(content=UK_FEED, text=UK_FEED.decode())):
+        cases = discover.search_uk_caselaw("contract", 5)
+    c = cases[0]
+    assert c["title"] == "A v B" and c["citation"] == "[2026] UKSC 1" and c["court"] == "United Kingdom Supreme Court"
+    assert c["pdfUrl"] == "https://assets/x.pdf" and c["year"] == 2026 and c["source"] == "uk_caselaw"
+
+
+def test_discover_routes_new_sources(client):
+    with mock.patch("app.search_europepmc", return_value=[{"title": "x"}]) as pmc, \
+         mock.patch("app.search_uk_caselaw", return_value=[{"title": "y"}]) as uk:
+        assert client.get("/discover?source=europepmc&q=asthma-test-1&type=guidelines").get_json()["papers"][0]["title"] == "x"
+        assert pmc.call_args.args[3] is True
+        assert client.get("/discover?source=uk_caselaw&q=tort-test-1").get_json()["papers"][0]["title"] == "y"
+
+
+# ── Study tools ──────────────────────────────────────────────────────
+
+def test_study_validates_and_cleans_quiz(client):
+    raw = {"questions": [
+        {"question": "Q1", "options": ["a", "b", "c", "d"], "answer": 2, "explanation": "e"},
+        {"question": "Q2", "options": ["a", "b"], "answer": 0, "explanation": "bad: two options"},
+        {"question": "Q3", "options": ["a", "b", "c", "d"], "answer": 7, "explanation": "bad index"},
+    ]}
+    with mock.patch.object(ai, "build_context", return_value=[{"type": "text", "text": "<library/>"}]), \
+         mock.patch.object(ai, "complete", return_value=raw):
+        r = client.post("/study", json={"itemId": "m1", "kind": "quiz"}, headers=AUTH)
+    assert r.status_code == 200
+    qs = r.get_json()["questions"]
+    assert [q["question"] for q in qs] == ["Q1"]
+    assert client.recorded.call_args.args[1] == "study"
+
+
+def test_study_rejects_unknown_kind_and_missing_item(client):
+    assert client.post("/study", json={"itemId": "m1", "kind": "essay"}, headers=AUTH).status_code == 400
+    with mock.patch.object(ai, "build_context", return_value=[]):
+        assert client.post("/study", json={"itemId": "nope", "kind": "brief"}, headers=AUTH).status_code == 404
+
+
+def test_profession_shapes_the_system_prompt():
+    assert "ratio decidendi" in ai.system_prompt("detailed", "students", profession="law")
+    assert "never give a diagnosis" in ai.system_prompt("detailed", "students", profession="medicine")
+    assert "ratio" not in ai.system_prompt("detailed", "students", profession="unknown")
+
+
+# ── Alerts ───────────────────────────────────────────────────────────
+
+class _FakeDoc:
+    def __init__(self, store, path):
+        self.store, self.path = store, path
+    def get(self):
+        d = self.store.get(self.path)
+        return mock.Mock(to_dict=lambda: d, exists=d is not None)
+
+
+class _FakeDB:
+    def __init__(self):
+        self.store, self.writes = {}, {}
+    def document(self, path):
+        return _FakeDoc(self.store, path)
+    def batch(self):
+        db = self
+        class B:
+            def set(self, ref, data, merge=False):
+                db.writes[ref.path] = data
+            def commit(self):
+                db.store.update(db.writes)
+        return B()
+
+
+def test_alerts_first_run_is_quiet_then_only_new_items():
+    import alerts
+    db = _FakeDB()
+    profile = {"alerts": {"enabled": True, "subjects": [{"label": "Nursing", "source": "europepmc", "query": "nursing"}]}}
+    first = [{"source": "europepmc", "id": f"MED:{i}", "title": f"P{i}"} for i in range(3)]
+    with mock.patch.dict(alerts.SOURCES, {"europepmc": lambda q, n: first}), mock.patch.object(discover, "cached", lambda k, f: f()):
+        got = alerts.run_for_user("u1", profile, db)
+    assert len(got) == 1  # first run: one per subject, the rest remembered as seen
+    second = [{"source": "europepmc", "id": "MED:9", "title": "New"}] + first
+    db.writes.clear()
+    with mock.patch.dict(alerts.SOURCES, {"europepmc": lambda q, n: second}), mock.patch.object(discover, "cached", lambda k, f: f()):
+        got = alerts.run_for_user("u1", profile, db)
+    assert [p["title"] for p in got] == ["New"]
+    assert any(k.startswith("users/u1/alerts/") for k in db.writes)
+
+
+def test_alerts_off_does_nothing():
+    import alerts
+    assert alerts.run_for_user("u1", {"alerts": {"enabled": False}}, _FakeDB()) == []
+
+
+def test_alerts_run_needs_the_cron_secret(client):
+    with mock.patch.dict(os.environ, {"CRON_SECRET": "s3cret"}):
+        assert client.post("/alerts/run").status_code == 403
+        assert client.post("/alerts/run", headers={"X-Cron-Secret": "wrong"}).status_code == 403
+        with mock.patch("alerts.run", return_value={"users": 0}):
+            assert client.post("/alerts/run", headers={"X-Cron-Secret": "s3cret"}).status_code == 200
+    with mock.patch.dict(os.environ, {"CRON_SECRET": ""}):
+        assert client.post("/alerts/run", headers={"X-Cron-Secret": ""}).status_code == 403

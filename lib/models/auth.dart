@@ -1,3 +1,4 @@
+import 'package:dscvr/models/profession.dart';
 import 'dart:async';
 import 'package:dscvr/models/edition.dart';
 import 'package:dscvr/models/file.dart';
@@ -27,6 +28,13 @@ class DSCVRUser {
   final String role;
   final List<String> interests;
   final bool onboarded;
+
+  /// What the user studies or does; tunes subjects, sources and Pinda.
+  final Profession? profession;
+
+  /// New items in followed subjects (server writes them to users/{uid}/alerts).
+  final bool alertsOn;
+  final bool alertsEmail;
 
   // Edition and organisation (enterprise)
   final Edition edition;
@@ -65,6 +73,9 @@ class DSCVRUser {
     this.role = 'Researcher',
     this.interests = const [],
     this.onboarded = false,
+    this.profession,
+    this.alertsOn = false,
+    this.alertsEmail = false,
     this.edition = Edition.researchers,
     this.orgId,
     this.orgRole,
@@ -129,6 +140,9 @@ class DSCVRUser {
     List<String>? interests,
     bool? onboarded,
     Edition? edition,
+    Profession? profession,
+    bool? alertsOn,
+    bool? alertsEmail,
   }) =>
       DSCVRUser(
         id: id,
@@ -147,6 +161,9 @@ class DSCVRUser {
         interests: interests ?? this.interests,
         onboarded: onboarded ?? this.onboarded,
         edition: edition ?? this.edition,
+        profession: profession ?? this.profession,
+        alertsOn: alertsOn ?? this.alertsOn,
+        alertsEmail: alertsEmail ?? this.alertsEmail,
         orgId: orgId,
         orgRole: orgRole,
         createdAt: createdAt,
@@ -168,6 +185,7 @@ class DSCVRUser {
         'interests': interests,
         'onboarded': onboarded,
         'edition': edition.name,
+        if (profession != null) 'profession': profession!.id,
         'subscription': subscription.toMap(),
         'createdAt': createdAt.toIso8601String(),
       };
@@ -185,6 +203,10 @@ class DSCVRUser {
         role: map['role'] as String? ?? 'Researcher',
         interests: (map['interests'] as List?)?.whereType<String>().toList() ?? const [],
         onboarded: map['onboarded'] as bool? ?? false,
+        profession: Profession.fromId(map['profession'] as String?) ??
+            Profession.guess((map['interests'] as List?)?.whereType<String>() ?? const []),
+        alertsOn: (map['alerts'] as Map?)?['enabled'] as bool? ?? false,
+        alertsEmail: (map['alerts'] as Map?)?['email'] as bool? ?? false,
         edition: (map['orgId'] as String?)?.isNotEmpty == true
             ? Edition.enterprise
             : Edition.parse(map['edition'] as String?, role: map['role'] as String?),
@@ -297,6 +319,7 @@ class DSCVRAuth {
     required String role,
     required List<String> interests,
     required Edition edition,
+    Profession? profession,
   }) async {
     await _firestore.collection('users').doc(uid).set({
       'id': uid,
@@ -305,6 +328,7 @@ class DSCVRAuth {
       'role': role,
       'interests': interests,
       'edition': edition.name,
+      if (profession != null) 'profession': profession.id,
       'onboarded': true,
     }, SetOptions(merge: true));
     if (displayName.isNotEmpty) {
@@ -535,6 +559,18 @@ class DSCVRAuth {
   /// set by the server when the user creates or joins an organisation.
   Future<void> setEdition(String uid, Edition edition) =>
       _firestore.collection('users').doc(uid).set({'edition': edition.name}, SetOptions(merge: true));
+
+  Future<void> setProfession(String uid, Profession profession) =>
+      _firestore.collection('users').doc(uid).set({'profession': profession.id}, SetOptions(merge: true));
+
+  Future<void> setInterests(String uid, List<String> interests) =>
+      _firestore.collection('users').doc(uid).set({'interests': interests}, SetOptions(merge: true));
+
+  /// What the daily alerts job watches. subjects: [{label, source, query}].
+  Future<void> setAlerts(String uid, {required bool enabled, required bool email, required List<Map<String, String>> subjects}) =>
+      _firestore.collection('users').doc(uid).set({
+        'alerts': {'enabled': enabled, 'email': email, 'subjects': subjects},
+      }, SetOptions(merge: true));
 
   Future<void> updatePreferences({
     required String uid,

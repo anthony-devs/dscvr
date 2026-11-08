@@ -2,7 +2,8 @@
 """Server setup helpers.
 
     python manage.py hash-password   prompts for the admin password, prints ADMIN_PASSWORD_HASH
-    python manage.py gen-secret      a random value for ADMIN_KEY, SESSION_SECRET or DEV_API_SECRET
+    python manage.py gen-secret      a random value for ADMIN_KEY, SESSION_SECRET, DEV_API_SECRET or CRON_SECRET
+    python manage.py alerts          finds new items for everyone with alerts on (run daily)
 """
 import getpass
 import secrets
@@ -15,6 +16,13 @@ def main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else ""
     if cmd == "gen-secret":
         print(secrets.token_urlsafe(48))
+        return 0
+    if cmd == "alerts":
+        from config import Config
+        from security import init_firebase
+        import alerts
+        init_firebase(Config.FIREBASE_PROJECT_ID)
+        print(alerts.run())
         return 0
     if cmd == "hash-password":
         user = input("Admin username (ADMIN_USERNAME): ").strip().lower()

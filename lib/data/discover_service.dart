@@ -10,15 +10,45 @@ import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 
 enum PaperSource {
-  arxiv('arXiv', 'arxiv'),
-  semanticScholar('Semantic Scholar', 'semantic_scholar'),
-  openAlex('All fields', 'openalex');
+  openAlex('All fields', 'openalex', 'Journals and books in every discipline'),
+  europePmc('Medicine & health', 'europepmc', 'PubMed, PMC and clinical guidelines'),
+  ukCaseLaw('UK case law', 'uk_caselaw', 'Judgments from UK courts (Find Case Law)'),
+  arxiv('arXiv', 'arxiv', 'Preprints in science, maths and computing'),
+  semanticScholar('Semantic Scholar', 'semantic_scholar', 'Papers with citation counts');
 
-  const PaperSource(this.label, this.key);
+  const PaperSource(this.label, this.key, this.blurb);
   final String label;
 
   /// Name the server uses for this source.
   final String key;
+  final String blurb;
+
+  static PaperSource forFeed(Feed f) => switch (f) {
+        Feed.arxiv => arxiv,
+        Feed.europepmc => europePmc,
+        Feed.caselaw => ukCaseLaw,
+        Feed.openalex => openAlex,
+      };
+}
+
+/// Free legal information institutes. Their terms don't allow automated
+/// search or AI use, so DSCVR opens their own search pages instead.
+class LawLibrary {
+  const LawLibrary(this.name, this.country, this._search);
+  final String name;
+  final String country;
+  final String _search;
+
+  Uri searchUri(String q) => Uri.parse(_search.replaceAll('{q}', Uri.encodeQueryComponent(q)));
+
+  static const all = [
+    LawLibrary('NigeriaLII', 'Nigeria', 'https://nigerialii.org/search/?q={q}'),
+    LawLibrary('GhaLII', 'Ghana', 'https://ghalii.org/search/?q={q}'),
+    LawLibrary('Kenya Law', 'Kenya', 'https://new.kenyalaw.org/search/?q={q}'),
+    LawLibrary('SAFLII', 'South Africa', 'https://www.saflii.org/cgi-bin/sinosrch-adw.cgi?query={q}'),
+    LawLibrary('ULII', 'Uganda', 'https://ulii.org/search/?q={q}'),
+    LawLibrary('CommonLII', 'Commonwealth', 'https://www.commonlii.org/cgi-bin/sinosrch.cgi?query={q}'),
+  ];
 }
 
 
@@ -31,55 +61,59 @@ class DiscoverService {
   DiscoverService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
-  Future<List<Paper>> search(String query, {PaperSource source = PaperSource.arxiv, int limit = 20}) {
+  Future<List<Paper>> search(String query, {PaperSource source = PaperSource.openAlex, int limit = 20, bool guidelines = false}) {
     final q = source == PaperSource.arxiv ? 'all:${query.trim()}' : query.trim();
-    return _fetch(source, q, sortByDate: false, limit: limit);
+    return _fetch(source, q, sortByDate: false, limit: limit, guidelines: guidelines);
   }
 
-  /// Newest papers in a subject: arXiv preprints where arXiv covers the
-  /// subject, otherwise recent journal articles from OpenAlex (any field).
-  Future<List<Paper>> latest(Subject subject, {int limit = 20}) => subject.usesArxiv
-      ? _fetch(PaperSource.arxiv, subject.arxiv!, sortByDate: true, limit: limit)
-      : _fetch(PaperSource.openAlex, subject.label, sortByDate: true, limit: limit);
+  /// Newest items in a subject from the subject's feed: arXiv preprints,
+  /// Europe PMC for health, UK judgments for law, OpenAlex for the rest.
+  Future<List<Paper>> latest(Subject subject, {int limit = 20, bool? guidelines}) =>
+      _fetch(PaperSource.forFeed(subject.feed), subject.searchText,
+          sortByDate: true, limit: limit, guidelines: guidelines ?? subject.guidelines);
 
   /// Results are cached for 10 minutes so switching subjects back and forth
   /// is instant and we stay well inside the providers' rate limits.
   static const _ttl = Duration(minutes: 10);
   final _cache = <String, (DateTime, List<Paper>)>{};
 
-  Future<List<Paper>> _fetch(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
+  Future<List<Paper>> _fetch(PaperSource source, String q,
+      {required bool sortByDate, required int limit, bool guidelines = false}) async {
     if (Env.demo) return _demoPapers(q);
 
-    final key = '${source.key}|$q|$sortByDate|$limit';
+    final key = '${source.key}|$q|$sortByDate|$limit|$guidelines';
     final hit = _cache[key];
     if (hit != null && DateTime.now().difference(hit.$1) < _ttl) return hit.$2;
 
-    final papers = await _fetchUncached(source, q, sortByDate: sortByDate, limit: limit);
+    final papers = await _fetchUncached(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines);
     if (_cache.length > 100) _cache.remove(_cache.keys.first);
     _cache[key] = (DateTime.now(), papers);
     return papers;
   }
 
-  Future<List<Paper>> _fetchUncached(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
+  Future<List<Paper>> _fetchUncached(PaperSource source, String q,
+      {required bool sortByDate, required int limit, bool guidelines = false}) async {
     // Browsers block direct calls to arXiv and Semantic Scholar (no CORS
     // headers, plus shared rate limits), so the web build always goes through
     // the DSCVR server. Native apps try the provider first and fall back.
-    if (!kIsWeb && source != PaperSource.openAlex) {
+    if (!kIsWeb && (source == PaperSource.arxiv || source == PaperSource.semanticScholar)) {
       try {
         return await _direct(source, q, sortByDate: sortByDate, limit: limit);
       } catch (_) {
         // Fall through to the server.
       }
     }
-    return _viaServer(source, q, sortByDate: sortByDate, limit: limit);
+    return _viaServer(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines);
   }
 
-  Future<List<Paper>> _viaServer(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
+  Future<List<Paper>> _viaServer(PaperSource source, String q,
+      {required bool sortByDate, required int limit, bool guidelines = false}) async {
     final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
       'source': source.key,
       'q': q,
       'sort': sortByDate ? 'date' : 'relevance',
       'limit': '$limit',
+      if (guidelines) 'type': 'guidelines',
     });
     final http.Response res;
     try {

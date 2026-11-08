@@ -9,6 +9,8 @@ import 'package:dscvr/screens/add/add_material_sheet.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/item_actions.dart';
 import 'package:dscvr/screens/reader/related_panel.dart';
+import 'package:dscvr/screens/reader/study_panel.dart';
+import 'package:dscvr/widgets/cite_sheet.dart';
 import 'package:dscvr/screens/pinda/pinda_chat.dart';
 import 'package:dscvr/screens/reader/notes_panel.dart';
 import 'package:dscvr/screens/reader/note_editor.dart';
@@ -28,7 +30,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum _Pane { read, notes, pinda, parliament, related }
+enum _Pane { read, notes, pinda, study, parliament, related }
 
 /// Opens a single material: the content on the left, Pinda and margin
 /// notes on the right (wide screens) or as tabs (phones).
@@ -175,6 +177,7 @@ class _ReaderPageState extends State<ReaderPage> {
                   content,
                   NotesPanel(item: item),
                   PindaChat(key: _chatKey, controller: pinda, compact: true),
+                  StudyPanel(item: item),
                   parliamentPanel,
                 ],
               ),
@@ -190,6 +193,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       (_Pane.read, 'Read', Ic.book),
                       (_Pane.notes, 'Notes', Ic.notebook),
                       (_Pane.pinda, 'Pinda', Ic.pinda),
+                      (_Pane.study, 'Study', Ic.exam),
                       (_Pane.parliament, 'Check', Ic.scale),
                     ],
                     value: _mobilePane,
@@ -309,6 +313,12 @@ class _ReaderPageState extends State<ReaderPage> {
             onPressed: () => launchUrl(Uri.parse(external), mode: LaunchMode.externalApplication),
             icon: const Icon(Ic.external, size: 19),
           ),
+        if (item.kind != MaterialKind.youtube) _ListenButton(item: item),
+        AppIconButton(
+          tooltip: 'Cite',
+          onPressed: () => showCiteSheet(context, CiteSource.fromItem(item)),
+          icon: const Icon(Ic.quote, size: 19),
+        ),
         Builder(
           builder: (ctx) => AppIconButton(
             tooltip: 'More',
@@ -356,8 +366,9 @@ class _SidePanel extends StatelessWidget {
     final related = item.kind == MaterialKind.paper || item.kind == MaterialKind.pdf;
     final activePaneIndex = switch (pane) {
       _Pane.notes => 1,
-      _Pane.parliament => 2,
-      _Pane.related => related ? 3 : 0,
+      _Pane.study => 2,
+      _Pane.parliament => 3,
+      _Pane.related => related ? 4 : 0,
       _ => 0,
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -366,11 +377,14 @@ class _SidePanel extends StatelessWidget {
         child: Row(children: [
           Expanded(
             child: Segmented<_Pane>(
+              // Five tabs fit the panel as text; icons would push the last one off.
+              expand: true,
               options: [
-                (_Pane.pinda, 'Pinda', Ic.pinda),
-                (_Pane.notes, item.noteCount > 0 ? 'Notes  ${item.noteCount}' : 'Notes', Ic.notebook),
-                (_Pane.parliament, 'Check', Ic.scale),
-                if (related) (_Pane.related, 'Related', Ic.discover),
+                (_Pane.pinda, 'Pinda', null),
+                (_Pane.notes, item.noteCount > 0 ? 'Notes ${item.noteCount}' : 'Notes', null),
+                (_Pane.study, 'Study', null),
+                (_Pane.parliament, 'Check', null),
+                if (related) (_Pane.related, 'Related', null),
               ],
               value: pane == _Pane.read || (pane == _Pane.related && !related) ? _Pane.pinda : pane,
               onChanged: onPane,
@@ -382,10 +396,41 @@ class _SidePanel extends StatelessWidget {
       Expanded(
         child: IndexedStack(
           index: activePaneIndex,
-          children: [chat, NotesPanel(item: item), parliament, if (related) RelatedPanel(item: item)],
+          children: [chat, NotesPanel(item: item), StudyPanel(item: item), parliament, if (related) RelatedPanel(item: item)],
         ),
       ),
     ]);
+  }
+}
+
+/// Reads the item aloud (its text, or its abstract for PDFs), at the speed
+/// set in Settings > Accessibility.
+class _ListenButton extends StatelessWidget {
+  const _ListenButton({required this.item});
+  final LibraryItem item;
+
+  String get _text {
+    final body = item.content.trim().isNotEmpty ? item.content : item.summary;
+    return '${item.title}. ${item.authors.isNotEmpty ? 'By ${item.authors.take(3).join(', ')}. ' : ''}$body';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final voice = context.services.voice;
+    return ListenableBuilder(
+      listenable: voice,
+      builder: (context, _) {
+        final on = voice.reading;
+        final hasText = item.content.trim().isNotEmpty || item.summary.trim().isNotEmpty;
+        return AppIconButton(
+          tooltip: on ? 'Stop reading aloud' : (hasText ? 'Listen' : 'Nothing to read aloud yet'),
+          onPressed: !hasText && !on
+              ? null
+              : () => on ? voice.stopReading() : voice.readAloud(_text, rate: context.services.settings.speechRate),
+          icon: Icon(on ? Ic.stopCircle : Ic.headphones, size: 19),
+        );
+      },
+    );
   }
 }
 

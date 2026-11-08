@@ -39,8 +39,15 @@ service cloud.firestore {
       match /{collection}/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
-          && collection in ['categories', 'topics', 'materials', 'conversations', 'reports', 'sessions', 'devices']
+          && collection in ['categories', 'topics', 'materials', 'conversations', 'reports', 'sessions', 'devices', 'studySets']
           && request.resource.data.size() < 60;
+      }
+
+      // Subject alerts are written by the server; users can only mark them
+      // read or delete them. users/{uid}/private/* is server-only.
+      match /alerts/{alertId} {
+        allow update: if isOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       }
 
       match /materials/{itemId}/notes/{noteId} {

@@ -199,7 +199,6 @@ class _PermissionPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     return Segmented<SharePermission>(
       value: value,
       onChanged: onChanged,

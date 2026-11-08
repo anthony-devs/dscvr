@@ -123,18 +123,43 @@ class _DscvrAppState extends State<DscvrApp> {
       library: _library,
       child: ListenableBuilder(
         listenable: widget.settings,
-        builder: (context, _) => MaterialApp.router(
-          title: 'DSCVR',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
-          darkTheme: AppTheme.dark(),
-          themeMode: widget.settings.themeMode,
-          themeAnimationDuration: const Duration(milliseconds: 280),
-          routerConfig: _router,
-          scrollBehavior: const DscvrScrollBehavior(),
-          // Sileo-style toasts float above every route, sheet and dialog.
-          builder: (context, child) => Toaster(child: child ?? const SizedBox.shrink()),
-        ),
+        builder: (context, _) {
+          final s = widget.settings;
+          AppTheme.fontChoice = s.font.name;
+          AppTheme.lineScale = s.lineSpacing;
+          final system = MediaQuery.maybeOf(context);
+          final contrast = s.highContrast || (system?.highContrast ?? false);
+          final still = s.reduceMotion || (system?.disableAnimations ?? false);
+          return MaterialApp.router(
+            title: 'DSCVR',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(highContrast: contrast, reduceMotion: still),
+            darkTheme: AppTheme.dark(highContrast: contrast, reduceMotion: still),
+            highContrastTheme: AppTheme.light(highContrast: true, reduceMotion: still),
+            highContrastDarkTheme: AppTheme.dark(highContrast: true, reduceMotion: still),
+            themeMode: s.themeMode,
+            themeAnimationDuration: still ? Duration.zero : const Duration(milliseconds: 280),
+            routerConfig: _router,
+            scrollBehavior: const DscvrScrollBehavior(),
+            // Text size multiplies the system setting; reduce motion is
+            // passed down so animated widgets can skip their animations.
+            builder: (context, child) {
+              final mq = MediaQuery.of(context);
+              final base = mq.textScaler.scale(1);
+              return MediaQuery(
+                data: mq.copyWith(
+                  textScaler: TextScaler.linear((base * s.textScale).clamp(0.8, 2.2)),
+                  disableAnimations: still,
+                ),
+                // A new font or spacing rebuilds every text style once.
+                child: KeyedSubtree(
+                  key: ValueKey('${s.font.name}/${s.lineSpacing}'),
+                  child: Toaster(child: child ?? const SizedBox.shrink()),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

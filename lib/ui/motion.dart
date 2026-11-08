@@ -64,6 +64,7 @@ class Pressable extends StatefulWidget {
     this.builder,
     this.semanticLabel,
     this.enabled = true,
+    this.selected,
   });
 
   final Widget child;
@@ -74,6 +75,9 @@ class Pressable extends StatefulWidget {
   final bool haptic;
   final bool enabled;
   final String? semanticLabel;
+
+  /// For toggles and chips: announced as selected or not by screen readers.
+  final bool? selected;
 
   /// Optional builder receiving hover/pressed state for custom styling.
   final Widget Function(BuildContext context, bool hovered, bool pressed, Widget child)? builder;
@@ -95,10 +99,12 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
     super.dispose();
   }
 
+  bool get _still => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
   void _down() {
     if (!_active) return;
     setState(() => _pressed = true);
-    springTo(_c, widget.scale);
+    if (!_still) springTo(_c, widget.scale);
   }
 
   void _up() {
@@ -128,6 +134,7 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
     return Semantics(
       button: _active,
       enabled: _active,
+      selected: widget.selected,
       label: widget.semanticLabel,
       child: FocusableActionDetector(
         enabled: _active,

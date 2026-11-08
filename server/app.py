@@ -5,7 +5,7 @@ Endpoints:
   GET   /pricing                     Public pricing (all editions)
 
   Research
-  GET   /discover                    arXiv / Semantic Scholar / OpenAlex search proxy
+  GET   /discover                    arXiv / Semantic Scholar / OpenAlex / Europe PMC / UK case law search
   GET   /arxiv?ref=                  One arXiv paper by id or URL
   GET   /related                     Related papers (Semantic Scholar)
   POST  /pdf/import                  Copy a public PDF into the user's storage
@@ -65,7 +65,8 @@ from devapi import make_devapi
 from metrics import metrics
 from staff import Staff
 from config import Config
-from discover import arxiv_by_id, cached, parse_arxiv_id, related_papers, s2_key_for, search_arxiv, search_semantic_scholar, search_openalex
+from discover import (arxiv_by_id, cached, parse_arxiv_id, related_papers, s2_key_for, search_arxiv, search_europepmc,
+                      search_openalex, search_semantic_scholar, search_uk_caselaw)
 from fetch import UnsafeUrl, fetch_pdf
 from payments import verify_google_pay_token
 from security import (
@@ -84,7 +85,7 @@ logger = logging.getLogger(__name__)
 SCOPES = {"general", "category", "topic", "material", "selection"}
 AI_PATHS = {"/pinda", "/reports/draft", "/sessions/summary", "/parliament"}
 # Paths that keep working during maintenance: staff tools, and signals that cost nothing.
-MAINTENANCE_OPEN = ("/admin", "/internal/dev", "/health", "/healthz", "/pricing", "/activity", "/billing/paystack")
+MAINTENANCE_OPEN = ("/admin", "/internal/dev", "/health", "/healthz", "/pricing", "/activity", "/billing/paystack", "/alerts/run")
 
 
 def _ids(value) -> list[str]:
@@ -99,6 +100,14 @@ def _edition(uid: str) -> str:
         return "enterprise"
     edition = profile.get("edition")
     return edition if edition in ("students", "researchers", "enterprise") else "researchers"
+
+
+PROFESSIONS = {"medicine", "nursing", "pharmacy", "public_health", "law", "engineering", "business", "education"}
+
+
+def _profession(uid: str) -> str | None:
+    p = orgs.user_profile(uid).get("profession")
+    return p if p in PROFESSIONS else None
 
 
 def _sse_response(generator) -> Response:
@@ -192,6 +201,12 @@ def create_app(config: Config | None = None) -> Flask:
                 papers = cached(("s2", q, limit), lambda: search_semantic_scholar(q, limit))
             elif source == "openalex":
                 papers = cached(("oa", q, sort, limit), lambda: search_openalex(q, limit, sort))
+            elif source == "europepmc":
+                guidelines = request.args.get("type") == "guidelines"
+                papers = cached(("pmc", q, sort, limit, guidelines), lambda: search_europepmc(q, limit, sort, guidelines))
+            elif source == "uk_caselaw":
+                court = sanitize(request.args.get("court", ""), 20)
+                papers = cached(("ukcl", q, limit, court), lambda: search_uk_caselaw(q, limit, court))
             else:
                 papers = cached(("arxiv", q, sort, limit), lambda: search_arxiv(q, sort, limit))
             resp = jsonify(papers=papers)
@@ -297,7 +312,7 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify(error="Ask a question first."), 400
         style = "concise" if body.get("style") == "concise" else "detailed"
         voice = bool(body.get("voice"))
-        system = ai.system_prompt(style, _edition(uid), voice=voice)
+        system = ai.system_prompt(style, _edition(uid), voice=voice, profession=_profession(uid))
         max_tokens = 700 if voice else (1500 if style == "concise" else 4096)
 
         model = plans.model_for(plans.plan_of(orgs.user_profile(uid)), "chat")
@@ -327,7 +342,8 @@ def create_app(config: Config | None = None) -> Flask:
         prompt = ai.report_prompt(sanitize(body.get("kind", ""), 40), sanitize(body.get("title", ""), 200),
                                   sanitize(body.get("instructions", ""), 2000))
         messages = [{"role": "user", "content": [*context, {"type": "text", "text": prompt}]}]
-        system = ai.REPORT_SYSTEM + "\n\n" + ai.EDITION.get(_edition(uid), "")
+        system = "\n\n".join(x for x in (ai.REPORT_SYSTEM, ai.EDITION.get(_edition(uid), ""),
+                                          ai.PROFESSION.get(_profession(uid) or "", "")) if x)
 
         model = plans.model_for(plans.plan_of(orgs.user_profile(uid)), "heavy")
 
@@ -363,6 +379,81 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify(error=ai.failure_reason(e)), 502
         orgs.record_usage(g.uid, "summary", usage.get("input", 0), usage.get("output", 0), model)
         return jsonify(summary=summary)
+
+    @app.route("/study", methods=["POST"])
+    @require_auth
+    def study():
+        """Flashcards, exam questions, a case brief or an evidence summary
+        for one library item. Body: {itemId, kind, count?}."""
+        if (r := ai_guard("study", 16 * 1024)):
+            return r
+        body = request.get_json(silent=True) or {}
+        kind = body.get("kind")
+        if kind not in ai.STUDY_TOOLS:
+            return jsonify(error="Pick flashcards, quiz, brief or evidence."), 400
+        item_id = sanitize(body.get("itemId") or "", 64)
+        if not item_id:
+            return jsonify(error="Open an item first."), 400
+        uid = g.uid
+        try:
+            context = ai.build_context(uid, "material", item_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("study context failed")
+            return jsonify(error="Could not load that item."), 500
+        if not context:
+            return jsonify(error="That item isn't in your library."), 404
+        try:
+            count = int(body.get("count") or 12)
+        except (TypeError, ValueError):
+            count = 12
+        usage: dict[str, int] = {}
+        model = plans.model_for(plans.plan_of(orgs.user_profile(uid)), "heavy")
+        try:
+            result = ai.study(kind, context, usage, count=count, edition=_edition(uid), profession=_profession(uid), model=model)
+        except ai.AIUnavailable as e:
+            return jsonify(error=str(e)), 503
+        except Exception as e:  # noqa: BLE001
+            logger.exception("study failed")
+            return jsonify(error=ai.failure_reason(e)), 502
+        orgs.record_usage(uid, "study", usage.get("input", 0), usage.get("output", 0), model)
+        if kind == "quiz":
+            good = []
+            for q in result.get("questions") or []:
+                opts = [str(o) for o in (q.get("options") or [])][:4]
+                ans = q.get("answer")
+                if len(opts) == 4 and isinstance(ans, int) and 0 <= ans < 4 and q.get("question"):
+                    good.append({**q, "options": opts})
+            result = {"questions": good}
+        elif kind == "flashcards":
+            result = {"cards": [c for c in (result.get("cards") or []) if c.get("front") and c.get("back")]}
+        if not any(result.values()):
+            return jsonify(error="Pinda couldn't make that from this item. Try another one."), 502
+        return jsonify(kind=kind, **result)
+
+    @app.route("/alerts/run", methods=["POST"])
+    def alerts_run():
+        """Called once a day by a scheduler with the CRON_SECRET header."""
+        import hmac as _hmac
+        secret = os.getenv("CRON_SECRET", "")
+        given = request.headers.get("X-Cron-Secret", "")
+        if not secret or not _hmac.compare_digest(secret, given):
+            return jsonify(error="Not allowed."), 403
+        import alerts
+        return jsonify(alerts.run())
+
+    @app.route("/alerts/check", methods=["POST"])
+    @require_auth
+    def alerts_check():
+        """Lets a user fetch their alerts now (after turning them on)."""
+        if (r := limited("alerts", g.uid)):
+            return r
+        import alerts
+        try:
+            new = alerts.run_for_user(g.uid, orgs.user_profile(g.uid, fresh=True))
+        except Exception:  # noqa: BLE001
+            logger.exception("alerts check failed")
+            return jsonify(error="Couldn't check for new items right now."), 502
+        return jsonify(new=len(new))
 
     @app.route("/parliament", methods=["POST"])
     @require_auth

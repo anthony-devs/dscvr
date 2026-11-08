@@ -12,11 +12,13 @@ import 'package:dscvr/data/research_service.dart';
 import 'package:dscvr/models/workspace.dart';
 import 'package:dscvr/widgets/star_rating.dart';
 import 'package:dscvr/widgets/subject_picker.dart';
+import 'package:dscvr/widgets/cite_sheet.dart';
+import 'package:dscvr/models/profession.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Search arXiv and Semantic Scholar, browse fresh papers by subject, and
-/// save anything into the library.
+/// Search papers, clinical literature and case law, browse what's new in
+/// each subject, and save anything into the library.
 class DiscoverPage extends StatefulWidget {
   const DiscoverPage({super.key, this.initialQuery});
   final String? initialQuery;
@@ -27,7 +29,12 @@ class DiscoverPage extends StatefulWidget {
 
 class _DiscoverPageState extends State<DiscoverPage> {
   final _q = TextEditingController();
-  PaperSource _source = PaperSource.arxiv;
+  late PaperSource _source = switch (context.services.session.user.profession) {
+    Profession.law => PaperSource.ukCaseLaw,
+    final p? when p.isHealth => PaperSource.europePmc,
+    _ => PaperSource.openAlex,
+  };
+  bool _guidelines = false;
   Subject? _subject;
   List<Paper> _papers = const [];
   TopicSummary? _summary;
@@ -89,12 +96,16 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (mounted && id == _request) setState(() => _ratings = r);
   }
 
+  bool get _lowData => context.services.settings.lowData;
+  int get _limit => _lowData ? 10 : 20;
+
   void _search() {
     final q = _q.text.trim();
     if (q.isEmpty) return;
     setState(() => _subject = null);
     final svc = context.services.discover;
-    _run(() => svc.search(q, source: _source), summary: svc.summary(q));
+    _run(() => svc.search(q, source: _source, limit: _limit, guidelines: _guidelines && _source == PaperSource.europePmc),
+        summary: _lowData || _source == PaperSource.ukCaseLaw ? null : svc.summary(q));
   }
 
   /// Subjects picked here this visit, on top of the user's own.
@@ -132,8 +143,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _q.clear();
     });
     final svc = context.services.discover;
-    _run(() => svc.latest(s));
+    _run(() => svc.latest(s, limit: _limit, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc)));
   }
+
+  bool get _showLaw =>
+      _source == PaperSource.ukCaseLaw || (_subject?.isLaw ?? false) || context.services.session.user.profession == Profession.law;
+
+  String get _lawQuery => _q.text.trim().isNotEmpty ? _q.text.trim() : (_subject?.searchText ?? 'contract');
 
   @override
   Widget build(BuildContext context) {
@@ -162,14 +178,30 @@ class _DiscoverPageState extends State<DiscoverPage> {
       ]),
       const SizedBox(height: 12),
       Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Segmented<PaperSource>(
-          options: [for (final s in PaperSource.values) (s, s.label, null)],
-          value: _source,
-          onChanged: (s) {
-            setState(() => _source = s);
-            if (_q.text.trim().isNotEmpty) _search();
-          },
+        SizedBox(
+          width: 230,
+          child: AppSelect<PaperSource>(
+            options: [for (final s in PaperSource.values) SelectOption(s, s.label, subtitle: s.blurb)],
+            value: _source,
+            onChanged: (s) {
+              setState(() => _source = s);
+              if (_q.text.trim().isNotEmpty) _search();
+            },
+          ),
         ),
+        if (_source == PaperSource.europePmc || (_subject?.feed == Feed.europepmc))
+          AppChip(
+            label: 'Guidelines only',
+            selected: _guidelines,
+            onTap: () {
+              setState(() => _guidelines = !_guidelines);
+              if (_q.text.trim().isNotEmpty) {
+                _search();
+              } else if (_subject != null) {
+                _loadSubject(_subject!);
+              }
+            },
+          ),
         AppButton.ghost(
           size: BtnSize.sm,
           onPressed: () {
@@ -191,13 +223,24 @@ class _DiscoverPageState extends State<DiscoverPage> {
         AppChip(label: 'More subjects', leading: const Icon(Ic.add, size: 13), selected: false, onTap: _moreSubjects),
       ]),
       const SizedBox(height: 26),
+      if (_showLaw) ...[
+        _LawLibraries(query: _lawQuery),
+        const SizedBox(height: 22),
+      ],
       if (_summary != null && _summary!.extract.isNotEmpty) ...[
-        _SummaryCard(summary: _summary!),
+        _SummaryCard(summary: _summary!, showImage: !_lowData),
         const SizedBox(height: 22),
       ],
       SectionLabel(
         _subject != null
-            ? (_subject!.usesArxiv ? 'New in ${_subject!.label} on arXiv' : 'New in ${_subject!.label} across journals')
+            ? switch (_subject!.feed) {
+                Feed.arxiv => 'New in ${_subject!.label} on arXiv',
+                Feed.europepmc => _subject!.guidelines || _guidelines
+                    ? 'Recent guidelines in ${_subject!.label}'
+                    : 'Recent in ${_subject!.label} from Europe PMC',
+                Feed.caselaw => 'Latest UK judgments in ${_subject!.label}',
+                Feed.openalex => 'New in ${_subject!.label} across journals',
+              }
             : 'Results',
         count: _loading ? null : _papers.length,
       ),
@@ -219,9 +262,45 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 }
 
+/// Links to the free African and Commonwealth law libraries, which don't
+/// allow automated search, plus a pointer for subscribers' own law reports.
+class _LawLibraries extends StatelessWidget {
+  const _LawLibraries({required this.query});
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(Radii.lg), border: Border.all(color: c.line)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Search Nigerian and Commonwealth judgments', style: context.text.titleMedium),
+        const SizedBox(height: 4),
+        Text('Opens each free law library\'s own search for "$query". Save any judgment to your library with its link or PDF.',
+            style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted, height: 1.5)),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final lib in LawLibrary.all)
+            PillButton(
+              label: '${lib.name} · ${lib.country}',
+              icon: Ic.external,
+              onTap: () => launchUrl(lib.searchUri(query), mode: LaunchMode.externalApplication),
+            ),
+        ]),
+        const SizedBox(height: 12),
+        Text('Subscribe to NWLR, LawPavilion or another law report? Add the PDF of a report to your library and Pinda can brief it, '
+            'quiz you on it, and cite it.',
+            style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint, height: 1.5)),
+      ]),
+    );
+  }
+}
+
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.summary});
+  const _SummaryCard({required this.summary, this.showImage = true});
   final TopicSummary summary;
+  final bool showImage;
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +313,7 @@ class _SummaryCard extends StatelessWidget {
         border: Border.all(color: c.line),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (summary.thumbnail != null && !context.isCompact) ...[
+        if (showImage && summary.thumbnail != null && !context.isCompact) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(Radii.md),
             child: Image.network(summary.thumbnail!, width: 88, height: 88, fit: BoxFit.cover,
@@ -292,23 +371,46 @@ class _PaperRowState extends State<_PaperRow> {
   Widget build(BuildContext context) {
     final p = widget.paper;
     final c = context.colors;
-    final meta = [
-      if (p.year != null) '${p.year}',
-      if (p.venue != null && p.venue!.isNotEmpty) p.venue!,
-      if (p.citations != null) '${p.citations} citations',
-      if (p.subjects.isNotEmpty) p.subjects.first,
-    ].join('  ·  ');
+    final meta = p.isJudgment
+        ? [
+            if (p.citation != null) p.citation!,
+            if (p.court != null && p.court!.isNotEmpty) p.court!,
+            if (p.date != null) p.date!,
+          ].join('  ·  ')
+        : [
+            if (p.year != null) '${p.year}',
+            if (p.venue != null && p.venue!.isNotEmpty) p.venue!,
+            if (p.citations != null) '${p.citations} citations',
+            if (p.subjects.isNotEmpty) p.subjects.first,
+          ].join('  ·  ');
+    final badge = p.isJudgment
+        ? 'Judgment'
+        : p.isGuideline
+            ? 'Guideline'
+            : p.kind;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(p.title, style: AppTheme.serif(fontSize: 18, fontWeight: FontWeight.w600, color: c.ink, height: 1.3)),
-        const SizedBox(height: 6),
-        Text(
-          p.authors.length > 6 ? '${p.authors.take(6).join(', ')}, et al.' : p.authors.join(', '),
-          style: AppTheme.sans(fontSize: 13, color: c.inkMuted),
+        if (badge != null || p.openAccess) ...[
+          Wrap(spacing: 6, children: [
+            if (badge != null) _Tag(badge),
+            if (p.openAccess) const _Tag('Open access'),
+          ]),
+          const SizedBox(height: 8),
+        ],
+        Semantics(
+          header: true,
+          child: Text(p.title, style: AppTheme.serif(fontSize: 18, fontWeight: FontWeight.w600, color: c.ink, height: 1.3)),
         ),
+        if (!p.isJudgment) ...[
+          const SizedBox(height: 6),
+          Text(
+            p.authors.length > 6 ? '${p.authors.take(6).join(', ')}, et al.' : p.authors.join(', '),
+            style: AppTheme.sans(fontSize: 13, color: c.inkMuted),
+          ),
+        ],
         if (meta.isNotEmpty || (widget.rating?.count ?? 0) > 0) ...[
           const SizedBox(height: 6),
           Wrap(spacing: 10, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -316,7 +418,7 @@ class _PaperRowState extends State<_PaperRow> {
             if (meta.isNotEmpty) Text(meta, style: context.text.labelSmall),
           ]),
         ],
-        if (p.summary.isNotEmpty) ...[
+        if (p.summary.isNotEmpty && !p.isJudgment) ...[
           const SizedBox(height: 10),
           Pressable(
             onTap: () => setState(() => _expanded = !_expanded),
@@ -333,12 +435,28 @@ class _PaperRowState extends State<_PaperRow> {
             PillButton(label: 'PDF', icon: Ic.pdf, onTap: () => launchUrl(Uri.parse(p.pdfUrl!), mode: LaunchMode.externalApplication)),
           if (p.url != null)
             PillButton(label: p.sourceLabel, icon: Ic.external, onTap: () => launchUrl(Uri.parse(p.url!), mode: LaunchMode.externalApplication)),
+          PillButton(label: 'Cite', icon: Ic.quote, onTap: () => showCiteSheet(context, CiteSource.fromPaper(p))),
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 6),
             child: StarRating(value: widget.rating?.mine ?? 0, size: 16, onChanged: _rate),
           ),
         ]),
       ]),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.line)),
+      child: Text(text, style: AppTheme.sans(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.inkMuted)),
     );
   }
 }

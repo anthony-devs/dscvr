@@ -11,8 +11,28 @@ import 'tokens.dart';
 class AppTheme {
   AppTheme._();
 
-  static ThemeData light() => _build(DscvrColors.light, Brightness.light);
-  static ThemeData dark() => _build(DscvrColors.dark, Brightness.dark);
+  static ThemeData light({bool highContrast = false, bool reduceMotion = false}) =>
+      _build(highContrast ? DscvrColors.lightHighContrast : DscvrColors.light, Brightness.light, reduceMotion);
+  static ThemeData dark({bool highContrast = false, bool reduceMotion = false}) =>
+      _build(highContrast ? DscvrColors.darkHighContrast : DscvrColors.dark, Brightness.dark, reduceMotion);
+
+  /// Reading font chosen in Settings > Accessibility. Set by the app root
+  /// before building, so every text style picks it up.
+  static String fontChoice = 'standard';
+
+  /// Extra line spacing for body text (paragraphs set height >= 1.4).
+  static double lineScale = 1.0;
+
+  static double? _h(double? height) => height != null && height >= 1.4 ? height * lineScale : height;
+
+  static TextStyle _accessible({double? fontSize, FontWeight? fontWeight, Color? color, double? height,
+          double? letterSpacing, FontStyle? fontStyle}) =>
+      switch (fontChoice) {
+        'hyperlegible' => GoogleFonts.atkinsonHyperlegible(fontSize: fontSize, fontWeight: fontWeight, color: color,
+            height: _h(height), letterSpacing: letterSpacing, fontStyle: fontStyle),
+        _ => GoogleFonts.lexend(fontSize: fontSize, fontWeight: fontWeight, color: color, height: _h(height),
+            letterSpacing: letterSpacing, fontStyle: fontStyle),
+      };
 
   static TextStyle serif({
     double? fontSize,
@@ -22,14 +42,17 @@ class AppTheme {
     double? letterSpacing,
     FontStyle? fontStyle,
   }) =>
-      GoogleFonts.sourceSerif4(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color,
-        height: height,
-        letterSpacing: letterSpacing,
-        fontStyle: fontStyle,
-      );
+      fontChoice != 'standard'
+          ? _accessible(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height,
+              letterSpacing: letterSpacing, fontStyle: fontStyle)
+          : GoogleFonts.sourceSerif4(
+              fontSize: fontSize,
+              fontWeight: fontWeight,
+              color: color,
+              height: _h(height),
+              letterSpacing: letterSpacing,
+              fontStyle: fontStyle,
+            );
 
   static TextStyle sans({
     double? fontSize,
@@ -38,18 +61,20 @@ class AppTheme {
     double? height,
     double? letterSpacing,
   }) =>
-      GoogleFonts.inter(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color,
-        height: height,
-        letterSpacing: letterSpacing,
-      );
+      fontChoice != 'standard'
+          ? _accessible(fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing)
+          : GoogleFonts.inter(
+              fontSize: fontSize,
+              fontWeight: fontWeight,
+              color: color,
+              height: _h(height),
+              letterSpacing: letterSpacing,
+            );
 
   static TextStyle mono({double? fontSize, Color? color}) =>
       GoogleFonts.jetBrainsMono(fontSize: fontSize, color: color);
 
-  static ThemeData _build(DscvrColors c, Brightness brightness) {
+  static ThemeData _build(DscvrColors c, Brightness brightness, [bool reduceMotion = false]) {
     final scheme = ColorScheme(
       brightness: brightness,
       primary: c.ink,
@@ -84,7 +109,11 @@ class AppTheme {
       focusColor: c.selection,
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      pageTransitionsTheme: reduceMotion
+          ? PageTransitionsTheme(builders: {
+              for (final p in TargetPlatform.values) p: const _NoTransition(),
+            })
+          : const PageTransitionsTheme(builders: {
         // Native-feeling slide with swipe-back on phones and tablets.
         TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
         TargetPlatform.android: CupertinoPageTransitionsBuilder(),
@@ -97,16 +126,11 @@ class AppTheme {
       extensions: [c],
     );
 
+    // Through sans()/serif() so the reading-font setting reaches theme text too.
     TextStyle s(double size, FontWeight w, Color color, {double h = 1.4}) =>
-        GoogleFonts.inter(
-            fontSize: size, fontWeight: w, color: color, height: h);
+        sans(fontSize: size, fontWeight: w, color: color, height: h);
     TextStyle sf(double size, FontWeight w, {double h = 1.2}) =>
-        GoogleFonts.sourceSerif4(
-            fontSize: size,
-            fontWeight: w,
-            color: c.ink,
-            height: h,
-            letterSpacing: -0.2);
+        serif(fontSize: size, fontWeight: w, color: c.ink, height: h, letterSpacing: fontChoice == 'standard' ? -0.2 : 0);
 
     final text = TextTheme(
       displayLarge: sf(44, FontWeight.w600, h: 1.1),
@@ -254,4 +278,15 @@ class AppTheme {
       ),
     );
   }
+}
+
+
+/// Page changes without movement, for the reduce-motion setting.
+class _NoTransition extends PageTransitionsBuilder {
+  const _NoTransition();
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context, Animation<double> animation,
+          Animation<double> secondaryAnimation, Widget child) =>
+      child;
 }
