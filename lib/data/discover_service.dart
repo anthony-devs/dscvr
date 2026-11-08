@@ -36,24 +36,121 @@ enum PaperSource {
       };
 }
 
-/// Free legal information institutes. Their terms don't allow automated
-/// search or AI use, so DSCVR opens their own search pages instead.
+/// A free law library. Most don't allow automated search or AI use, so DSCVR
+/// opens their own search page instead of reading results itself.
 class LawLibrary {
-  const LawLibrary(this.name, this.country, this._search);
+  const LawLibrary(this.name, this.country, this._search, {this.reports = ''});
   final String name;
   final String country;
   final String _search;
 
+  /// What it holds, in a few words ("Judgments, legislation").
+  final String reports;
+
   Uri searchUri(String q) => Uri.parse(_search.replaceAll('{q}', Uri.encodeQueryComponent(q)));
 
-  static const all = [
-    LawLibrary('NigeriaLII', 'Nigeria', 'https://nigerialii.org/search/?q={q}'),
-    LawLibrary('GhaLII', 'Ghana', 'https://ghalii.org/search/?q={q}'),
-    LawLibrary('Kenya Law', 'Kenya', 'https://new.kenyalaw.org/search/?q={q}'),
-    LawLibrary('SAFLII', 'South Africa', 'https://www.saflii.org/cgi-bin/sinosrch-adw.cgi?query={q}'),
-    LawLibrary('ULII', 'Uganda', 'https://ulii.org/search/?q={q}'),
-    LawLibrary('CommonLII', 'Commonwealth', 'https://www.commonlii.org/cgi-bin/sinosrch.cgi?query={q}'),
+  static const nigeria = LawLibrary('NigeriaLII', 'Nigeria', 'https://nigerialii.org/search/?q={q}', reports: 'Judgments and legislation');
+  static const ghana = LawLibrary('GhaLII', 'Ghana', 'https://ghalii.org/search/?q={q}', reports: 'Judgments and legislation');
+  static const kenya = LawLibrary('Kenya Law', 'Kenya', 'https://new.kenyalaw.org/search/?q={q}', reports: 'Law reports and legislation');
+  static const southAfrica =
+      LawLibrary('SAFLII', 'South Africa', 'https://www.saflii.org/cgi-bin/sinosrch-adw.cgi?query={q}', reports: 'Judgments and legislation');
+  static const uganda = LawLibrary('ULII', 'Uganda', 'https://ulii.org/search/?q={q}', reports: 'Judgments and legislation');
+  static const commonLii =
+      LawLibrary('CommonLII', 'Commonwealth', 'https://www.commonlii.org/cgi-bin/sinosrch.cgi?query={q}', reports: 'Commonwealth-wide search');
+  static const africanLii = LawLibrary('AfricanLII', 'Africa', 'https://africanlii.org/search/?q={q}', reports: 'Search across African countries');
+
+  /// Every library once, for tests and "search everything".
+  static List<LawLibrary> get all => LawCountry.all.expand((c) => c.libraries).toSet().toList();
+}
+
+/// A country (or region) with the free libraries that cover its law.
+class LawCountry {
+  const LawCountry(this.code, this.name, this.libraries, {this.note = ''});
+  final String code;
+  final String name;
+  final List<LawLibrary> libraries;
+
+  /// Shown under the buttons, e.g. where the official reports are paid.
+  final String note;
+
+  static const _paid = 'Official reports such as NWLR and LawPavilion are paid. Add a report PDF to your library and Pinda can brief it.';
+
+  static const all = <LawCountry>[
+    LawCountry('ng', 'Nigeria', [LawLibrary.nigeria, LawLibrary.africanLii, LawLibrary.commonLii], note: _paid),
+    LawCountry('gh', 'Ghana', [LawLibrary.ghana, LawLibrary.africanLii, LawLibrary.commonLii]),
+    LawCountry('ke', 'Kenya', [LawLibrary.kenya, LawLibrary.africanLii, LawLibrary.commonLii]),
+    LawCountry('za', 'South Africa', [LawLibrary.southAfrica, LawLibrary.africanLii, LawLibrary.commonLii]),
+    LawCountry('ug', 'Uganda', [LawLibrary.uganda, LawLibrary.africanLii, LawLibrary.commonLii]),
+    LawCountry('tz', 'Tanzania', [
+      LawLibrary('TanzLII', 'Tanzania', 'https://tanzlii.org/search/?q={q}', reports: 'Judgments and legislation'),
+      LawLibrary.africanLii,
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('zm', 'Zambia', [
+      LawLibrary('ZambiaLII', 'Zambia', 'https://zambialii.org/search/?q={q}', reports: 'Judgments and legislation'),
+      LawLibrary.africanLii,
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('zw', 'Zimbabwe', [
+      LawLibrary('ZimLII', 'Zimbabwe', 'https://zimlii.org/search/?q={q}', reports: 'Judgments and legislation'),
+      LawLibrary.africanLii,
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('mw', 'Malawi', [
+      LawLibrary('MalawiLII', 'Malawi', 'https://malawilii.org/search/?q={q}', reports: 'Judgments and legislation'),
+      LawLibrary.africanLii,
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('na', 'Namibia', [
+      LawLibrary('NamibLII', 'Namibia', 'https://namiblii.org/search/?q={q}', reports: 'Judgments and legislation'),
+      LawLibrary.africanLii,
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('sl', 'Sierra Leone', [
+      LawLibrary('SierraLII', 'Sierra Leone', 'https://sierralii.gov.sl/search/?q={q}', reports: 'Judgments and legislation'),
+      LawLibrary.africanLii,
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('gm', 'The Gambia', [LawLibrary.africanLii, LawLibrary.commonLii]),
+    LawCountry('uk', 'United Kingdom', [
+      LawLibrary('BAILII', 'United Kingdom', 'https://www.bailii.org/cgi-bin/lucy_search_1.cgi?query={q}', reports: 'UK and Irish judgments'),
+      LawLibrary.commonLii,
+    ], note: 'Pick "UK case law" in the search box to search Find Case Law inside DSCVR.'),
+    LawCountry('ie', 'Ireland', [
+      LawLibrary('BAILII Ireland', 'Ireland', 'https://www.bailii.org/cgi-bin/lucy_search_1.cgi?query={q}', reports: 'Irish judgments'),
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('ca', 'Canada', [
+      LawLibrary('CanLII', 'Canada', 'https://www.canlii.org/en/#search/text={q}', reports: 'Courts and tribunals'),
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('au', 'Australia', [
+      LawLibrary('AustLII', 'Australia', 'https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?query={q}', reports: 'Cases and legislation'),
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('nz', 'New Zealand', [
+      LawLibrary('NZLII', 'New Zealand', 'https://www.nzlii.org/cgi-bin/sinosrch.cgi?query={q}', reports: 'Cases and legislation'),
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('in', 'India', [
+      LawLibrary('Indian Kanoon', 'India', 'https://indiankanoon.org/search/?formInput={q}', reports: 'Judgments and statutes'),
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('sg', 'Singapore', [LawLibrary.commonLii]),
+    LawCountry('hk', 'Hong Kong', [LawLibrary.commonLii]),
+    LawCountry('pacific', 'Pacific Islands', [
+      LawLibrary('PacLII', 'Pacific Islands', 'http://www.paclii.org/cgi-bin/sinosrch.cgi?query={q}', reports: 'Fiji, Samoa, PNG and more'),
+      LawLibrary.commonLii,
+    ]),
+    LawCountry('caribbean', 'Caribbean', [LawLibrary.commonLii], note: 'CommonLII covers Jamaica, Trinidad, Barbados and others.'),
+    LawCountry('us', 'United States', [
+      LawLibrary('CourtListener', 'United States', 'https://www.courtlistener.com/?q={q}', reports: 'Federal and state opinions'),
+      LawLibrary('Cornell LII', 'United States', 'https://www.law.cornell.edu/search/site/{q}', reports: 'Statutes, rules, key cases'),
+    ]),
+    LawCountry('commonwealth', 'Other Commonwealth', [LawLibrary.commonLii, LawLibrary.africanLii]),
   ];
+
+  static LawCountry byCode(String? code) => all.firstWhere((c) => c.code == code, orElse: () => all.first);
 }
 
 

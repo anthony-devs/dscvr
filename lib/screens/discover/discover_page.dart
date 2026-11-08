@@ -252,7 +252,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
       ]),
       const SizedBox(height: 26),
       if (_showLaw) ...[
-        _LawLibraries(query: _lawQuery),
+        _LawLibraries(
+          query: _lawQuery,
+          country: LawCountry.byCode(context.services.settings.lawCountry),
+          onCountry: (code) {
+            context.services.settings.setLawCountry(code);
+            setState(() {});
+          },
+        ),
         const SizedBox(height: 22),
       ],
       if (_summary != null && _summary!.extract.isNotEmpty) ...[
@@ -295,11 +302,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 }
 
-/// Links to the free African and Commonwealth law libraries, which don't
-/// allow automated search, plus a pointer for subscribers' own law reports.
+/// Links to the free law libraries for the chosen country, which don't allow
+/// automated search, plus a pointer for subscribers' own law reports.
 class _LawLibraries extends StatelessWidget {
-  const _LawLibraries({required this.query});
+  const _LawLibraries({required this.query, required this.country, required this.onCountry});
   final String query;
+  final LawCountry country;
+  final ValueChanged<String> onCountry;
 
   @override
   Widget build(BuildContext context) {
@@ -308,23 +317,36 @@ class _LawLibraries extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(Radii.lg), border: Border.all(color: c.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Search Nigerian and Commonwealth judgments', style: context.text.titleMedium),
+        Text('Law reports and judgments', style: context.text.titleMedium),
         const SizedBox(height: 4),
-        Text('Opens each free law library\'s own search for "$query". Save any judgment to your library with its link or PDF.',
+        Text('Pick a country. Each free library opens with its own search for "$query". Save any judgment to your library with its link or PDF.',
             style: AppTheme.sans(fontSize: 13.5, color: c.inkMuted, height: 1.5)),
         const SizedBox(height: 12),
+        SizedBox(
+          width: 260,
+          child: AppSelect<String>(
+            label: 'Country',
+            options: [for (final k in LawCountry.all) SelectOption(k.code, k.name)],
+            value: country.code,
+            onChanged: onCountry,
+          ),
+        ),
+        const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final lib in LawLibrary.all)
+          for (final lib in country.libraries)
             PillButton(
-              label: '${lib.name} · ${lib.country}',
+              label: lib.reports.isEmpty ? lib.name : '${lib.name} · ${lib.reports}',
               icon: Ic.external,
               onTap: () => launchUrl(lib.searchUri(query), mode: LaunchMode.externalApplication),
             ),
         ]),
         const SizedBox(height: 12),
-        Text('Subscribe to NWLR, LawPavilion or another law report? Add the PDF of a report to your library and Pinda can brief it, '
-            'quiz you on it, and cite it.',
-            style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint, height: 1.5)),
+        Text(
+          country.note.isNotEmpty
+              ? country.note
+              : 'Subscribe to a law report service? Add the PDF of a report to your library and Pinda can brief it, quiz you on it, and cite it.',
+          style: AppTheme.sans(fontSize: 12.5, color: c.inkFaint, height: 1.5),
+        ),
       ]),
     );
   }

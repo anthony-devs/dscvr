@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:dscvr/screens/add/add_material_sheet.dart';
 import 'package:dscvr/screens/shell/sidebar.dart';
+import 'package:dscvr/screens/tour/app_tour.dart';
 import 'package:dscvr/state/library_controller.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
@@ -47,6 +48,10 @@ class AppShell extends StatelessWidget {
       ),
     );
 
+    return TourGate(child: _frame(context, c, background));
+  }
+
+  Widget _frame(BuildContext context, DscvrColors c, BoxDecoration background) {
     if (context.isCompact) {
       return Scaffold(
         backgroundColor: c.background,

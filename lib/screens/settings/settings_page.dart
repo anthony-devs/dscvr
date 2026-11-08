@@ -4,6 +4,7 @@ import 'package:dscvr/models/profession.dart';
 import 'package:dscvr/state/settings_controller.dart';
 import 'package:dscvr/widgets/subject_picker.dart';
 import 'package:dscvr/models/workspace.dart';
+import 'package:dscvr/screens/tour/app_tour.dart';
 import 'package:dscvr/screens/library/dialogs.dart';
 import 'package:dscvr/screens/library/shelf_page.dart';
 import 'package:dscvr/state/services.dart';
@@ -328,6 +329,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       'Your library, notes and Pinda conversations stay readable without a connection, and changes sync when you are back online. '
                       'PDFs you have opened once stay in your browser cache.',
                   child: SizedBox.shrink(),
+                ),
+              ],
+            ),
+            _Section(
+              title: 'Help',
+              children: [
+                _Row(
+                  label: 'App tour',
+                  description: 'A one-minute walk through your library, Discover, Pinda, alerts and accessibility.',
+                  child: AppButton.secondary(onPressed: () => showAppTour(context), child: const Text('Take the tour')),
                 ),
               ],
             ),

@@ -28,6 +28,8 @@ class SettingsController extends ChangeNotifier {
   bool _reduceMotion = false;
   bool _lowData = false;
   double _speechRate = 1.0;
+  String _lawCountry = 'ng';
+  bool _tourSeen = false;
   SharedPreferences? _prefs;
 
   ThemeMode get themeMode => _themeMode;
@@ -49,6 +51,12 @@ class SettingsController extends ChangeNotifier {
   /// Read-aloud speed: 0.5 (slow) to 2.0 (fast), 1.0 is normal.
   double get speechRate => _speechRate;
 
+  /// Country whose law libraries Discover shows first (code from LawCountry).
+  String get lawCountry => _lawCountry;
+
+  /// Whether the first-run app tour has been shown on this device.
+  bool get tourSeen => _tourSeen;
+
   Future<void> load() async {
     try {
       _prefs = await SharedPreferences.getInstance();
@@ -64,6 +72,8 @@ class SettingsController extends ChangeNotifier {
       _reduceMotion = p.getBool('a11y.reduceMotion') ?? false;
       _lowData = p.getBool('lowData') ?? false;
       _speechRate = (p.getDouble('a11y.speechRate') ?? 1.0).clamp(0.5, 2.0);
+      _lawCountry = p.getString('lawCountry') ?? 'ng';
+      _tourSeen = p.getBool('tourSeen') ?? false;
     } catch (_) {
       // Storage unavailable (private browsing); keep defaults.
     }
@@ -127,6 +137,18 @@ class SettingsController extends ChangeNotifier {
   void setSpeechRate(double v) {
     _speechRate = v.clamp(0.5, 2.0);
     _prefs?.setDouble('a11y.speechRate', _speechRate);
+    notifyListeners();
+  }
+
+  void setLawCountry(String code) {
+    _lawCountry = code;
+    _prefs?.setString('lawCountry', code);
+    notifyListeners();
+  }
+
+  void setTourSeen(bool v) {
+    _tourSeen = v;
+    _prefs?.setBool('tourSeen', v);
     notifyListeners();
   }
 

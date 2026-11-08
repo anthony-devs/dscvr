@@ -146,4 +146,34 @@ void main() {
       handle.dispose();
     });
   });
+
+  group('Law countries and tour', () {
+    test('every country has libraries and every library takes the query', () {
+      expect(LawCountry.all.length, greaterThan(15));
+      expect(LawCountry.all.any((c) => c.code == 'ng'), isTrue);
+      expect(LawCountry.byCode('zzz').code, 'ng');
+      for (final c in LawCountry.all) {
+        expect(c.libraries, isNotEmpty, reason: c.name);
+        for (final l in c.libraries) {
+          final u = l.searchUri('breach of contract');
+          expect(u.toString(), contains('breach'), reason: l.name);
+          expect(u.toString(), isNot(contains('{q}')));
+        }
+      }
+    });
+
+    test('law country and tour flag persist', () async {
+      SharedPreferences.setMockInitialValues({});
+      final a = SettingsController();
+      await a.load();
+      expect(a.lawCountry, 'ng');
+      expect(a.tourSeen, isFalse);
+      a.setLawCountry('gh');
+      a.setTourSeen(true);
+      final b = SettingsController();
+      await b.load();
+      expect(b.lawCountry, 'gh');
+      expect(b.tourSeen, isTrue);
+    });
+  });
 }
