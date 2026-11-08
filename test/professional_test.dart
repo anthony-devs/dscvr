@@ -2,6 +2,7 @@ import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/models/citation.dart';
 import 'package:dscvr/models/paper.dart';
 import 'package:dscvr/models/profession.dart';
+import 'package:dscvr/models/text_clean.dart';
 import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/state/settings_controller.dart';
 import 'package:dscvr/ui/ui.dart';
@@ -195,5 +196,26 @@ void main() {
     expect(b.pageTourSeen('discover'), isTrue);
     b.resetTours();
     expect(b.pageTourSeen('discover'), isFalse);
+  });
+
+  group('tidyText', () {
+    test('turns arXiv LaTeX into readable text', () {
+      expect(tidyText(r'coefficients $a_n$ of'), 'coefficients aₙ of');
+      expect(tidyText(r'with $\mathbb E|X_1|^2=1$'), 'with 𝔼|X₁|²=1');
+      expect(tidyText(r'$\exp(\sum_{k\ge1}X_kz^k/\sqrt{k})$'), 'exp(∑_(k≥1)Xₖzᵏ/√k)');
+      expect(tidyText(r'$|a_n|=O((\log n)^{2})$'), '|aₙ|=O((log n)²)');
+      expect(tidyText(r'$\frac{a}{b}$ and $\frac{x+1}{2}$'), 'a/b and (x+1)/2');
+      expect(tidyText(r'$\alpha \le \beta$, $\mathcal{L}(\theta)$'), 'α ≤ β, L(θ)');
+      expect(tidyText(r'$\hat{x} \in \mathbb{R}^d$'), 'x̂ ∈ ℝᵈ');
+      expect(tidyText(r'\(x^2\) and \[y_i\]'), 'x² and yᵢ');
+    });
+
+    test('leaves ordinary text and money alone, strips tags and entities', () {
+      expect(tidyText('A plain sentence.'), 'A plain sentence.');
+      expect(tidyText(r'It costs $5 and then $10 more.'), r'It costs $5 and then $10 more.');
+      expect(tidyText('<jats:p>Fish &amp; chips &#8211; <i>fresh</i></jats:p>'), 'Fish & chips – fresh');
+      expect(tidyText(null), '');
+      expect(tidyText(r'$\unknownthing$'), 'unknownthing');
+    });
   });
 }

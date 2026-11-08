@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/models/paper.dart';
+import 'package:dscvr/models/text_clean.dart';
 import 'package:dscvr/models/subjects.dart';
 
 export 'package:dscvr/models/subjects.dart';
@@ -268,11 +269,11 @@ class DiscoverService {
       final p = (raw as Map).cast<String, dynamic>();
       return Paper(
         id: p['paperId'] as String? ?? '',
-        title: p['title'] as String? ?? '',
+        title: tidyText(p['title'] as String?),
         source: 'semantic_scholar',
         authors: [for (final a in (p['authors'] as List? ?? const [])) (a as Map)['name'] as String? ?? ''],
         year: (p['year'] as num?)?.toInt(),
-        summary: p['abstract'] as String? ?? '',
+        summary: tidyText(p['abstract'] as String?),
         url: p['url'] as String?,
         pdfUrl: (p['openAccessPdf'] as Map?)?['url'] as String?,
         venue: p['venue'] as String?,
@@ -293,11 +294,11 @@ class DiscoverService {
       final published = text('published');
       return Paper(
         id: id.split('/abs/').last,
-        title: text('title'),
+        title: tidyText(text('title')),
         source: 'arxiv',
         authors: [for (final a in e.findElements('author')) a.getElement('name')?.innerText.trim() ?? ''],
         year: int.tryParse(published.length >= 4 ? published.substring(0, 4) : ''),
-        summary: text('summary'),
+        summary: tidyText(text('summary')),
         url: id.replaceFirst('http://', 'https://'),
         pdfUrl: pdf?.replaceFirst('http://', 'https://'),
         subjects: [for (final c in e.findElements('category')) c.getAttribute('term') ?? ''],

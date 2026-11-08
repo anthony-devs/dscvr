@@ -1,3 +1,4 @@
+import 'package:dscvr/models/text_clean.dart';
 import 'package:flutter/foundation.dart';
 
 /// A search result from Discover: a paper, a guideline or a court judgment.
@@ -84,11 +85,11 @@ class Paper {
 
   factory Paper.fromMap(Map<String, dynamic> m) => Paper(
         id: m['id'] as String? ?? '',
-        title: (m['title'] as String? ?? '').replaceAll(RegExp(r'\s+'), ' ').trim(),
+        title: tidyText(m['title'] as String?),
         source: m['source'] as String? ?? '',
         authors: (m['authors'] as List?)?.whereType<String>().toList() ?? const [],
         year: (m['year'] as num?)?.toInt(),
-        summary: (m['summary'] as String? ?? '').replaceAll(RegExp(r'\s+'), ' ').trim(),
+        summary: tidyText(m['summary'] as String?),
         url: m['url'] as String?,
         pdfUrl: m['pdfUrl'] as String?,
         venue: m['venue'] as String?,

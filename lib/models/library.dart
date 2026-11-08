@@ -1,3 +1,4 @@
+import 'package:dscvr/models/text_clean.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -245,7 +246,7 @@ class LibraryItem {
         pdfUrl: m['pdfUrl'] as String?,
         storagePath: m['storagePath'] as String?,
         fileName: m['fileName'] as String?,
-        summary: m['summary'] as String? ?? '',
+        summary: tidyText(m['summary'] as String?),
         content: m['content'] as String? ?? '',
         thumbnailUrl: m['thumbnailUrl'] as String?,
         siteName: m['siteName'] as String?,
