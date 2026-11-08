@@ -10,8 +10,8 @@
  *
  * Bump VERSION to force-drop old caches.
  */
-const VERSION = 'dscvr-v2';
-const SHELL = ['./', 'index.html', 'flutter_bootstrap.js', 'main.dart.js', 'manifest.json', 'favicon.png', 'icons/Icon-192.png'];
+const VERSION = 'dscvr-v4';
+const SHELL = ['./', 'index.html', 'flutter_bootstrap.js', 'manifest.json', 'favicon.png?v=2', 'favicon.svg?v=2', 'icons/Icon-192.png?v=2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -47,7 +47,15 @@ function networkFirst(request) {
     .then((res) => {
       if (res && res.ok) {
         const copy = res.clone();
-        caches.open(VERSION).then((c) => c.put(request, copy));
+        caches.open(VERSION).then(async (c) => {
+          // Each deploy ships main.<hash>.dart.js; drop previous builds' bundles.
+          if (/\/main\.[0-9a-f]+\.dart\.js$/.test(new URL(request.url).pathname)) {
+            for (const k of await c.keys()) {
+              if (k.url !== request.url && /\/main\.[0-9a-f]+\.dart\.js$/.test(new URL(k.url).pathname)) c.delete(k);
+            }
+          }
+          c.put(request, copy);
+        });
       }
       return res;
     })
