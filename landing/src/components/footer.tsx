@@ -5,9 +5,8 @@ export function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center">
-              <span className="text-background font-bold text-sm">D</span>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/mark.svg" alt="" width={32} height={32} className="w-8 h-8" />
             <div>
               <span className="font-semibold tracking-tight">DSCVR</span>
               <p className="text-xs text-muted">Your research desk, everywhere.</p>

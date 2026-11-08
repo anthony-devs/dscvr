@@ -8,9 +8,8 @@ export function Pinda() {
             <div className="bg-white rounded-2xl border border-border shadow-xl shadow-foreground/5 overflow-hidden max-w-md mx-auto md:mx-0">
               {/* Chat header */}
               <div className="px-5 py-4 border-b border-border flex items-center gap-3">
-                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2"><path d="M12 2a7 7 0 0 1 7 7c0 3-2 5-3.5 6.5L12 19l-3.5-3.5C7 14 5 12 5 9a7 7 0 0 1 7-7z" /></svg>
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/mark.svg" alt="" width={32} height={32} className="w-8 h-8" />
                 <div>
                   <p className="text-sm font-semibold">Pinda</p>
                   <p className="text-[10px] text-muted">Reading your library</p>
@@ -61,15 +60,18 @@ export function Pinda() {
 
           {/* Right: Copy */}
           <div className="order-1 md:order-2">
-            <p className="text-sm font-medium text-muted mb-3 tracking-wide uppercase">Pinda AI</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/pinda.svg" alt="Pinda the pangolin reading a book" width={220} height={161} className="w-44 md:w-56 h-auto mb-6" />
+            <p className="text-sm font-medium text-muted mb-3 tracking-wide uppercase">Meet Pinda</p>
             <h2 className="font-serif text-3xl md:text-5xl font-bold tracking-tight leading-tight mb-6">
               Your research, <br />
               <span className="italic text-muted/60">answering back.</span>
             </h2>
             <p className="text-muted leading-relaxed mb-8 max-w-md">
-              Pinda reads your saved papers, PDFs and notes, then answers with citations
-              pointing back to your own materials. Not a generic chatbot. An assistant
-              that knows what you&apos;ve read, and talks like your edition needs it to.
+              Pinda is a pangolin, native to Nigeria, whose scales look like the pages it loves.
+              It reads your saved papers, PDFs and notes, then answers with citations pointing
+              back to your own materials. Not a generic chatbot: a study partner that knows what
+              you&apos;ve read and speaks your field.
             </p>
             <div className="space-y-4">
               {[
@@ -77,7 +79,7 @@ export function Pinda() {
                 "Reads full PDFs, scoped to a topic or a single paper",
                 "Speak your question, hear the answer",
                 "Drafts reports and session recaps from your sources",
-                "Powered by Claude, streaming as it thinks",
+                "Flashcards, practice questions and case briefs from any reading",
               ].map((line, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="mt-0.5 w-5 h-5 rounded-full bg-foreground flex items-center justify-center shrink-0">

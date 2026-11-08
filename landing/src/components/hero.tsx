@@ -12,7 +12,7 @@ export function Hero() {
             className="fade-up inline-flex items-center gap-2 pl-1.5 pr-4 py-1.5 mb-8 border border-border bg-white/70 rounded-full text-xs font-medium text-muted hover:text-foreground transition-colors"
           >
             <span className="px-2 py-0.5 rounded-full bg-foreground text-background text-[10px] font-semibold tracking-wide">NEW</span>
-            Editions for students, researchers and teams
+            Now for medicine, nursing, law and every other field
             <Icon.arrow size={12} />
           </a>
 
@@ -26,8 +26,8 @@ export function Hero() {
           </h1>
 
           <p className="fade-up delay-2 mt-8 text-lg md:text-xl text-muted max-w-2xl mx-auto leading-relaxed">
-            Pull papers straight from arXiv, read them with an AI that has read them too,
-            and turn what you learn into reports. One research desk, from first year to research lab.
+            Search arXiv, PubMed, journals and case law at once, read any PDF with Pinda beside you,
+            and turn what you learn into flashcards, case briefs and reports. One research desk, from first year to the courtroom.
           </p>
 
           <div className="fade-up delay-3 mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

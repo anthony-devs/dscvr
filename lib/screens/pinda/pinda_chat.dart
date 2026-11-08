@@ -1,3 +1,4 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:dscvr/data/voice_service.dart';
 import 'package:dscvr/models/pinda.dart';
 import 'package:dscvr/state/services.dart';
@@ -12,27 +13,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
+/// Pinda's face in chat: the curled-up pangolin.
 class PindaAvatar extends StatelessWidget {
   const PindaAvatar({super.key, this.size = 24});
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [CategoryPalette.of(0), CategoryPalette.of(2)],
-        ),
-        borderRadius: BorderRadius.circular(size * 0.3),
-      ),
-      child: Icon(Ic.pinda, size: size * 0.58, color: c.isDark ? Colors.white : Colors.white),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: SvgPicture.asset('assets/brand/mark.svg', semanticsLabel: 'Pinda'),
+      );
 }
 
 /// The conversation surface: messages, suggested actions and composer.
@@ -298,7 +289,7 @@ class _Empty extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 560),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(height: compact ? 8 : 40),
-            PindaAvatar(size: compact ? 32 : 40),
+            PindaFigure(width: compact ? 120 : 170),
             const SizedBox(height: 16),
             Text(title ?? 'What are you trying to understand?',
                 style: compact ? ctx.text.headlineSmall : ctx.text.headlineLarge),

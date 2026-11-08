@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs><clipPath id="c"><circle cx="60" cy="62" r="48"/></clipPath></defs>
+  <circle cx="60" cy="62" r="48" fill="#5B6CFF"/>
+  <g clip-path="url(#c)" fill="#7C89FF" stroke="#2F3389" stroke-width="5" stroke-linejoin="round">
+    <path d="M14 36 A13 13 0 0 0 40 36 L40 26 L14 26 Z"/><path d="M40 36 A13 13 0 0 0 66 36 L66 26 L40 26 Z"/><path d="M66 36 A13 13 0 0 0 92 36 L92 26 L66 26 Z"/><path d="M92 36 A13 13 0 0 0 118 36 L118 26 L92 26 Z"/>
+    <path d="M1 58 A13 13 0 0 0 27 58 L27 48 L1 48 Z"/><path d="M27 58 A13 13 0 0 0 53 58 L53 48 L27 48 Z"/><path d="M53 58 A13 13 0 0 0 79 58 L79 48 L53 48 Z"/><path d="M79 58 A13 13 0 0 0 105 58 L105 48 L79 48 Z"/><path d="M105 58 A13 13 0 0 0 131 58 L131 48 L105 48 Z"/>
+    <path d="M14 80 A13 13 0 0 0 40 80 L40 70 L14 70 Z"/><path d="M40 80 A13 13 0 0 0 66 80 L66 70 L40 70 Z"/><path d="M66 80 A13 13 0 0 0 92 80 L92 70 L66 70 Z"/><path d="M92 80 A13 13 0 0 0 118 80 L118 70 L92 70 Z"/>
+    <path d="M1 102 A13 13 0 0 0 27 102 L27 92 L1 92 Z"/><path d="M27 102 A13 13 0 0 0 53 102 L53 92 L27 92 Z"/><path d="M53 102 A13 13 0 0 0 79 102 L79 92 L53 92 Z"/><path d="M79 102 A13 13 0 0 0 105 102 L105 92 L79 92 Z"/>
+  </g>
+  <circle cx="60" cy="62" r="48" fill="none" stroke="#2F3389" stroke-width="6"/>
+  <path d="M76 92 C94 88 110 98 120 112 C108 120 90 120 76 110 Z" fill="#F4CDA5" stroke="#2F3389" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="94" cy="103" r="4.5" fill="#1D1F2B"/>
+</svg>

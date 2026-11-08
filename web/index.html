@@ -7,8 +7,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="DSCVR is a calm, personal research library. Collect papers, PDFs, articles and lectures, read and annotate them, and ask Pinda about anything you have saved.">
-  <meta name="theme-color" content="#F8F3ED" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#171513" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F3F4F6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131418" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
 
   <!-- iOS home-screen app -->
@@ -23,6 +23,7 @@
   <meta property="og:description" content="A personal research library with an assistant that has read your sources.">
   <meta property="og:image" content="icons/Icon-512.png">
 
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
   <title>DSCVR</title>
@@ -64,11 +65,11 @@
   </script>
   <script>
     // Update prompt: a tab left open across a deploy keeps running the old build.
-    // Compare main.dart.js's ETag with the one seen at load and offer a reload.
+    // Compare flutter_bootstrap.js's ETag with the one seen at load and offer a reload.
     (function () {
       var baseline = null, shown = false;
       function etag() {
-        return fetch('main.dart.js', { method: 'HEAD', cache: 'no-store' })
+        return fetch('flutter_bootstrap.js', { method: 'HEAD', cache: 'no-store' })
           .then(function (r) { return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified')) : null; })
           .catch(function () { return null; });
       }

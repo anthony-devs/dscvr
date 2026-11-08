@@ -2,22 +2,40 @@ import { Icon } from "./icons";
 
 const features = [
   {
-    icon: Icon.paper,
-    title: "arXiv, straight to your desk",
-    description: "Paste an arXiv link or ID. DSCVR pulls the metadata and saves the full PDF into your library, ready to read offline.",
+    icon: Icon.graph,
+    title: "Every free source, one search",
+    description: "arXiv, Semantic Scholar, OpenAlex, PubMed via Europe PMC, Crossref, DOAJ, PLOS and Zenodo searched together, every result labelled with where it came from.",
     tag: "New",
   },
   {
-    icon: Icon.graph,
-    title: "Semantic Scholar built in",
-    description: "Search arXiv and Semantic Scholar from one bar, then open any paper's related work without leaving the reader.",
+    icon: Icon.paper,
+    title: "Read PDFs right here",
+    description: "DSCVR's own PDF reader with search, zoom and download. Select any line and ask Pinda, take a note or fact-check it.",
     tag: "New",
   },
   {
     icon: Icon.pinda,
-    title: "Pinda, powered by Claude",
-    description: "Ask questions across your whole library, one topic or a single paper. Pinda reads the PDFs and cites them back.",
+    title: "Pinda, your research pangolin",
+    description: "Ask across your whole library, one topic or a single paper. Pinda reads the PDFs, cites them back, and knows your field.",
     tag: "Live",
+  },
+  {
+    icon: Icon.cap,
+    title: "Built for your field",
+    description: "Medicine, nursing, pharmacy, public health, law, engineering, business and education: 246 subjects, clinical guidelines, and UK, Nigerian and Commonwealth case law.",
+    tag: "New",
+  },
+  {
+    icon: Icon.check,
+    title: "Study mode",
+    description: "Turn any paper or judgment into flashcards, exam-style questions, a case brief, or an evidence summary in one tap.",
+    tag: "New",
+  },
+  {
+    icon: Icon.spark,
+    title: "Cite and alerts",
+    description: "Cite in APA, Vancouver, OSCOLA or Nigerian legal style, export to Zotero, and get a daily alert when your subjects publish something new.",
+    tag: "New",
   },
   {
     icon: Icon.report,
@@ -50,8 +68,8 @@ const features = [
   },
   {
     icon: Icon.devices,
-    title: "Everywhere you are",
-    description: "Installable on phone, tablet and desktop. Your library syncs, and you can see and sign out every device from settings.",
+    title: "Accessible, everywhere",
+    description: "Screen reader and keyboard friendly, dyslexia and low-vision fonts, read-aloud, high contrast, and a low-data mode. Works offline on phone and desktop.",
   },
 ];
 

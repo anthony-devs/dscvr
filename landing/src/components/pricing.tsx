@@ -59,8 +59,8 @@ const faqs = [
     a: "A 10-person lab where everyone works 15 days a month pays $60 for seats, plus AI. Someone who opens DSCVR twice that month costs $0.80.",
   },
   {
-    q: "Which model powers Pinda?",
-    a: "Pinda runs on Claude by Anthropic. Answers are grounded in the papers and notes you choose, with citations back to them.",
+    q: "How does Pinda work?",
+    a: "Pinda is DSCVR's research assistant, built on a leading large language model. Its answers are grounded in the papers and notes you choose, with citations back to them.",
   },
 ];
 

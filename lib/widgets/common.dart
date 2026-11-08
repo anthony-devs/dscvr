@@ -1,3 +1,4 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/icons.dart';
@@ -19,42 +20,31 @@ class ColorDot extends StatelessWidget {
 
 /// Brand mark: four tiles, two squares and two circles, echoing the original
 /// DSCVR logo.
+/// DSCVR's mark: Pinda the pangolin, curled into a ball.
 class DscvrMark extends StatelessWidget {
   const DscvrMark({super.key, this.size = 28});
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(size * 0.26)),
-      padding: EdgeInsets.all(size * 0.2),
-      child: CustomPaint(painter: _MarkPainter(c.inverseInk)),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: SvgPicture.asset('assets/brand/mark.svg', semanticsLabel: 'DSCVR'),
+      );
 }
 
-class _MarkPainter extends CustomPainter {
-  _MarkPainter(this.color);
-  final Color color;
+/// Pinda standing with an open book, for welcomes and empty states.
+class PindaFigure extends StatelessWidget {
+  const PindaFigure({super.key, this.width = 160});
+  final double width;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final gap = size.width * 0.08;
-    final tile = (size.width - gap) / 2;
-    final solid = Paint()..color = color;
-    final soft = Paint()..color = color.withValues(alpha: 0.5);
-    final r = Radius.circular(tile * 0.18);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, tile, tile), r), solid);
-    canvas.drawCircle(Offset(tile + gap + tile / 2, tile / 2), tile / 2, soft);
-    canvas.drawCircle(Offset(tile / 2, tile + gap + tile / 2), tile / 2, soft);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(tile + gap, tile + gap, tile, tile), r), solid);
-  }
-
-  @override
-  bool shouldRepaint(_MarkPainter old) => old.color != color;
+  Widget build(BuildContext context) => SvgPicture.asset(
+        'assets/brand/pinda.svg',
+        width: width,
+        height: width * 190 / 260,
+        semanticsLabel: 'Pinda the pangolin, reading',
+      );
 }
 
 class Wordmark extends StatelessWidget {

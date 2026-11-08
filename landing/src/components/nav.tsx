@@ -19,9 +19,8 @@ export function Nav() {
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center">
-            <span className="text-background font-bold text-sm">D</span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/mark.svg" alt="" width={32} height={32} className="w-8 h-8" />
           <span className="font-semibold text-lg tracking-tight">DSCVR</span>
         </Link>
 
