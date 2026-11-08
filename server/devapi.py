@@ -99,7 +99,7 @@ def make_devapi(staff) -> Blueprint:
             "aiPaused": bool(f.get("aiPaused")),
             "s2KeySet": bool(os.getenv("S2_API_KEY")),
             "adminEnabled": staff.enabled,
-            "adminKeySet": bool(staff.admin_key), "adminKeyStrong": len(staff.admin_key) >= 16,
+            "adminTotpSet": staff.enabled, "adminKeySet": staff.enabled, "adminKeyStrong": staff.enabled,
             "sessionSecretStrong": staff.secret_strong, "adminPasswordHashed": staff.password_hashed,
             "serviceAccountSet": bool(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")) or not cloud,
             "paymentsMode": "simulated",

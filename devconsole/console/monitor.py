@@ -78,7 +78,7 @@ def problems_from(health_ok: bool, ms: float, diag: dict | None, dbcheck: dict |
         if c.get("s2KeySet") is False and diag.get("service") != "local":
             add("info", "s2_key", "No S2_API_KEY: Semantic Scholar shares a public rate limit, so related papers may be slow.")
         if not c.get("adminKeyStrong"):
-            add("warning", "admin_key", "ADMIN_KEY is missing or shorter than 16 characters.")
+            add("warning", "admin_key", "The admin dashboard is off: set ADMIN_USERNAME, ADMIN_PASSWORD_HASH and ADMIN_TOTP_SECRET.")
         if not c.get("sessionSecretStrong"):
             add("warning", "session_secret", "SESSION_SECRET is missing or shorter than 32 characters.")
         if (diag.get("maintenance") or {}).get("on"):

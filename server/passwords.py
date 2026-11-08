@@ -38,3 +38,57 @@ def password_problems(password: str, username: str = "") -> list[str]:
     if any(w in password.lower() for w in ("password", "dscvr", "qwerty", "123456", "letmein")):
         out.append("nothing easy to guess")
     return out
+
+
+# ── 6-digit authenticator codes (RFC 6238), works with Google Authenticator, Authy, 1Password ──
+
+import base64 as _b64
+import struct
+import time
+from urllib.parse import quote
+
+
+def totp_new_secret() -> str:
+    """A fresh 160-bit secret in the base32 form authenticator apps expect."""
+    return _b64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def totp_clean(secret: str) -> str:
+    return re.sub(r"[\s-]", "", secret or "").upper()
+
+
+def totp_valid_secret(secret: str) -> bool:
+    s = totp_clean(secret)
+    if len(s) < 16 or not re.fullmatch(r"[A-Z2-7]+", s):
+        return False
+    try:
+        _b64.b32decode(s + "=" * (-len(s) % 8))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def totp_at(secret: str, step: int, digits: int = 6) -> str:
+    s = totp_clean(secret)
+    key = _b64.b32decode(s + "=" * (-len(s) % 8))
+    mac = hmac.new(key, struct.pack(">Q", step), hashlib.sha1).digest()
+    off = mac[-1] & 0x0F
+    num = (struct.unpack(">I", mac[off:off + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    return str(num).zfill(digits)
+
+
+def totp_verify(secret: str, code: str, now: float | None = None, window: int = 1) -> int | None:
+    """The 30-second step the code belongs to (allowing one step of clock drift either way), or None."""
+    code = re.sub(r"\s", "", code or "")
+    if not re.fullmatch(r"\d{6}", code):
+        return None
+    step = int((time.time() if now is None else now) // 30)
+    hit = None
+    for s in range(step - window, step + window + 1):
+        if hmac.compare_digest(totp_at(secret, s), code):  # no early exit, so timing says nothing
+            hit = s
+    return hit
+
+
+def totp_uri(secret: str, account: str, issuer: str = "DSCVR Admin") -> str:
+    return f"otpauth://totp/{quote(issuer)}:{quote(account)}?secret={totp_clean(secret)}&issuer={quote(issuer)}&algorithm=SHA1&digits=6&period=30"

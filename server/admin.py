@@ -68,7 +68,7 @@ def _clean_id(v: str, n: int = 128) -> str:
 
 def make_admin(staff: Staff) -> Blueprint:
     bp = Blueprint("admin", __name__)
-    guarded = staff.require(with_key=True)
+    guarded = staff.require()
     _cache: dict[Any, tuple[float, Any]] = {}
 
     @bp.errorhandler(StaffError)
@@ -87,7 +87,7 @@ def make_admin(staff: Staff) -> Blueprint:
 
     @bp.after_request
     def _drop_cache(resp):
-        if request.method == "POST" and request.path.startswith("/admin/api/") and not request.path.endswith("/login"):
+        if request.method == "POST" and request.path.startswith("/admin/api/") and not request.path.endswith(("/login", "/totp")):
             _cache.clear()
         resp.headers["Cache-Control"] = "no-store"
         return resp
@@ -118,10 +118,15 @@ def make_admin(staff: Staff) -> Blueprint:
         d = body()
         return jsonify(staff.login(str(d.get("username") or ""), str(d.get("password") or ""), client_ip()))
 
+    @bp.post("/admin/api/totp")
+    def totp():
+        d = body()
+        return jsonify(staff.verify_code(str(d.get("token") or ""), str(d.get("code") or ""), client_ip()))
+
     @bp.get("/admin/api/session")
-    @staff.require(with_key=False)
+    @staff.require()
     def session():
-        return jsonify(username=g.actor, keySet=len(staff.admin_key) >= 16)
+        return jsonify(username=g.actor)
 
     @bp.get("/admin/api/ping")
     @guarded

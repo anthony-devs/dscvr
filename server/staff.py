@@ -1,13 +1,13 @@
 """Founder sign-in for the admin dashboard.
 
-Three locks, in this order:
-    1. sign in with ADMIN_USERNAME + password (ADMIN_PASSWORD_HASH, made by ``python manage.py hash-password``)
-    2. "connect" with ADMIN_KEY
-    3. every request carries both, and both are checked every time
+Two steps:
+    1. username + password (ADMIN_PASSWORD_HASH, made by ``python manage.py hash-password``)
+    2. the 6-digit code from an authenticator app (ADMIN_TOTP_SECRET, made by ``python manage.py totp-setup``)
 
-With no ADMIN_KEY or no admin password set, the dashboard is switched off.
-Sessions are signed, expire after ADMIN_SESSION_HOURS, and end when the password
-changes. Five wrong passwords lock that username + address for 15 minutes.
+A right password only opens the code step. With no password or no authenticator secret set,
+the dashboard is switched off. Sessions are signed, expire after ADMIN_SESSION_HOURS, and end
+when the password or secret changes. Five wrong passwords, or five wrong codes, lock that
+username + address for 15 minutes, and a code works only once.
 """
 from __future__ import annotations
 
@@ -25,7 +25,9 @@ from pathlib import Path
 from flask import Response, g, jsonify, request
 from itsdangerous import BadSignature, URLSafeSerializer
 
-from passwords import hash_password, password_problems, verify_password  # noqa: F401
+from passwords import (  # noqa: F401
+    hash_password, password_problems, totp_clean, totp_valid_secret, totp_verify, verify_password,
+)
 from security import get_firestore_client
 
 log = logging.getLogger("staff")
@@ -73,13 +75,8 @@ def html_page(path: Path) -> Response:
 class Staff:
     def __init__(self) -> None:
         self.username = os.getenv("ADMIN_USERNAME", "").strip().lower()
-        self.admin_key = os.getenv("ADMIN_KEY", "")
-        secret = os.getenv("SESSION_SECRET", "")
-        if len(secret) < 32:
-            log.warning("SESSION_SECRET is missing or short: admin sessions end when the server restarts.")
-            secret = secrets.token_urlsafe(32)
-        self.secret_strong = len(os.getenv("SESSION_SECRET", "")) >= 32
-        self._signer = URLSafeSerializer(secret, salt="dscvr-admin-session")
+        self.totp_secret = totp_clean(os.getenv("ADMIN_TOTP_SECRET", ""))
+        self._last_step = 0
         self._hash, self.problem = "", None
         stored, plain = os.getenv("ADMIN_PASSWORD_HASH", ""), os.getenv("ADMIN_PASSWORD", "")
         if not self.username:
@@ -95,6 +92,19 @@ class Staff:
             self._hash = "" if bad else hash_password(plain)
         else:
             self.problem = "Set ADMIN_PASSWORD_HASH (python manage.py hash-password)."
+        if self._hash and not self.problem and not totp_valid_secret(self.totp_secret):
+            self.problem = "Set ADMIN_TOTP_SECRET (python manage.py totp-setup), then add it to your authenticator app."
+            self._hash = ""
+        # Sessions must verify on every worker. Without SESSION_SECRET, derive one from the
+        # credentials so all workers agree and it survives restarts (changes when they change).
+        secret = os.getenv("SESSION_SECRET", "")
+        self.secret_strong = len(secret) >= 32
+        if not self.secret_strong:
+            log.warning("SESSION_SECRET is missing or short: using a secret derived from the admin credentials.")
+            secret = hashlib.sha256(f"dscvr-admin-session|{self.username}|{stored or plain}|{self.totp_secret}".encode()).hexdigest()
+        self._signer = URLSafeSerializer(secret, salt="dscvr-admin-session")
+        # Identifies the credentials a session was issued for (stable across workers, unlike a salted hash).
+        self._ver = hashlib.sha256(f"{stored or plain}|{self.totp_secret}".encode()).hexdigest()[:12]
         self._fails: dict[str, list[float]] = {}
         if self.problem:
             log.error("Admin dashboard sign-in is OFF. %s", self.problem)
@@ -108,8 +118,8 @@ class Staff:
         return bool(os.getenv("ADMIN_PASSWORD_HASH")) or not os.getenv("ADMIN_PASSWORD")
 
     # -- lock-out (Firestore, so every worker agrees; memory if it is unreachable)
-    def _key(self, username: str, ip: str) -> str:
-        return "staff_login/" + hashlib.sha256(f"{username}|{ip}".encode()).hexdigest()[:40]
+    def _key(self, username: str, ip: str, kind: str = "login") -> str:
+        return "staff_login/" + hashlib.sha256(f"{kind}|{username}|{ip}".encode()).hexdigest()[:40]
 
     def _read_lock(self, key: str) -> dict:
         try:
@@ -127,42 +137,70 @@ class Staff:
             else:
                 self._fails.pop(key, None)
 
+    def _check_locked(self, rec: dict, now: float) -> None:
+        if float(rec.get("lockedUntil") or 0) > now:
+            mins = int((float(rec["lockedUntil"]) - now) // 60) + 1
+            raise StaffError(429, "login_locked", f"Too many wrong attempts. Try again in {mins} minute(s).")
+
+    def _record_fail(self, key: str, rec: dict, now: float) -> None:
+        first = float(rec.get("firstAt") or 0)
+        fails = 1 if now - first > LOCK_MINUTES * 60 else int(rec.get("fails") or 0) + 1
+        doc = {"fails": fails, "firstAt": first if fails > 1 else now, "lockedUntil": 0}
+        if fails >= MAX_FAILS:
+            doc = {"fails": 0, "firstAt": 0, "lockedUntil": now + LOCK_MINUTES * 60}
+        self._write_lock(key, doc)
+        time.sleep(0.3)
+
+    def _token(self, stage: str, seconds: float) -> tuple[str, float]:
+        exp = time.time() + seconds
+        return self._signer.dumps({"u": self.username, "v": self._ver, "e": exp, "s": stage}), exp
+
     def login(self, username: str, password: str, ip: str) -> dict:
+        """Step 1. A right password only earns a 5-minute pass to the code step, never the dashboard."""
         if not self.enabled:
             raise StaffError(503, "admin_disabled", "Admin sign-in is not set up on this server.")
         username = (username or "").strip().lower()[:64]
         key = self._key(username, ip)
         now = time.time()
         rec = self._read_lock(key)
-        if float(rec.get("lockedUntil") or 0) > now:
-            mins = int((float(rec["lockedUntil"]) - now) // 60) + 1
-            raise StaffError(429, "login_locked", f"Too many wrong attempts. Try again in {mins} minute(s).")
+        self._check_locked(rec, now)
         right_user = hmac.compare_digest(username.encode(), self.username.encode())
         ok = verify_password(password or "", self._hash if right_user else _DUMMY) and right_user
         if not ok:
-            first = float(rec.get("firstAt") or 0)
-            fails = 1 if now - first > LOCK_MINUTES * 60 else int(rec.get("fails") or 0) + 1
-            doc = {"fails": fails, "firstAt": first if fails > 1 else now, "lockedUntil": 0}
-            if fails >= MAX_FAILS:
-                doc = {"fails": 0, "firstAt": 0, "lockedUntil": now + LOCK_MINUTES * 60}
-            self._write_lock(key, doc)
-            time.sleep(0.3)
+            self._record_fail(key, rec, now)
             raise StaffError(401, "bad_credentials", "Wrong username or password.")
         self._write_lock(key, {"fails": 0, "firstAt": 0, "lockedUntil": 0})
-        exp = now + SESSION_HOURS * 3600
-        token = self._signer.dumps({"u": self.username, "v": self._hash[-12:], "e": exp})
-        return {"token": token, "username": self.username, "expiresAt": exp, "keyRequired": True}
+        token, exp = self._token("pw", 300)
+        return {"token": token, "username": self.username, "expiresAt": exp, "totpRequired": True}
 
-    def session(self, token: str) -> str:
+    def verify_code(self, token: str, code: str, ip: str) -> dict:
+        """Step 2. The 6-digit code from the authenticator app opens the dashboard."""
+        self.session(token, "pw")
+        key = self._key(self.username, ip, "totp")
+        now = time.time()
+        rec = self._read_lock(key)
+        self._check_locked(rec, now)
+        step = totp_verify(self.totp_secret, code, now)
+        if step is None or step <= self._last_step:  # a code works once
+            self._record_fail(key, rec, now)
+            raise StaffError(401, "bad_code", "That code is wrong or already used. Wait for a new one and try again.")
+        self._last_step = step
+        self._write_lock(key, {"fails": 0, "firstAt": 0, "lockedUntil": 0})
+        full, exp = self._token("full", SESSION_HOURS * 3600)
+        return {"token": full, "username": self.username, "expiresAt": exp}
+
+    def session(self, token: str, stage: str = "full") -> str:
         try:
             p = self._signer.loads(token)
-            if p["u"] != self.username or p["v"] != self._hash[-12:] or time.time() > float(p["e"]):
+            if p["u"] != self.username or p["v"] != self._ver or time.time() > float(p["e"]):
+                raise ValueError
+            if stage != "any" and p.get("s") != stage:
                 raise ValueError
             return p["u"]
         except (BadSignature, ValueError, KeyError, TypeError):
             raise StaffError(401, "staff_unauthenticated", "Sign in again.") from None
 
-    def require(self, with_key: bool = True):
+    def require(self, stage: str = "full"):
         def deco(view):
             @wraps(view)
             def wrapper(*args, **kwargs):
@@ -171,13 +209,7 @@ class Staff:
                 header = request.headers.get("Authorization", "")
                 if not header.startswith("Bearer "):
                     raise StaffError(401, "staff_unauthenticated", "Sign in to continue.")
-                g.actor = self.session(header[7:].strip())
-                if with_key:
-                    if len(self.admin_key) < 16:
-                        raise StaffError(503, "admin_key_missing", "Set ADMIN_KEY (16+ characters) on the server.")
-                    given = request.headers.get("X-Admin-Key", "")
-                    if not hmac.compare_digest(given.encode(), self.admin_key.encode()):
-                        raise StaffError(401, "bad_admin_key", "Wrong admin key.")
+                g.actor = self.session(header[7:].strip(), stage)
                 return view(*args, **kwargs)
             return wrapper
         return deco

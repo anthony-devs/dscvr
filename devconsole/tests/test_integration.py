@@ -66,7 +66,7 @@ class FakeFirestore:
 @pytest.fixture(scope="module")
 def live_server():
     sys.path.insert(0, str(SERVER))
-    env = {"ADMIN_USERNAME": "founder-x", "ADMIN_PASSWORD": "Str0ng!Passphrase#1", "ADMIN_KEY": "k" * 24,
+    env = {"ADMIN_USERNAME": "founder-x", "ADMIN_PASSWORD": "Str0ng!Passphrase#1", "ADMIN_TOTP_SECRET": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
            "SESSION_SECRET": "s" * 40, "DEV_API_SECRET": DEV_SECRET, "ANTHROPIC_API_KEY": "test"}
     fake = FakeFirestore()
     fake_claude = types.SimpleNamespace(models=types.SimpleNamespace(list=lambda **_: []))

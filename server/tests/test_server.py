@@ -236,7 +236,7 @@ import staff as staff_mod  # noqa: E402
 ADMIN_ENV = {
     "ADMIN_USERNAME": "founder-anthony",
     "ADMIN_PASSWORD_HASH": staff_mod.hash_password("Correct-Horse-9!"),
-    "ADMIN_KEY": "k" * 24,
+    "ADMIN_TOTP_SECRET": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
     "SESSION_SECRET": "s" * 40,
     "DEV_API_SECRET": "d" * 40,
 }
@@ -253,8 +253,18 @@ def admin_client():
         yield flask_app.test_client()
 
 
-def _login(c):
+TOTP = ADMIN_ENV["ADMIN_TOTP_SECRET"]
+
+
+def _code(offset=0):
+    from passwords import totp_at
+    return totp_at(TOTP, int(_time.time() // 30) + offset)
+
+
+def _login(c, offset=0):
     r = c.post("/admin/api/login", json={"username": "founder-anthony", "password": "Correct-Horse-9!"})
+    assert r.status_code == 200 and r.get_json()["totpRequired"] is True
+    r = c.post("/admin/api/totp", json={"token": r.get_json()["token"], "code": _code(offset)})
     assert r.status_code == 200
     return r.get_json()["token"]
 
@@ -273,19 +283,65 @@ def test_admin_login_rejects_wrong_password(admin_client):
     assert r.status_code == 401
 
 
-def test_admin_api_needs_session_and_key(admin_client):
+def test_admin_api_needs_a_full_session(admin_client):
     assert admin_client.get("/admin/api/overview").status_code == 401
+    # a right password alone only reaches the code step, never the dashboard
+    pw = admin_client.post("/admin/api/login", json={"username": "founder-anthony", "password": "Correct-Horse-9!"}).get_json()["token"]
+    assert admin_client.get("/admin/api/ping", headers={"Authorization": "Bearer " + pw}).status_code == 401
     token = _login(admin_client)
-    auth = {"Authorization": "Bearer " + token}
-    r = admin_client.get("/admin/api/ping", headers={**auth, "X-Admin-Key": "wrong"})
-    assert r.status_code == 401 and r.get_json()["error"] == "bad_admin_key"
-    r = admin_client.get("/admin/api/ping", headers={**auth, "X-Admin-Key": "k" * 24})
+    r = admin_client.get("/admin/api/ping", headers={"Authorization": "Bearer " + token})
     assert r.status_code == 200 and r.get_json()["username"] == "founder-anthony"
-    assert admin_client.get("/admin/api/ping", headers={"Authorization": "Bearer forged", "X-Admin-Key": "k" * 24}).status_code == 401
+    assert admin_client.get("/admin/api/ping", headers={"Authorization": "Bearer forged"}).status_code == 401
+
+
+def test_admin_code_step(admin_client):
+    pw = admin_client.post("/admin/api/login", json={"username": "founder-anthony", "password": "Correct-Horse-9!"}).get_json()["token"]
+    bad = admin_client.post("/admin/api/totp", json={"token": pw, "code": "000000"})
+    assert bad.status_code == 401 and bad.get_json()["error"] == "bad_code"
+    assert admin_client.post("/admin/api/totp", json={"token": pw, "code": "12345"}).status_code == 401
+    assert admin_client.post("/admin/api/totp", json={"token": "forged", "code": _code()}).status_code == 401
+    ok = admin_client.post("/admin/api/totp", json={"token": pw, "code": _code()})
+    assert ok.status_code == 200
+    # the same code cannot be used twice
+    again = admin_client.post("/admin/api/totp", json={"token": pw, "code": _code()})
+    assert again.status_code == 401 and again.get_json()["error"] == "bad_code"
+    # and a full token is not accepted as the code-step pass
+    assert admin_client.post("/admin/api/totp", json={"token": ok.get_json()["token"], "code": _code(1)}).status_code == 401
+
+
+def test_totp_matches_rfc6238_vectors():
+    from passwords import totp_at, totp_valid_secret, totp_verify
+    rfc = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # "12345678901234567890"
+    assert totp_at(rfc, 59 // 30) == "287082"
+    assert totp_at(rfc, 1111111109 // 30) == "081804"
+    assert totp_verify(rfc, "287082", now=59) == 1
+    assert totp_verify(rfc, "287082", now=59 + 60) is None and totp_verify(rfc, "28708", now=59) is None
+    assert totp_valid_secret(rfc) and not totp_valid_secret("short") and not totp_valid_secret("1" * 20)
+
+
+def test_admin_is_off_without_totp_secret():
+    env = {k: v for k, v in ADMIN_ENV.items() if k != "ADMIN_TOTP_SECRET"}
+    with mock.patch.dict(os.environ, env, clear=False):
+        os.environ.pop("ADMIN_TOTP_SECRET", None)
+        s = staff_mod.Staff()
+    assert not s.enabled and "ADMIN_TOTP_SECRET" in s.problem
+
+
+def test_sessions_survive_without_session_secret():
+    """Two workers with no SESSION_SECRET must agree, or the dashboard bounces you back to sign-in."""
+    env = {**ADMIN_ENV, "SESSION_SECRET": ""}
+    with mock.patch.dict(os.environ, env):
+        a, b = staff_mod.Staff(), staff_mod.Staff()
+        token, _ = a._token("full", 60)
+        assert b.session(token) == "founder-anthony"
+    with mock.patch.dict(os.environ, {**env, "ADMIN_PASSWORD_HASH": "", "ADMIN_PASSWORD": "Another-Pass-77!"}):
+        a, b = staff_mod.Staff(), staff_mod.Staff()  # a plain password is salted per worker; sessions must not depend on that
+        token, _ = a._token("full", 60)
+        assert b.session(token) == "founder-anthony"
 
 
 def test_admin_flags_validate_limit(admin_client):
-    h = {"Authorization": "Bearer " + _login(admin_client), "X-Admin-Key": "k" * 24}
+    h = {"Authorization": "Bearer " + _login(admin_client)}
     assert admin_client.post("/admin/api/flags", json={"freeDailyUsd": 50}, headers=h).status_code == 400
     with mock.patch.object(flags, "update", return_value={"freeDailyUsd": 0.2, "shared": True}) as up:
         r = admin_client.post("/admin/api/flags", json={"freeDailyUsd": 0.2}, headers=h)

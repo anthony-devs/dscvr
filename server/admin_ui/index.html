@@ -141,7 +141,7 @@ details summary{cursor:pointer;color:var(--dim);font-size:12.5px}
 'use strict';
 const $app = document.getElementById('app');
 const store = {get: k => { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} }, del: k => { try { sessionStorage.removeItem(k); } catch {} }};
-let TOKEN = store.get('dscvr_admin_token'), KEY = store.get('dscvr_admin_key'), TAB = 'overview', USER = '';
+let TOKEN = store.get('dscvr_admin_token'), PENDING = '', TAB = 'overview', USER = '';
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -175,18 +175,17 @@ const ed = e => h('span', {class: 'pill ' + e}, e ? e[0].toUpperCase() + e.slice
 
 class ApiErr extends Error { constructor(m, s, c) { super(m); this.status = s; this.code = c; } }
 async function api(path, body) {
-  const opts = {method: body ? 'POST' : 'GET', headers: {'Authorization': 'Bearer ' + TOKEN, 'X-Admin-Key': KEY}};
+  const opts = {method: body ? 'POST' : 'GET', headers: {'Authorization': 'Bearer ' + TOKEN}};
   if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   const res = await fetch(path, opts);
   let data = {}; try { data = await res.json(); } catch {}
   if (!res.ok) {
     if (res.status === 401 && data.error === 'staff_unauthenticated') { signOut(); }
-    if (res.status === 401 && data.error === 'bad_admin_key') { KEY = ''; store.del('dscvr_admin_key'); render(); }
     throw new ApiErr(data.message || data.error || ('HTTP ' + res.status), res.status, data.error);
   }
   return data;
 }
-function signOut() { TOKEN = ''; KEY = ''; store.del('dscvr_admin_token'); store.del('dscvr_admin_key'); render(); }
+function signOut() { TOKEN = ''; PENDING = ''; store.del('dscvr_admin_token'); render(); }
 
 // ── gates ───────────────────────────────────────────────────────────
 function gate(title, sub, fields, label, submit) {
@@ -202,18 +201,21 @@ function signInView() {
     const res = await fetch('/admin/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u.value, password: p.value})});
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.message || 'Sign-in failed.');
-    TOKEN = d.token; store.set('dscvr_admin_token', TOKEN); render();
+    PENDING = d.token; render();
   });
 }
-function keyView() {
-  const k = h('input', {type: 'password', autocomplete: 'off', required: true, autofocus: true});
-  return gate('Connect', 'Enter the admin key to open the dashboard.', [h('label', {}, 'Admin key'), k], 'Connect', async () => {
-    const res = await fetch('/admin/api/ping', {headers: {'Authorization': 'Bearer ' + TOKEN, 'X-Admin-Key': k.value}});
+function codeView() {
+  const k = h('input', {inputmode: 'numeric', pattern: '[0-9 ]*', maxlength: '7', autocomplete: 'one-time-code', required: true, autofocus: true, 'aria-label': '6-digit code', style: 'letter-spacing:.3em;font-size:22px;text-align:center'});
+  const view = gate('Enter your code', 'Open your authenticator app and type the 6-digit code for DSCVR Admin.', [h('label', {}, '6-digit code'), k], 'Open dashboard', async () => {
+    const res = await fetch('/admin/api/totp', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token: PENDING, code: k.value})});
     const d = await res.json().catch(() => ({}));
-    if (res.status === 401 && d.error === 'staff_unauthenticated') { signOut(); return; }
-    if (!res.ok) throw new Error(d.message || 'Could not connect.');
-    KEY = k.value; USER = d.username; store.set('dscvr_admin_key', KEY); render();
+    if (res.status === 401 && d.error === 'staff_unauthenticated') { PENDING = ''; render(); return; }
+    if (!res.ok) { k.value = ''; throw new Error(d.message || 'Could not verify the code.'); }
+    TOKEN = d.token; USER = d.username; PENDING = ''; store.set('dscvr_admin_token', TOKEN); render();
   });
+  view.querySelector('form').append(h('button', {class: 'small', type: 'button', style: 'margin-top:10px', onclick: () => { PENDING = ''; render(); }}, 'Back'));
+  k.addEventListener('input', () => { if (k.value.replace(/\D/g, '').length === 6) view.querySelector('form').requestSubmit(); });
+  return view;
 }
 
 // ── shell ───────────────────────────────────────────────────────────
@@ -241,8 +243,7 @@ function bars(series, key, fmt) {
     h('div', {class: 'axis'}, h('span', {}, series[0]?.day.slice(5)), h('span', {}, series[series.length - 1]?.day.slice(5)))];
 }
 async function render() {
-  if (!TOKEN) { $app.replaceChildren(signInView()); return; }
-  if (!KEY) { $app.replaceChildren(keyView()); return; }
+  if (!TOKEN) { $app.replaceChildren(PENDING ? codeView() : signInView()); return; }
   $app.replaceChildren(shell());
 }
 
@@ -405,7 +406,7 @@ VIEWS.audit = async (view, menu) => {
 };
 
 (async () => {
-  if (TOKEN && KEY) { try { USER = (await api('/admin/api/ping')).username; } catch {} }
+  if (TOKEN) { try { USER = (await api('/admin/api/ping')).username; } catch {} }
   else if (TOKEN) { try { USER = (await api('/admin/api/session')).username; } catch {} }
   render();
 })();
