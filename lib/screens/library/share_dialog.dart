@@ -132,6 +132,12 @@ class _ShareDialogState extends State<ShareDialog> {
                 value: _newPermission,
                 onChanged: (p) => setState(() => _newPermission = p),
               ),
+              const SizedBox(height: 10),
+              Text(
+                'Anyone with the link can open it after signing in to DSCVR. They see the titles, summaries, links and notes '
+                'in this ${widget.targetType}. Files you uploaded, your margin notes and your Pinda chats stay private.',
+                style: AppTheme.sans(fontSize: 12.5, color: c.inkMuted, height: 1.45),
+              ),
               const SizedBox(height: 12),
               AppButton.primary(
                 onPressed: _creating ? null : _createLink,
@@ -203,9 +209,8 @@ class _PermissionPicker extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       options: const [
-        (SharePermission.view, 'View', Ic.eye),
-        (SharePermission.comment, 'Comment', Ic.chatCircle),
-        (SharePermission.fork, 'Fork', Ic.gitFork),
+        (SharePermission.view, 'View only', Ic.eye),
+        (SharePermission.fork, 'View and copy', Ic.gitFork),
       ],
     );
   }

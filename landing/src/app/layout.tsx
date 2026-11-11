@@ -1,26 +1,46 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { DESCRIPTION, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "DSCVR: research, answered",
-  description:
-    "Search papers, clinical guidelines and case law from every free source at once, read PDFs with Pinda beside you, and turn what you learn into flashcards, case briefs and reports. Free for students and researchers.",
-  openGraph: {
-    title: "DSCVR: research, answered",
-    description:
-      "Find it, read it with Pinda, and write it up. For students, researchers, doctors, nurses and lawyers. Free to start.",
-    type: "website",
-    images: ["/pinda.svg"],
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "DSCVR: search papers, read with AI, write it up",
+    template: "%s | DSCVR",
   },
+  description: DESCRIPTION,
+  applicationName: "DSCVR",
+  keywords: [
+    "AI research assistant",
+    "academic paper search",
+    "literature review tool",
+    "PDF reader with AI",
+    "AI study tools",
+    "flashcards from PDF",
+    "case brief generator",
+    "medical student study app",
+    "law student study app",
+    "free research tool",
+  ],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "DSCVR",
+    title: "DSCVR: research, answered",
+    description: "Find the research, read it with Pinda, and write it up. For students, researchers, clinicians and lawyers. Free to start.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DSCVR: research, answered",
+    description: "Find the research, read it with Pinda, and write it up. Free to start.",
+  },
+  robots: { index: true, follow: true },
 };
 
-export const viewport: Viewport = { themeColor: "#F3F4F6" };
+export const viewport: Viewport = { themeColor: "#FAFAFA" };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body className="font-sans antialiased">{children}</body>

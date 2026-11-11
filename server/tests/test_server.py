@@ -734,3 +734,115 @@ def test_pdf_view_streams_pdf_and_blocks_private_urls(client):
     assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data.startswith(b"%PDF")
     assert client.get("/pdf/view?url=http://127.0.0.1/x.pdf", headers=AUTH).status_code == 400
     assert client.get("/pdf/view?url=https://arxiv.org/x.pdf").status_code == 401
+
+
+# ── Shared collections ───────────────────────────────────────────────
+
+class _ShareDB:
+    """Just enough Firestore for shares.resolve: documents and equality queries."""
+    def __init__(self, docs):
+        self.docs = docs
+    def document(self, path):
+        d = self.docs.get(path)
+        return mock.Mock(get=lambda: mock.Mock(exists=d is not None, to_dict=lambda: d, id=path.rsplit("/", 1)[-1]))
+    def collection(self, path):
+        db = self
+        class Q:
+            def __init__(self, filters=()):
+                self.filters = filters
+            def where(self, field, op, value):
+                return Q(self.filters + ((field, value),))
+            def limit(self, n):
+                return self
+            def get(self):
+                out = []
+                for k, v in db.docs.items():
+                    if k.startswith(path + "/") and "/" not in k[len(path) + 1:] and all(v.get(f) == val for f, val in self.filters):
+                        out.append(mock.Mock(id=k.rsplit("/", 1)[-1], to_dict=lambda v=v: v))
+                return out
+        return Q()
+
+
+def _share_docs(**link):
+    return {
+        "shares/L1": {"ownerId": "owner", "targetType": "category", "targetId": "c1", "permission": "fork", "active": True, **link},
+        "users/owner": {"displayName": "Ada Lovelace", "email": "ada@example.com"},
+        "users/owner/categories/c1": {"name": "Sepsis", "description": "Reading for the ward round"},
+        "users/owner/topics/t1": {"categoryId": "c1", "name": "Fluids"},
+        "users/owner/materials/m1": {"categoryId": "c1", "kind": "paper", "title": "Early goal-directed therapy",
+                                     "url": "https://example.org/p", "pdfUrl": "https://example.org/p.pdf", "authors": ["Rivers E"]},
+        "users/owner/materials/m2": {"categoryId": "c1", "kind": "pdf", "title": "My scan", "storagePath": "users/owner/m2.pdf",
+                                     "url": "https://storage/secret?token=x", "pdfUrl": "https://storage/secret?token=x"},
+        "users/owner/materials/m3": {"categoryId": "other", "kind": "note", "title": "Private elsewhere", "content": "no"},
+    }
+
+
+def test_share_returns_the_collection_without_private_files():
+    import shares
+    out = shares.resolve(_ShareDB(_share_docs()), "L1", "viewer")
+    assert out["name"] == "Sepsis" and out["ownerName"] == "Ada" and out["canFork"] and not out["mine"]
+    assert [i["title"] for i in out["items"]] == ["Early goal-directed therapy", "My scan"]
+    scan = out["items"][1]
+    assert scan["privateFile"] and "url" not in scan and "pdfUrl" not in scan
+    assert "token" not in json.dumps(out) and "ada@example.com" not in json.dumps(out)
+    assert out["topics"] == [{"id": "t1", "name": "Fluids", "description": ""}]
+
+
+@pytest.mark.parametrize("link,status", [
+    ({"active": False}, 404),
+    ({"expiresAt": "2020-01-01T00:00:00"}, 404),
+    ({"password": "x"}, 403),
+    ({"allowedEmails": ["someone@else.com"]}, 403),
+    ({"targetId": "gone"}, 404),
+])
+def test_share_refuses_dead_or_restricted_links(link, status):
+    import shares
+    with pytest.raises(shares.ShareError) as e:
+        shares.resolve(_ShareDB(_share_docs(**link)), "L1", "viewer", "me@example.com")
+    assert e.value.status == status
+
+
+def test_share_missing_link_is_404():
+    import shares
+    with pytest.raises(shares.ShareError):
+        shares.resolve(_ShareDB({}), "nope", "viewer")
+
+
+def test_share_endpoint_needs_sign_in_and_a_clean_id(client):
+    assert client.get("/shares/L1").status_code == 401
+    assert client.get("/shares/bad-id!", headers=AUTH).status_code == 404
+
+
+# ── Account deletion ─────────────────────────────────────────────────
+
+def test_account_delete_needs_confirmation(client):
+    assert client.post("/account/delete", headers=AUTH, json={}).status_code == 400
+
+
+def test_account_delete_removes_everything():
+    import account
+    calls = []
+    profile = {"paystack": {"subscriptionCode": "SUB_1"}, "orgId": "o1"}
+    rating_paper = mock.Mock()
+    rating_paper.get.return_value.to_dict.return_value = {"count": 3, "sum": 12}
+    rating = mock.Mock()
+    rating.to_dict.return_value = {"stars": 5, "uid": "u1"}
+    rating.reference.parent.parent = rating_paper
+    share = mock.Mock()
+    db = mock.Mock()
+    db.document.return_value.get.return_value.to_dict.return_value = profile
+    db.collection.return_value.where.return_value.get.return_value = [share]
+    db.collection_group.return_value.where.return_value.get.return_value = [rating]
+    blob = mock.Mock()
+    bucket = mock.Mock(list_blobs=mock.Mock(return_value=[blob, blob]))
+    auth = mock.Mock()
+    out = account.delete_everything("u1", db, bucket, auth,
+                                    cancel_subscription=lambda uid: calls.append("cancel"),
+                                    detach_org=lambda org, uid: calls.append(("detach", org)))
+    assert calls == ["cancel", ("detach", "o1")]
+    share.reference.delete.assert_called_once()
+    rating_paper.set.assert_called_once_with({"count": 2, "sum": 7}, merge=True)
+    assert blob.delete.call_count == 2
+    db.recursive_delete.assert_called_once()
+    auth.delete_user.assert_called_once_with("u1")
+    assert out == {"subscription": "cancelled", "org": "left", "shares": 1, "ratings": 1, "files": 2}

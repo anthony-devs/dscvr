@@ -9,6 +9,8 @@ Endpoints:
   GET   /pdf/find                    free PDF for a DOI (Unpaywall)
   GET   /pdf/view                    PDF bytes for the in-app viewer
   GET   /arxiv?ref=                  One arXiv paper by id or URL
+  POST  /account/delete              Delete the caller's account and all their data
+  GET   /shares/<id>                 Read-only copy of a shared category or topic
   GET   /related                     Related papers (Semantic Scholar)
   POST  /pdf/import                  Copy a public PDF into the user's storage
 
@@ -63,6 +65,7 @@ import flags
 import billing
 import orgs
 import plans
+import shares
 from admin import make_admin
 from devapi import make_devapi
 from metrics import metrics
@@ -176,7 +179,8 @@ def create_app(config: Config | None = None) -> Flask:
     @app.route("/health")
     @app.route("/healthz")
     def health():
-        return jsonify(ok=True, status="ok", service="dscvr-server", ai=bool(os.getenv("ANTHROPIC_API_KEY")))
+        return jsonify(ok=True, status="ok", service="dscvr-server", ai=bool(os.getenv("ANTHROPIC_API_KEY")),
+                       alertsEmail=bool(os.getenv("RESEND_API_KEY") and os.getenv("ALERTS_FROM_EMAIL")))
 
     @app.route("/pricing")
     @app.route("/payments/pricing")
@@ -620,6 +624,46 @@ def create_app(config: Config | None = None) -> Flask:
         room.reference.collection("members").document(g.uid).set(
             {"name": (profile.get("displayName") or "Member")[:80], "lastSeen": fs.SERVER_TIMESTAMP}, merge=True)
         return jsonify(roomId=room.id)
+
+    # ── Account ──────────────────────────────────────────────────────
+
+    @app.route("/account/delete", methods=["POST"])
+    @require_auth
+    def delete_account():
+        """Deletes the caller's account and everything in it. Can't be undone."""
+        if (r := limited("account")):
+            return r
+        body = request.get_json(silent=True) or {}
+        if body.get("confirm") != "DELETE":
+            return jsonify(error="Confirm deletion first."), 400
+        import account
+        from firebase_admin import auth as fb_auth, firestore as fs, storage
+        try:
+            done = account.delete_everything(
+                g.uid, fs.client(), storage.bucket(), fb_auth,
+                cancel_subscription=billing.cancel, detach_org=orgs._detach)
+        except Exception:  # noqa: BLE001
+            logger.exception("account deletion failed")
+            return jsonify(error="Couldn't delete your account. Email mail@askpinda.com and we'll do it."), 500
+        orgs._forget(g.uid)
+        return jsonify(ok=True, deleted=done)
+
+    # ── Shared collections ───────────────────────────────────────────
+
+    @app.route("/shares/<link_id>")
+    @require_auth
+    def open_share(link_id: str):
+        """What a share link points to, as a read-only copy for the viewer."""
+        if (r := limited("shares")):
+            return r
+        link_id = sanitize(link_id, 64)
+        if not link_id.isalnum():
+            return jsonify(error="This link is not valid."), 404
+        from firebase_admin import firestore as fs
+        try:
+            return jsonify(shares.resolve(fs.client(), link_id, g.uid, g.get("email")))
+        except shares.ShareError as e:
+            return jsonify(error=str(e)), e.status
 
     # ── Enterprise ───────────────────────────────────────────────────
 

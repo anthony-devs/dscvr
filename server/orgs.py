@@ -412,7 +412,7 @@ def rate_paper(uid: str, key: str, stars: int, title: str) -> dict[str, Any]:
         total = int(agg.get("sum", 0)) - int(prev["stars"] if prev else 0) + stars
         count = int(agg.get("count", 0)) + (0 if prev else 1)
         tx.set(paper, {"sum": total, "count": count, "title": title[:300] or agg.get("title", "")}, merge=True)
-        tx.set(mine, {"stars": stars, "updatedAt": _now()})
+        tx.set(mine, {"stars": stars, "uid": uid, "updatedAt": _now()})
         return total, count
 
     total, count = txn(db.transaction())

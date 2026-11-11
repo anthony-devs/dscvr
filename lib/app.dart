@@ -21,6 +21,7 @@ import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DscvrApp extends StatefulWidget {
   const DscvrApp({super.key, required this.settings});
@@ -93,6 +94,23 @@ class _DscvrAppState extends State<DscvrApp> {
       debugPrint('Device registration failed: $e');
     }
     unawaited(_orgs.pingActivity());
+    unawaited(_dailyAlertsCheck(uid));
+  }
+
+  /// Looks for new items in the user's subjects once a day, on first open.
+  /// This keeps alerts fresh even when no server schedule is running.
+  Future<void> _dailyAlertsCheck(String uid) async {
+    if (Env.demo || !_session.user.alertsOn) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'alerts.lastCheck.$uid';
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      if (prefs.getString(key) == today) return;
+      await _api.post('/alerts/check');
+      await prefs.setString(key, today);
+    } catch (e) {
+      debugPrint('Daily alerts check failed: $e');
+    }
   }
 
   @override

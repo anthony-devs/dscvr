@@ -59,9 +59,20 @@ def recount_ratings(apply: bool) -> dict:
     return {"scanned": scanned, "changed": _commit(updates, apply)}
 
 
+def tag_rating_owners(apply: bool) -> dict:
+    """Ratings made before they carried a uid get one (the document id), so account deletion can find them."""
+    updates, scanned = [], 0
+    for snap in _db().collection_group("ratings").stream():
+        scanned += 1
+        if not (snap.to_dict() or {}).get("uid"):
+            updates.append((snap.reference, {"uid": snap.id}))
+    return {"scanned": scanned, "changed": _commit(updates, apply)}
+
+
 MIGRATIONS: list[tuple[str, str, Callable[[bool], dict]]] = [
     ("2026-11-backfill-edition", "Give every existing user an edition (Students, Researchers or Enterprise).", backfill_edition),
     ("2026-11-recount-ratings", "Recount community paper ratings from the individual ratings.", recount_ratings),
+    ("2026-11-tag-rating-owners", "Record who made each rating so deleted accounts take their ratings with them.", tag_rating_owners),
 ]
 
 

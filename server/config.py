@@ -16,7 +16,7 @@ class Config:
     ALLOWED_ORIGINS = [
         r"https://dscvr-9d362\.web\.app",
         r"https://dscvr-9d362\.firebaseapp\.com",
-        r"https://dscvr\.askpinda\.com",
+        r"https://(app|dscvr)\.askpinda\.com",
         r"https://(www\.)?askpinda\.com",
         r"http://localhost(:\d+)?",
         r"http://127\.0\.0\.1(:\d+)?",

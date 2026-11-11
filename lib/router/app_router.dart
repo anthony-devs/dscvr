@@ -2,6 +2,7 @@ import 'package:dscvr/models/paper.dart';
 import 'package:dscvr/screens/reader/pdf_read_page.dart';
 import 'package:dscvr/screens/alerts/alerts_page.dart';
 import 'package:dscvr/screens/discover/discover_page.dart';
+import 'package:dscvr/screens/library/shared_page.dart';
 import 'package:dscvr/screens/library/home_pages.dart';
 import 'package:dscvr/screens/library/shelf_page.dart';
 import 'package:dscvr/screens/login.dart';
@@ -28,6 +29,9 @@ import 'package:go_router/go_router.dart';
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
+/// A share link waiting for the user to finish signing in.
+String? _pendingLink;
+
 GoRouter buildRouter(SessionController session) {
   NoTransitionPage<void> page(GoRouterState s, Widget child) => NoTransitionPage(key: s.pageKey, child: child);
 
@@ -37,6 +41,8 @@ GoRouter buildRouter(SessionController session) {
     refreshListenable: session,
     redirect: (context, state) {
       final loc = state.subloc;
+      // A share link opened while signed out survives login, sign-up and onboarding.
+      if (loc.startsWith('/s/') && session.status != SessionStatus.ready) _pendingLink = state.location;
       // Remember deep links (e.g. a shared /m/abc URL) across the auth check.
       final from = state.queryParams['from'];
       String hold(String target) =>
@@ -50,6 +56,11 @@ GoRouter buildRouter(SessionController session) {
           return loc == '/onboarding' ? null : '/onboarding';
         case SessionStatus.ready:
           if (const {'/splash', '/login', '/signup', '/onboarding', '/'}.contains(loc)) {
+            final pending = _pendingLink;
+            if (pending != null) {
+              _pendingLink = null;
+              return pending;
+            }
             if (from != null && from.startsWith('/') && !from.startsWith('/splash')) return from;
             final u = session.user;
             if (loc == '/onboarding' && u.edition == Edition.enterprise && !u.inOrg) return '/team';
@@ -70,6 +81,11 @@ GoRouter buildRouter(SessionController session) {
         pageBuilder: (_, s) => MaterialPage(
             key: s.pageKey,
             child: ReaderPage(itemId: s.params['id']!, dictate: s.queryParams['dictate'] == '1', ask: s.extra is String ? s.extra as String : null)),
+      ),
+      GoRoute(
+        path: '/s/:id',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: SharedPage(linkId: s.params['id']!)),
       ),
       GoRoute(
         path: '/read',

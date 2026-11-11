@@ -31,6 +31,17 @@ class _SettingsPageState extends State<SettingsPage> {
   late final Stream<List<DeviceSession>> _devices = context.services.sessions.watchDevices(context.services.session.user.id);
   late final Future<String> _thisDevice = context.services.sessions.deviceId();
 
+  /// Whether the server can send email digests. The option stays hidden until it can.
+  bool _emailDigests = false;
+
+  @override
+  void initState() {
+    super.initState();
+    context.services.api.get('/health', auth: false).then((h) {
+      if (mounted && h['alertsEmail'] == true) setState(() => _emailDigests = true);
+    }).catchError((_) {});
+  }
+
   Future<void> _editSubjects(BuildContext context) async {
     final session = context.services.session;
     final picked = [...session.user.interests];
@@ -283,7 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _Row(
                   label: 'New in my subjects',
-                  description: 'Once a day, DSCVR checks your subjects for new papers, guidelines and judgments.',
+                  description: 'DSCVR checks your subjects for new papers, guidelines and judgments, once a day when you open the app.',
                   child: AppSwitch(
                     value: user.alertsOn,
                     label: 'Alerts for new items in my subjects',
@@ -305,7 +316,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-                _Row(
+                if (_emailDigests) _Row(
                   label: 'Email me a digest',
                   description: 'A short email when there is something new. Off by default.',
                   child: AppSwitch(
@@ -529,24 +540,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _Row(
                     label: 'Delete account',
-                    description: 'Removes your profile. Library data is deleted with it.',
+                    description: 'Deletes your profile, library, notes, chats, reports and uploaded files, and stops any paid plan. This can\'t be undone.',
                     child: AppButton.ghost(
                       onPressed: () async {
                         final ok = await confirm(
                           context,
                           title: 'Delete your account?',
-                          message: 'This permanently deletes your account. Firebase may ask you to sign in again first.',
+                          message: 'Everything in your library is deleted with it, and any paid plan stops renewing. This can\'t be undone.',
+                          action: 'Delete everything',
                         );
                         if (!ok) return;
                         try {
-                          await FirebaseAuth.instance.currentUser?.delete();
-                        } on FirebaseAuthException catch (e) {
-                          if (context.mounted) {
-                            toast(
-                              context,
-                              e.code == 'requires-recent-login' ? 'Please sign out and in again, then retry.' : (e.message ?? 'Failed'),
-                            );
-                          }
+                          await s.api.post('/account/delete', {'confirm': 'DELETE'});
+                          await s.session.signOut();
+                        } catch (e) {
+                          if (context.mounted) toast(context, e.toString());
                         }
                       },
                       child: Text('Delete', style: TextStyle(color: c.danger)),

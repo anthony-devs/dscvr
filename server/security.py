@@ -146,6 +146,8 @@ LIMITS = {
     "rate":       {"per_min": 30, "per_hour": 300},
     "orgs":       {"per_min": 5,  "per_hour": 30},
     "rooms":      {"per_min": 10, "per_hour": 60},
+    "shares":     {"per_min": 20, "per_hour": 200},
+    "account":    {"per_min": 3, "per_hour": 10},
 }
 
 

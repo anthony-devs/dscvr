@@ -10,6 +10,7 @@
   --muted: #6B7280;
   --border: #E5E7EB;
   --accent: #111111;
+  --brand: #4F5BFF;
 }
 
 html {
@@ -81,3 +82,39 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .float-1, .float-2, .float-3, .eq { animation: none; }
 }
+
+/* Framed page: thin dashed rails either side of the content, like a layout sheet. */
+.rails { position: relative; }
+.rails::before, .rails::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 1px dashed rgba(17, 17, 17, 0.09); pointer-events: none;
+}
+.rails::before { left: 0; }
+.rails::after { right: 0; }
+.rails-dark::before, .rails-dark::after { border-color: rgba(255, 255, 255, 0.08); }
+
+/* Pixel mosaic behind the hero search card. */
+.mosaic { display: grid; grid-template-columns: repeat(24, 1fr); }
+.mosaic > span { aspect-ratio: 1; }
+@media (max-width: 640px) {
+  .mosaic { grid-template-columns: repeat(12, 1fr); }
+  .mosaic > span:nth-child(n+109) { display: none; }
+}
+
+/* Long-form text for the blog and legal pages. */
+.prose { font-size: 1.0625rem; line-height: 1.75; color: #1f2328; }
+.prose h2 { font-family: 'Source Serif 4', Georgia, serif; font-size: 1.75rem; line-height: 1.25; font-weight: 700; margin: 2.5rem 0 1rem; letter-spacing: -0.01em; }
+.prose h3 { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.75rem; }
+.prose p { margin: 0 0 1.25rem; }
+.prose ul, .prose ol { margin: 0 0 1.25rem; padding-left: 1.4rem; }
+.prose ul { list-style: disc; }
+.prose ol { list-style: decimal; }
+.prose li { margin: 0.4rem 0; }
+.prose a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.prose strong { font-weight: 600; color: #111; }
+.prose blockquote { border-left: 3px solid var(--brand); padding: 0.25rem 0 0.25rem 1.1rem; margin: 1.5rem 0; color: #4b5563; font-style: italic; }
+.prose code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: #f3f4f6; padding: 0.1rem 0.35rem; border-radius: 4px; }
+.prose hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+.prose table { width: 100%; border-collapse: collapse; margin: 0 0 1.5rem; font-size: 0.95rem; }
+.prose th, .prose td { border-bottom: 1px solid var(--border); padding: 0.6rem 0.5rem; text-align: left; vertical-align: top; }
+.prose th { font-weight: 600; }

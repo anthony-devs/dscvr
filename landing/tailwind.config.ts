@@ -14,6 +14,7 @@ const config: Config = {
         muted: "var(--muted)",
         border: "var(--border)",
         accent: "var(--accent)",
+        brand: { DEFAULT: "#4F5BFF", deep: "#2F3389", soft: "#EEF0FF" },
       },
       fontFamily: {
         serif: ["'Source Serif 4'", "Georgia", "serif"],

@@ -9,19 +9,19 @@ const steps = [
     number: "02",
     title: "Organize naturally",
     description:
-      "Create categories and topics that mirror how you think. Not rigid folders — a flexible, visual structure that grows with your research.",
+      "Create categories and topics that mirror how you think. Not rigid folders: a flexible structure that grows with your research.",
   },
   {
     number: "03",
-    title: "Read and highlight",
+    title: "Read with Pinda beside you",
     description:
-      "A clean reader with highlights, ratings and related papers beside it. Start a focus session and let the timer keep you honest.",
+      "A clean PDF reader with notes, ratings and related papers beside it. Ask Pinda about the page, or fact-check a claim.",
   },
   {
     number: "04",
     title: "Ask, then write it up",
     description:
-      "Pinda answers with citations back to your materials, then drafts the literature review, study notes or comparison you need.",
+      "Pinda answers from your materials and names them, then drafts the literature review, study notes or comparison you need, with numbered citations.",
   },
 ];
 

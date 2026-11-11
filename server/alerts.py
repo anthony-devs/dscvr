@@ -131,7 +131,7 @@ def _email(to: str | None, name: str | None, items: list[dict[str, Any]]) -> Non
     key, sender = os.getenv("RESEND_API_KEY", ""), os.getenv("ALERTS_FROM_EMAIL", "")
     if not (key and sender and to):
         return
-    app_url = os.getenv("APP_URL", "https://dscvr-9d362.web.app")
+    app_url = os.getenv("APP_URL", "https://app.askpinda.com")
     rows = []
     for p in items[:25]:
         meta = " · ".join(str(x) for x in (p.get("_subject"), SOURCE_NAMES.get(p.get("source"), ""), p.get("venue") or p.get("year")) if x)

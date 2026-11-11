@@ -32,7 +32,7 @@ class _AlertsPageState extends State<AlertsPage> {
     try {
       final r = await context.services.api.post('/alerts/check');
       final n = (r['new'] as num?)?.toInt() ?? 0;
-      if (mounted) toast(context, n > 0 ? '$n new' : 'Nothing new yet', description: n > 0 ? null : 'We check every day.');
+      if (mounted) toast(context, n > 0 ? '$n new' : 'Nothing new yet', description: n > 0 ? null : 'We check once a day when you open DSCVR.');
     } catch (e) {
       if (mounted) toast(context, e.toString());
     } finally {

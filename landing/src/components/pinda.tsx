@@ -31,7 +31,7 @@ export function Pinda() {
                   <div className="bg-gray-100 px-4 py-3 rounded-2xl rounded-bl-md text-sm max-w-[85%] space-y-2">
                     <p>Based on 4 papers in your library, here are the key findings:</p>
                     <p className="text-muted text-xs">
-                      <span className="font-medium text-foreground">1.</span> Self-attention scales quadratically with sequence length (Vaswani et al.)
+                      <span className="font-medium text-foreground">1.</span> Self-attention scales quadratically with sequence length (<span className="font-medium text-foreground">Vaswani 2017</span>)
                     </p>
                     <p className="text-muted text-xs">
                       <span className="font-medium text-foreground">2.</span> Flash Attention reduces memory from O(N&sup2;) to O(N) through tiling...
@@ -68,10 +68,9 @@ export function Pinda() {
               <span className="italic text-muted/60">answering back.</span>
             </h2>
             <p className="text-muted leading-relaxed mb-8 max-w-md">
-              Pinda is a pangolin, native to Nigeria, whose scales look like the pages it loves.
-              It reads your saved papers, PDFs and notes, then answers with citations pointing
-              back to your own materials. Not a generic chatbot: a study partner that knows what
-              you&apos;ve read and speaks your field.
+              Pinda is a pangolin whose scales look like the pages it loves. It reads your saved
+              papers, PDFs and notes, then answers from them and names the sources it used. Not a
+              generic chatbot: a study partner that knows what you&apos;ve read and speaks your field.
             </p>
             <div className="space-y-4">
               {[

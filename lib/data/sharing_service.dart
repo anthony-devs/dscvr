@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dscvr/data/api.dart';
 import 'package:dscvr/models/sharing.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -74,6 +75,11 @@ class SharingService {
     return link;
   }
 }
+
+/// Opens a share link as a viewer. The server checks the link and returns a
+/// read-only copy, because viewers can't read the owner's library directly.
+Future<SharedCollection> openSharedLink(DscvrApi api, String linkId) async =>
+    SharedCollection.fromMap(await api.get('/shares/$linkId'));
 
 /// In demo mode, returns canned data.
 class DemoSharingService extends SharingService {

@@ -48,7 +48,7 @@ const faqs = [
   },
   {
     q: "How do I pay, and can I cancel?",
-    a: "Plans are billed monthly in US dollars through Paystack, with cards from anywhere. Cancel any time from Settings; your plan runs to the end of the month you paid for.",
+    a: "Plans are billed monthly through Paystack, which accepts cards from most countries. Prices are shown in US dollars; Paystack charges the local-currency equivalent and your bank handles any conversion. Cancel any time from Settings; your plan runs to the end of the month you paid for.",
   },
   {
     q: "How is Enterprise billed?",
@@ -60,7 +60,7 @@ const faqs = [
   },
   {
     q: "How does Pinda work?",
-    a: "Pinda is DSCVR's research assistant, built on a leading large language model. Its answers are grounded in the papers and notes you choose, with citations back to them.",
+    a: "Pinda is DSCVR's research assistant, built on a leading large language model. It answers from the papers and notes you choose, names the sources it used, and says so when something isn't in your material.",
   },
 ];
 
