@@ -10,6 +10,10 @@ Endpoints:
   GET   /pdf/view                    PDF bytes for the in-app viewer
   GET   /arxiv?ref=                  One arXiv paper by id or URL
   POST  /account/delete              Delete the caller's account and all their data
+  GET   /blog/posts[/<slug>]         Published blog posts (public)
+  POST  /me/sync, /me/email-updates  Email verified state; product update emails on/off
+  GET   /referrals/me, POST /referrals/redeem
+  GET/POST /feedback/rating          Rate DSCVR (1-5 stars)
   GET   /shares/<id>                 Read-only copy of a shared category or topic
   GET   /related                     Related papers (Semantic Scholar)
   POST  /pdf/import                  Copy a public PDF into the user's storage
@@ -50,6 +54,7 @@ All endpoints that touch user data require a Firebase Bearer token.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 import os
 import uuid
 from urllib.parse import quote
@@ -66,6 +71,9 @@ import billing
 import orgs
 import plans
 import shares
+import blog
+import referrals
+import mailer
 from admin import make_admin
 from devapi import make_devapi
 from metrics import metrics
@@ -647,6 +655,108 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify(error="Couldn't delete your account. Email mail@askpinda.com and we'll do it."), 500
         orgs._forget(g.uid)
         return jsonify(ok=True, deleted=done)
+
+    # ── Blog (public; written from the admin console) ────────────────
+
+    @app.route("/blog/posts")
+    def blog_list():
+        resp = jsonify(posts=blog.list_posts())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+
+    @app.route("/blog/posts/<slug>")
+    def blog_get(slug: str):
+        post = blog.get_post(sanitize(slug, 100))
+        if not post:
+            return jsonify(error="Not found."), 404
+        resp = jsonify(post)
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+
+    # ── Me: email status and preferences ─────────────────────────────
+
+    @app.route("/me/sync", methods=["POST"])
+    @require_auth
+    def me_sync():
+        """Records whether the user's email is verified (from their sign-in token)."""
+        from firebase_admin import firestore as fs
+        fs.client().document(f"users/{g.uid}").set(
+            {"emailVerified": bool(g.get("email_verified")), **({"email": g.email} if g.get("email") else {})}, merge=True)
+        orgs._forget(g.uid)
+        return jsonify(ok=True, emailVerified=bool(g.get("email_verified")))
+
+    @app.route("/me/email-updates", methods=["POST"])
+    @require_auth
+    def me_email_updates():
+        body = request.get_json(silent=True) or {}
+        on = bool(body.get("on"))
+        from firebase_admin import firestore as fs
+        fs.client().document(f"users/{g.uid}").set({"emailUpdates": on}, merge=True)
+        orgs._forget(g.uid)
+        return jsonify(ok=True, emailUpdates=on)
+
+    @app.route("/email/unsubscribe", methods=["GET", "POST"])
+    def email_unsubscribe():
+        uid, token = sanitize(request.args.get("u", ""), 128), sanitize(request.args.get("t", ""), 64)
+        ok = bool(uid) and mailer.unsubscribe(uid, token)
+        msg = ("You're unsubscribed from DSCVR product updates. You can turn them back on in Settings."
+               if ok else "That unsubscribe link isn't valid. Turn updates off in DSCVR, Settings.")
+        return Response(f"<!doctype html><meta name=viewport content='width=device-width'><title>DSCVR</title>"
+                        f"<div style='font-family:system-ui;max-width:460px;margin:80px auto;padding:0 20px;line-height:1.6'>"
+                        f"<h2>DSCVR</h2><p>{msg}</p></div>", mimetype="text/html", status=200 if ok else 400)
+
+    # ── Referrals ────────────────────────────────────────────────────
+
+    @app.route("/referrals/me")
+    @require_auth
+    def referrals_me():
+        return jsonify(referrals.status(g.uid))
+
+    @app.route("/referrals/redeem", methods=["POST"])
+    @require_auth
+    def referrals_redeem():
+        if (r := limited("referrals")):
+            return r
+        body = request.get_json(silent=True) or {}
+        from firebase_admin import auth as fb_auth
+        try:
+            meta = fb_auth.get_user(g.uid).user_metadata
+            created = datetime.fromtimestamp(meta.creation_timestamp / 1000, timezone.utc) if meta and meta.creation_timestamp else None
+        except Exception:  # noqa: BLE001
+            created = None
+        try:
+            out = referrals.redeem(g.uid, str(body.get("code", "")), bool(g.get("email_verified")), created)
+        except referrals.ReferralError as e:
+            return jsonify(error=str(e)), e.status
+        orgs._forget(g.uid)
+        return jsonify(out)
+
+    # ── Rate DSCVR ───────────────────────────────────────────────────
+
+    @app.route("/feedback/rating", methods=["GET", "POST"])
+    @require_auth
+    def app_rating():
+        from firebase_admin import firestore as fs
+        ref = fs.client().document(f"app_ratings/{g.uid}")
+        if request.method == "GET":
+            d = ref.get().to_dict() or {}
+            return jsonify(stars=d.get("stars"), comment=d.get("comment", ""))
+        if (r := limited("feedback")):
+            return r
+        body = request.get_json(silent=True) or {}
+        try:
+            stars = int(body.get("stars"))
+        except (TypeError, ValueError):
+            stars = 0
+        if stars not in (1, 2, 3, 4, 5):
+            return jsonify(error="Pick from 1 to 5 stars."), 400
+        profile = orgs.user_profile(g.uid)
+        import plans as _plans
+        ref.set({"stars": stars, "comment": sanitize(str(body.get("comment", "")), 2000), "at": fs.SERVER_TIMESTAMP,
+                 "email": g.get("email") or profile.get("email"), "name": profile.get("displayName"),
+                 "edition": profile.get("edition"), "plan": _plans.plan_of(profile),
+                 "platform": sanitize(str(body.get("platform", "")), 20)}, merge=True)
+        return jsonify(ok=True, stars=stars)
 
     # ── Shared collections ───────────────────────────────────────────
 

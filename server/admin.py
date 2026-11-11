@@ -566,4 +566,96 @@ def make_admin(staff: Staff) -> Blueprint:
                          "target": d.get("target"), "detail": d.get("detail")})
         return jsonify(rows=rows)
 
+    # ── blog ─────────────────────────────────────────────────────────
+
+    @bp.get("/admin/api/blog")
+    @guarded
+    def blog_list():
+        import blog
+        return jsonify(posts=blog.list_posts(include_drafts=True))
+
+    @bp.get("/admin/api/blog/<slug>")
+    @guarded
+    def blog_get(slug):
+        import blog
+        post = blog.get_post(slug, include_drafts=True)
+        if not post:
+            raise StaffError(404, "not_found", "No post with that address.")
+        return jsonify(post)
+
+    @bp.post("/admin/api/blog")
+    @guarded
+    def blog_save():
+        import blog
+        try:
+            post = blog.save_post(body(), g.actor)
+        except blog.BlogError as e:
+            raise StaffError(e.status, "blog", str(e)) from None
+        audit("blog_save", post["slug"], {"published": post["published"]})
+        return jsonify(post)
+
+    @bp.post("/admin/api/blog/<slug>/delete")
+    @guarded
+    def blog_delete(slug):
+        import blog
+        try:
+            blog.delete_post(slug)
+        except blog.BlogError as e:
+            raise StaffError(e.status, "blog", str(e)) from None
+        audit("blog_delete", slug)
+        return jsonify(ok=True)
+
+    # ── feedback: Rate DSCVR ─────────────────────────────────────────
+
+    @bp.get("/admin/api/ratings")
+    @guarded
+    def app_ratings():
+        def build():
+            rows, total, dist = [], 0, {str(i): 0 for i in range(1, 6)}
+            for snap in _db().collection("app_ratings").limit(2000).get():
+                d = snap.to_dict() or {}
+                stars = int(d.get("stars") or 0)
+                if not 1 <= stars <= 5:
+                    continue
+                total += stars
+                dist[str(stars)] += 1
+                rows.append({"uid": snap.id, "stars": stars, "comment": d.get("comment") or "", "at": _iso(d.get("at")),
+                             "name": d.get("name"), "email": d.get("email"), "edition": d.get("edition"), "plan": d.get("plan")})
+            rows.sort(key=lambda r: r["at"] or "", reverse=True)
+            n = len(rows)
+            return {"count": n, "average": round(total / n, 2) if n else None, "distribution": dist, "ratings": rows[:200]}
+        return jsonify(cached("ratings", build))
+
+    # ── emails: product updates ──────────────────────────────────────
+
+    @bp.get("/admin/api/emails")
+    @guarded
+    def emails_info():
+        import mailer
+        def build():
+            return {"configured": mailer.configured(), "recipients": len(mailer.recipients())}
+        return jsonify(cached("emails", build))
+
+    @bp.post("/admin/api/emails/send")
+    @guarded
+    def emails_send():
+        import mailer
+        d = body()
+        subject, text = str(d.get("subject") or ""), str(d.get("body") or "")
+        if d.get("test"):
+            to = str(d.get("to") or "").strip()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", to):
+                raise StaffError(400, "bad_email", "Enter the email address to send the test to.")
+            targets = [{"uid": "test", "email": to, "name": "there"}]
+        else:
+            if d.get("confirm") != "SEND":
+                raise StaffError(400, "confirm", "Confirm before sending to everyone.")
+            targets = mailer.recipients()
+        try:
+            out = mailer.send(subject, text, targets)
+        except mailer.MailError as e:
+            raise StaffError(e.status, "mail", str(e)) from None
+        audit("email_test" if d.get("test") else "email_send", subject[:150], out)
+        return jsonify(out)
+
     return bp

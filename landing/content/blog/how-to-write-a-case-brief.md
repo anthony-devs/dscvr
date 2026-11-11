@@ -1,6 +1,6 @@
 ---
-title: How to brief a case: a template law students can reuse
-description: What goes into a case brief, how to find the ratio decidendi, the difference between ratio and obiter, and a template you can copy.
+title: Case Brief Template: How to Brief a Case (Guide for Law Students)
+description: How to brief a case step by step: facts, issues, holding, ratio decidendi and obiter dicta, with a free case brief template you can copy.
 date: 2026-11-08
 author: The DSCVR team
 tags: [law students, case brief, ratio decidendi, legal study]

@@ -1,6 +1,6 @@
 ---
-title: How to read a research paper quickly (and actually understand it)
-description: A three-pass method for reading academic papers, what to look for in each section, and how to keep notes you can use later.
+title: How to Read a Research Paper Quickly: The Three-Pass Method
+description: How to read a scientific paper fast: a three-pass method, what to look for in each section, and how to take notes you can use when you write.
 date: 2026-11-09
 author: The DSCVR team
 tags: [reading research, study skills, students, researchers]

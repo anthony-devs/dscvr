@@ -55,12 +55,17 @@
 </head>
 <body>
   <div id="splash" aria-label="Loading DSCVR"><div class="mark"><svg viewBox="0 0 128 128" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="#5B6CFF" stroke="#2F3389" stroke-width="8"/><path d="M22 46 Q37 62 52 46 Q67 62 82 46 Q97 62 106 48" fill="none" stroke="#2F3389" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 74 Q29 90 44 74 Q59 90 74 74" fill="none" stroke="#2F3389" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M78 90 C96 86 112 96 122 110 C110 120 92 120 78 108 Z" fill="#F4CDA5" stroke="#2F3389" stroke-width="8" stroke-linejoin="round"/><circle cx="98" cy="102" r="4.5" fill="#1D1F2B"/></svg></div></div>
-  <div id="slow" role="status"><span>This is taking longer than usual. Your connection may be slow, or this network may be blocking part of DSCVR.</span><button type="button" onclick="location.reload()">Try again</button><span style="opacity:.7">If it keeps happening, switch between Wi-Fi and mobile data.</span></div>
+  <div id="slow" role="status"><span id="slow-msg">Still loading. The first visit downloads about 2.5 MB, so it can take a minute on a slow connection. After that, DSCVR opens almost instantly.</span><button id="slow-retry" type="button" onclick="location.reload()" hidden>Try again</button><span id="slow-tip" style="opacity:.7" hidden>If nothing changes, switch between Wi-Fi and mobile data, then try again.</span></div>
   <script>
-    // If the app has not drawn its first frame after 12 seconds, say so instead of spinning forever.
+    // A slow first download is normal on weak connections, so first say it's still loading.
+    // Only offer a reload (which restarts the download) after a long wait.
     var slowTimer = setTimeout(function () { var e = document.getElementById('slow'); if (e) e.classList.add('on'); }, 12000);
+    var stuckTimer = setTimeout(function () {
+      var m = document.getElementById('slow-msg'); if (m) m.textContent = 'This is taking much longer than usual. Your connection may be very slow, or this network may be blocking part of DSCVR.';
+      ['slow-retry', 'slow-tip'].forEach(function (id) { var x = document.getElementById(id); if (x) x.hidden = false; });
+    }, 120000);
     window.addEventListener('flutter-first-frame', function () {
-      clearTimeout(slowTimer);
+      clearTimeout(slowTimer); clearTimeout(stuckTimer);
       var sl = document.getElementById('slow'); if (sl) sl.remove();
       var s = document.getElementById('splash');
       if (s) { s.classList.add('hide'); setTimeout(function () { s.remove(); }, 300); }

@@ -1,6 +1,6 @@
 ---
-title: Why AI chatbots make up citations, and how to use AI for research safely
-description: Why general-purpose chatbots produce references that don't exist, how to spot them, and a safer way to use AI for reading and writing research.
+title: Does ChatGPT Make Up Citations? Why AI Invents Sources and How to Check
+description: Why AI chatbots like ChatGPT produce fake citations and references, how to spot a fake source, and a safer way to use AI for research.
 date: 2026-11-06
 author: The DSCVR team
 tags: [AI for research, citations, academic integrity, ChatGPT]

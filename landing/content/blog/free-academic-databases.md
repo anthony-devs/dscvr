@@ -1,6 +1,6 @@
 ---
-title: Where to find free research papers: 10 sources worth knowing
-description: The free, legal databases and search engines for academic papers, preprints, clinical guidelines and case law, what each one is best for, and how to search several at once.
+title: Free Academic Databases: 10 Places to Find Research Papers for Free
+description: The best free academic databases and search engines for research papers, preprints, clinical guidelines and case law, and how to search them all at once.
 date: 2026-11-10
 author: The DSCVR team
 tags: [free research papers, academic databases, open access, students]

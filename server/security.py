@@ -77,6 +77,7 @@ def require_auth(f: Callable) -> Callable:
             return jsonify(error="Invalid or expired token."), 401
         g.uid = claims["uid"]
         g.email = claims.get("email")
+        g.email_verified = bool(claims.get("email_verified"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -148,6 +149,8 @@ LIMITS = {
     "rooms":      {"per_min": 10, "per_hour": 60},
     "shares":     {"per_min": 20, "per_hour": 200},
     "account":    {"per_min": 3, "per_hour": 10},
+    "referrals":  {"per_min": 5, "per_hour": 30},
+    "feedback":   {"per_min": 5, "per_hour": 20},
 }
 
 

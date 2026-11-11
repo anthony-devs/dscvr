@@ -8,14 +8,15 @@ import { allPosts, formatDate, getPost } from "@/lib/blog";
 import { renderMarkdown } from "@/lib/markdown";
 import { SITE_URL } from "@/lib/site";
 
-export const dynamicParams = false;
+export const revalidate = 300;
+export const dynamicParams = true;
 
-export function generateStaticParams() {
-  return allPosts().map((p) => ({ slug: p.slug }));
+export async function generateStaticParams() {
+  return (await allPosts()).map((p) => ({ slug: p.slug }));
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
-  const post = getPost(params.slug);
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const post = await getPost(params.slug);
   if (!post) return {};
   return {
     title: post.title,
@@ -26,12 +27,12 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   };
 }
 
-export default function PostPage({ params }: { params: { slug: string } }) {
-  const post = getPost(params.slug);
+export default async function PostPage({ params }: { params: { slug: string } }) {
+  const post = await getPost(params.slug);
   if (!post) notFound();
   // The CTA goes where the post says <!-- cta -->, or at the end.
   const [before, after] = post.body.split("<!-- cta -->");
-  const others = allPosts().filter((p) => p.slug !== post.slug).slice(0, 3);
+  const others = (await allPosts()).filter((p) => p.slug !== post.slug).slice(0, 3);
   const schema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",

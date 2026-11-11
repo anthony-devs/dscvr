@@ -89,6 +89,10 @@ tr:last-child td{border-bottom:0}
 .toolbar select{max-width:180px}
 .split{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:16px;align-items:start}
 .panel{position:sticky;top:20px}
+.split.wide{grid-template-columns:minmax(0,340px) minmax(0,1fr)}
+.split.wide .panel{position:static}
+label.s{display:block;margin:12px 0 5px}
+@media (max-width:900px){.split.wide{grid-template-columns:1fr}}
 .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:13.5px}
 .kv dt{color:var(--dim)}
 .kv dd{margin:0;word-break:break-word}
@@ -161,6 +165,9 @@ const ICONS = {
   community: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   switches: '<rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/>',
   audit: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+  blog: '<path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  feedback: '<path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.4A8 8 0 1121 12z"/>',
+  emails: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
 };
 const icon = n => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.7'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[n]; return s; };
@@ -219,7 +226,7 @@ function codeView() {
 }
 
 // ── shell ───────────────────────────────────────────────────────────
-const TABS = [['overview', 'Overview'], ['users', 'Users'], ['teams', 'Teams'], ['community', 'Community'], ['switches', 'Switches'], ['audit', 'Audit log']];
+const TABS = [['overview', 'Overview'], ['users', 'Users'], ['teams', 'Teams'], ['community', 'Community'], ['blog', 'Blog'], ['feedback', 'Feedback'], ['emails', 'Emails'], ['switches', 'Switches'], ['audit', 'Audit log']];
 function shell() {
   const side = h('aside', {},
     h('div', {class: 'brand'}, h('div', {class: 'mark'}, 'D'), h('b', {}, 'DSCVR'), h('span', {}, 'Admin')),
@@ -374,6 +381,83 @@ VIEWS.community = async (view, menu) => {
       card('Live group sessions', r.rooms.length ? h('table', {}, h('tr', {}, h('th', {}, 'Room'), h('th', {}, 'People'), h('th', {})),
         r.rooms.map(x => h('tr', {}, h('td', {}, x.title || 'Untitled', h('div', {class: 's'}, `${x.host || ''} · ${when(x.createdAt)}`)), h('td', {}, num(x.members)),
           h('td', {}, h('button', {class: 'small danger', onclick: async () => { if (!confirm('End this room for everyone in it?')) return; try { await api(`/admin/api/rooms/${x.id}/end`, {}); toast('Room ended'); render(); } catch (e) { toast(e.message, true); } }}, 'End'))))) : h('div', {class: 'empty'}, 'No live rooms right now.'))));
+};
+
+// ── blog ────────────────────────────────────────────────────────────
+let BLOGSEL = '';
+const SITE = 'https://www.askpinda.com';
+VIEWS.blog = async (view, menu) => {
+  const d = await api('/admin/api/blog');
+  const panel = h('div', {class: 'panel'});
+  const hint = (el, min, max, label) => { const n = el.value.trim().length; return `${label}: ${n} characters` + (n && (n < min || n > max) ? ` (aim for ${min} to ${max})` : ''); };
+  async function edit(slug) {
+    BLOGSEL = slug;
+    let p = {title: '', slug: '', description: '', tags: [], date: new Date().toISOString().slice(0, 10), author: 'The DSCVR team', body: '', published: false};
+    if (slug) { try { p = await api('/admin/api/blog/' + encodeURIComponent(slug)); } catch (e) { toast(e.message, true); return; } }
+    const title = h('input', {value: p.title, maxlength: '160', placeholder: 'How to write a literature review: a step-by-step guide'});
+    const sl = h('input', {value: p.slug, maxlength: '90', placeholder: 'how-to-write-a-literature-review (made from the title if empty)'});
+    const desc = h('textarea', {rows: '3', maxlength: '300', placeholder: 'One or two sentences. Google shows this under the title.'}, p.description);
+    const tags = h('input', {value: (p.tags || []).join(', '), placeholder: 'literature review, students, research methods'});
+    const date = h('input', {type: 'date', value: p.date, style: 'max-width:180px'});
+    const author = h('input', {value: p.author, maxlength: '80', style: 'max-width:260px'});
+    const pub = h('input', {type: 'checkbox', checked: p.published, style: 'width:auto'});
+    const bodyEl = h('textarea', {rows: '24', class: 'mono', style: 'font-size:13px;line-height:1.55', placeholder: 'Write in Markdown.\n\n## A heading\n\nA paragraph with **bold** and a [link](https://www.askpinda.com).\n\n- A list item\n\nPut <!-- cta --> where the "Try DSCVR" box should go.'}, p.body);
+    const tHint = h('div', {class: 's'}), dHint = h('div', {class: 's'}), wHint = h('div', {class: 's'});
+    const upd = () => { tHint.textContent = hint(title, 30, 65, 'Title'); dHint.textContent = hint(desc, 110, 160, 'Description'); wHint.textContent = `${(bodyEl.value.trim().match(/\S+/g) || []).length} words`; };
+    [title, desc, bodyEl].forEach(x => x.addEventListener('input', upd)); upd();
+    const save = async () => {
+      try {
+        const out = await api('/admin/api/blog', {title: title.value, slug: sl.value, previousSlug: slug, description: desc.value, tags: tags.value, date: date.value, author: author.value, body: bodyEl.value, published: pub.checked});
+        toast(out.published ? 'Saved and published. Live on the site within a few minutes.' : 'Saved as a draft'); BLOGSEL = out.slug; render();
+      } catch (e) { toast(e.message, true); }
+    };
+    put(panel, card(null,
+      h('div', {class: 'row', style: 'justify-content:space-between'}, h('h3', {class: 'serif', style: 'margin:0;font-size:22px'}, slug ? 'Edit post' : 'New post'),
+        h('div', {class: 'row'}, slug && p.published ? h('a', {href: `${SITE}/blog/${slug}`, target: '_blank', rel: 'noopener'}, h('button', {class: 'small'}, 'View on site')) : null,
+          slug ? h('button', {class: 'small danger', onclick: async () => { if (!confirm('Delete this post? It disappears from the site.')) return; try { await api(`/admin/api/blog/${encodeURIComponent(slug)}/delete`, {}); toast('Deleted'); BLOGSEL = ''; render(); } catch (e) { toast(e.message, true); } }}, 'Delete') : null)),
+      h('label', {class: 's'}, 'Title (use the words people search for)'), title, tHint,
+      h('label', {class: 's'}, 'Address: askpinda.com/blog/…'), sl,
+      h('label', {class: 's'}, 'Description'), desc, dHint,
+      h('label', {class: 's'}, 'Tags'), tags,
+      h('div', {class: 'row', style: 'gap:16px;margin-top:8px'}, h('div', {}, h('label', {class: 's'}, 'Date'), date), h('div', {}, h('label', {class: 's'}, 'Author'), author)),
+      h('label', {class: 's'}, 'Post (Markdown)'), bodyEl, wHint,
+      h('div', {class: 'row', style: 'margin-top:14px;justify-content:space-between'}, h('label', {class: 'row', style: 'gap:8px'}, pub, 'Published'), h('button', {class: 'primary', onclick: save}, 'Save'))));
+  }
+  put(view, header('Blog', `${d.posts.length} posts written here. Posts in the code repo also show on the site.`, h('button', {class: 'primary small', onclick: () => edit('')}, 'New post'), menu),
+    h('div', {class: 'split wide'}, d.posts.length ? card(null, h('table', {}, h('tr', {}, h('th', {}, 'Post'), h('th', {}, 'Status')),
+      d.posts.map(x => h('tr', {class: 'click', onclick: () => edit(x.slug)}, h('td', {}, x.title, h('div', {class: 's mono'}, '/blog/' + x.slug)), h('td', {}, h('span', {class: 'pill ' + (x.published ? 'good' : 'warn')}, x.published ? 'Live' : 'Draft'), h('div', {class: 's'}, x.date)))))) : card(null, h('div', {class: 'empty'}, 'No posts yet. Write your first one.')), panel));
+  if (BLOGSEL) edit(BLOGSEL); else put(panel, card(null, h('div', {class: 'empty'}, 'Pick a post to edit, or start a new one.')));
+};
+
+// ── feedback ────────────────────────────────────────────────────────
+VIEWS.feedback = async (view, menu) => {
+  const d = await api('/admin/api/ratings');
+  const max = Math.max(1, ...Object.values(d.distribution));
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+  put(view, header('Feedback', 'What people say when they rate DSCVR in the app.', null, menu),
+    h('div', {class: 'grid g3'}, stat('Average rating', d.average == null ? '—' : d.average + ' / 5', `${num(d.count)} ratings`, true),
+      card('Stars', h('div', {class: 'legend'}, ['5', '4', '3', '2', '1'].flatMap(k => [h('div', {}, k + ' ★', h('div', {class: 'meter', style: 'margin-top:6px'}, h('i', {style: `width:${d.distribution[k] / max * 100}%`}))), h('b', {}, num(d.distribution[k]))])))),
+    h('div', {class: 'section'}, card('Latest', d.ratings.length ? h('table', {}, h('tr', {}, h('th', {}, 'Rating'), h('th', {}, 'Comment'), h('th', {class: 'hide-sm'}, 'Who')),
+      d.ratings.map(r => h('tr', {}, h('td', {style: 'white-space:nowrap;color:var(--warn)'}, stars(r.stars), h('div', {class: 's'}, when(r.at))), h('td', {}, r.comment || h('span', {class: 's'}, 'No comment')), h('td', {class: 's hide-sm'}, r.name || '—', h('div', {}, r.email || ''), h('div', {}, [r.edition, PLAN[r.plan]].filter(Boolean).join(' · '))))))
+      : h('div', {class: 'empty'}, 'No ratings yet.'))));
+};
+
+// ── emails ──────────────────────────────────────────────────────────
+VIEWS.emails = async (view, menu) => {
+  const d = await api('/admin/api/emails');
+  const subject = h('input', {maxlength: '150', placeholder: 'New in DSCVR: share your reading lists'});
+  const bodyEl = h('textarea', {rows: '14', placeholder: 'Write in simple Markdown: paragraphs, ## headings, - lists, **bold** and [links](https://www.askpinda.com).\n\nEach email starts with "Hi <first name>," and ends with an unsubscribe link.'});
+  const to = h('input', {type: 'email', placeholder: 'your@email.com', style: 'max-width:280px'});
+  const send = async (test) => {
+    if (!test && !confirm(`Send "${subject.value}" to ${d.recipients} people? This can't be undone.`)) return;
+    try { const out = await api('/admin/api/emails/send', {subject: subject.value, body: bodyEl.value, test, to: to.value, confirm: test ? undefined : 'SEND'}); toast(test ? 'Test sent' : `Sent to ${out.sent}${out.failed ? `, ${out.failed} failed` : ''}`); } catch (e) { toast(e.message, true); }
+  };
+  put(view, header('Emails', `Product updates go to the ${num(d.recipients)} people who turned them on and verified their email.`, null, menu),
+    !d.configured ? h('div', {class: 'banner'}, 'Email isn\'t set up yet. In Railway, add RESEND_API_KEY and UPDATES_FROM_EMAIL (for example updates@askpinda.com), then redeploy.') : null,
+    card(null, h('label', {class: 's'}, 'Subject'), subject, h('label', {class: 's'}, 'Message'), bodyEl,
+      h('div', {class: 'row', style: 'margin-top:14px;justify-content:space-between;flex-wrap:wrap;gap:10px'},
+        h('div', {class: 'row'}, to, h('button', {class: 'small', onclick: () => send(true)}, 'Send test')),
+        h('button', {class: 'primary', disabled: !d.configured || !d.recipients, onclick: () => send(false)}, `Send to ${num(d.recipients)}`))));
 };
 
 // ── switches ────────────────────────────────────────────────────────

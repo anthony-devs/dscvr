@@ -1,6 +1,6 @@
 ---
-title: The Pomodoro technique for studying: how to focus for longer without burning out
-description: How timed focus blocks work, how long they should be, what to do in the breaks, and how to end each session knowing what to do next.
+title: Pomodoro Technique for Studying: How to Focus Longer Without Burning Out
+description: How to use the Pomodoro technique to study: how long each session should be, what to do in breaks, and how to study with friends using a shared timer.
 date: 2026-11-05
 author: The DSCVR team
 tags: [pomodoro technique, focus, study habits, productivity]

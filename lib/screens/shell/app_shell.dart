@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/growth/growth.dart';
 import 'package:dscvr/screens/tour/page_tour.dart';
 import 'dart:ui' as ui;
 
@@ -91,7 +92,7 @@ class AppShell extends StatelessWidget {
             ),
           ],
         ),
-        body: DecoratedBox(decoration: background, child: child),
+        body: DecoratedBox(decoration: background, child: Column(children: [const VerifyEmailBanner(), Expanded(child: child)])),
         bottomNavigationBar: TourTarget(id: 'shell.nav', child: _BottomNav(location: location)),
       );
     }
@@ -146,6 +147,7 @@ class AppShell extends StatelessWidget {
                           ),
                         ),
                       ),
+                      const VerifyEmailBanner(),
                       Expanded(child: child),
                     ],
                   ),

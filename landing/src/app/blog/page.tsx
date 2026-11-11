@@ -3,14 +3,16 @@ import Link from "next/link";
 import { PageShell } from "@/components/page-shell";
 import { allPosts, formatDate } from "@/lib/blog";
 
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Blog: guides for students and researchers",
   description: "Practical guides on finding papers, reading research, writing literature reviews, revising for exams and using AI for study without getting things wrong.",
   alternates: { canonical: "/blog" },
 };
 
-export default function BlogIndex() {
-  const posts = allPosts();
+export default async function BlogIndex() {
+  const posts = await allPosts();
   return (
     <PageShell>
       <div className="max-w-4xl mx-auto px-6">

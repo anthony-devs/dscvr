@@ -1,6 +1,6 @@
 ---
-title: Active recall for exams: how to make flashcards and practice questions from your own reading
-description: Why testing yourself beats rereading, how to write flashcards and multiple-choice questions that actually help, and how to make them from your notes in minutes.
+title: Active Recall Study Method: How to Make Flashcards and Practice Questions
+description: How to use active recall and spaced repetition to study for exams, write better flashcards and practice questions, and make them from your notes fast.
 date: 2026-11-07
 author: The DSCVR team
 tags: [active recall, flashcards, exam revision, medical students, study tips]

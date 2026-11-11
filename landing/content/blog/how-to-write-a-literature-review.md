@@ -1,6 +1,6 @@
 ---
-title: How to write a literature review, step by step
-description: A practical method for finding sources, reading them efficiently, spotting themes and gaps, and turning your notes into a literature review that holds together.
+title: How to Write a Literature Review: A Step-by-Step Guide for Students
+description: How to write a literature review in 8 steps: narrow your question, search databases, screen papers, find themes and gaps, and write it up with accurate citations.
 date: 2026-11-11
 author: The DSCVR team
 tags: [literature review, academic writing, research methods, students]

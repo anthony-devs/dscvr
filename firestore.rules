@@ -25,9 +25,11 @@ service cloud.firestore {
       // Org membership is granted only by the server (/orgs, /orgs/join).
       allow update: if isOwner(uid)
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'orgId', 'orgRole',
-            'plan', 'planStatus', 'planEndsAt', 'planUpdatedAt', 'planGrantedBy', 'paystack']));
+            'plan', 'planStatus', 'planEndsAt', 'planUpdatedAt', 'planGrantedBy', 'paystack',
+            'boostUntil', 'referralCode', 'referralCount', 'referredBy', 'referredAt', 'emailVerified']));
       allow create: if isOwner(uid)
-        && !request.resource.data.keys().hasAny(['orgId', 'orgRole', 'plan', 'planStatus', 'planEndsAt', 'paystack']);
+        && !request.resource.data.keys().hasAny(['orgId', 'orgRole', 'plan', 'planStatus', 'planEndsAt', 'paystack',
+            'boostUntil', 'referralCode', 'referralCount', 'referredBy', 'referredAt', 'emailVerified']);
 
       // Usage counters — Cloud Functions only (admin SDK bypasses rules).
       match /meta/{doc} {

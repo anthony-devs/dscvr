@@ -105,7 +105,9 @@ def check_allowance(uid: str) -> dict[str, Any] | None:
     caps = plans.budgets(plan, flags.free_daily_usd())
     if caps is None:
         return None
-    daily, monthly = caps
+    import referrals
+    boost = referrals.boost_factor(profile)
+    daily, monthly = caps[0] * boost, caps[1] * boost
     u = _db().document(f"users/{uid}/meta/usage").get().to_dict() or {}
     day_cost = float(u.get("dayCost") or 0) if u.get("day") == _today() else 0.0
     month_cost = float(u.get("monthCost") or 0) if u.get("month") == _month() else 0.0
@@ -121,6 +123,10 @@ def check_allowance(uid: str) -> dict[str, Any] | None:
     return None
 
 
+def _iso_or_none(v: Any) -> str | None:
+    return v.isoformat() if hasattr(v, "isoformat") else (str(v) if v else None)
+
+
 def usage_for(uid: str) -> dict[str, Any]:
     """The usage meter a user sees: percentages and reset times, no dollars."""
     import flags
@@ -128,6 +134,10 @@ def usage_for(uid: str) -> dict[str, Any]:
     profile = user_profile(uid, fresh=True)
     plan = plans.plan_of(profile)
     caps = plans.budgets(plan, flags.free_daily_usd())
+    import referrals
+    boost = referrals.boost_factor(profile)
+    if caps:
+        caps = (caps[0] * boost, caps[1] * boost)
     u = _db().document(f"users/{uid}/meta/usage").get().to_dict() or {}
     day_cost = float(u.get("dayCost") or 0) if u.get("day") == _today() else 0.0
     month_cost = float(u.get("monthCost") or 0) if u.get("month") == _month() else 0.0
@@ -140,7 +150,9 @@ def usage_for(uid: str) -> dict[str, Any]:
     ends = profile.get("planEndsAt")
     return {"plan": plan, "planStatus": profile.get("planStatus") or ("active" if plan != "free" else None),
             "planEndsAt": ends.isoformat() if hasattr(ends, "isoformat") else ends,
-            "usage": meter, "requests": int(u.get("total") or 0)}
+            "usage": meter, "requests": int(u.get("total") or 0),
+            "boost": boost if boost > 1 else None,
+            "boostUntil": _iso_or_none(profile.get("boostUntil")) if boost > 1 else None}
 
 
 def record_usage(uid: str, feature: str, input_tokens: int = 0, output_tokens: int = 0, model: str | None = None) -> None:

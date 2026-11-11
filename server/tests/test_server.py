@@ -846,3 +846,81 @@ def test_account_delete_removes_everything():
     db.recursive_delete.assert_called_once()
     auth.delete_user.assert_called_once_with("u1")
     assert out == {"subscription": "cancelled", "org": "left", "shares": 1, "ratings": 1, "files": 2}
+
+
+# ── Blog, referrals, ratings, emails ─────────────────────────────────
+
+def test_blog_slugify_and_validation():
+    import blog
+    assert blog.slugify("How to Write a Literature Review (2026)!") == "how-to-write-a-literature-review-2026"
+    with mock.patch.object(blog, "_db"), mock.patch.object(blog, "revalidate"):
+        with pytest.raises(blog.BlogError):
+            blog.save_post({"title": "Hi"}, "me")
+        with pytest.raises(blog.BlogError):
+            blog.save_post({"title": "A real title", "date": "11/11/2026"}, "me")
+        out = blog.save_post({"title": "A real title", "body": "Hello", "tags": "a, b", "published": True}, "me")
+    assert out["slug"] == "a-real-title" and out["tags"] == ["a", "b"] and out["published"]
+
+
+def test_blog_public_hides_drafts(client):
+    import blog
+    with mock.patch.object(blog, "get_post", return_value=None):
+        assert client.get("/blog/posts/draft-post").status_code == 404
+    with mock.patch.object(blog, "list_posts", return_value=[{"slug": "x"}]):
+        assert client.get("/blog/posts").get_json() == {"posts": [{"slug": "x"}]}
+
+
+def test_referral_boost_factor():
+    import referrals
+    from datetime import datetime, timedelta, timezone
+    future = datetime.now(timezone.utc) + timedelta(days=3)
+    past = datetime.now(timezone.utc) - timedelta(days=3)
+    assert referrals.boost_factor({"boostUntil": future}) == referrals.BOOST
+    assert referrals.boost_factor({"boostUntil": past}) == 1.0
+    assert referrals.boost_factor({}) == 1.0
+
+
+def test_referral_rules():
+    import referrals
+    from datetime import datetime, timedelta, timezone
+    db = mock.Mock()
+    db.document.return_value.get.return_value.to_dict.return_value = {"uid": "me"}
+    with pytest.raises(referrals.ReferralError, match="Verify"):
+        referrals.redeem("me", "ABC2345", False, None, db)
+    with pytest.raises(referrals.ReferralError, match="first"):
+        referrals.redeem("me", "ABC2345", True, datetime.now(timezone.utc) - timedelta(days=60), db)
+    with pytest.raises(referrals.ReferralError, match="own"):
+        referrals.redeem("me", "ABC2345", True, datetime.now(timezone.utc), db)
+
+
+def test_boost_doubles_the_allowance():
+    from datetime import datetime, timedelta, timezone
+    profile = {"plan": "free", "boostUntil": datetime.now(timezone.utc) + timedelta(days=5)}
+    usage = {"day": orgs._today(), "dayCost": 0.15, "month": orgs._month(), "monthCost": 0.2}
+    db = mock.Mock()
+    db.document.return_value.get.return_value.to_dict.return_value = usage
+    with mock.patch.object(orgs, "user_profile", return_value=profile), mock.patch.object(orgs, "_db", return_value=db), \
+         mock.patch("flags.free_daily_usd", return_value=None):
+        assert orgs.check_allowance("u1") is None  # 0.15 is under the boosted 0.20
+        profile["boostUntil"] = datetime.now(timezone.utc) - timedelta(days=1)
+        assert orgs.check_allowance("u1")["code"] == "usage_limit"
+
+
+def test_app_rating_validates_stars(client):
+    with mock.patch("firebase_admin.firestore.client"):
+        assert client.post("/feedback/rating", headers=AUTH, json={"stars": 9}).status_code == 400
+        assert client.post("/feedback/rating", headers=AUTH, json={"stars": 4, "comment": "Great"}).status_code == 200
+
+
+def test_unsubscribe_token_roundtrip():
+    import mailer
+    with mock.patch.dict(os.environ, {"SESSION_SECRET": "k"}), mock.patch.object(mailer, "get_firestore_client") as db:
+        assert mailer.unsubscribe("u1", mailer.unsubscribe_token("u1"))
+        assert not mailer.unsubscribe("u1", "nope")
+        db.return_value.document.assert_called_once_with("users/u1")
+
+
+def test_update_email_renders_markdown_and_unsubscribe():
+    import mailer
+    html_out = mailer.render("Hi", "## New\n\n- one\n- two\n\nSee [DSCVR](https://www.askpinda.com) **now**.", "Ada Lovelace", "https://x/unsub")
+    assert "Hi Ada," in html_out and "<li" in html_out and "<strong>now</strong>" in html_out and "https://x/unsub" in html_out

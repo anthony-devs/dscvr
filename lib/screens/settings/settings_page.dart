@@ -1,3 +1,4 @@
+import 'package:dscvr/screens/growth/growth.dart';
 import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/config/env.dart';
 import 'package:dscvr/models/edition.dart';
@@ -343,6 +344,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: SizedBox.shrink(),
                 ),
               ],
+            ),
+            const _Section(
+              title: 'Invite and feedback',
+              children: [GrowthSettings()],
             ),
             _Section(
               title: 'Help',
