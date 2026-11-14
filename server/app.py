@@ -81,7 +81,7 @@ from staff import Staff
 from config import Config
 from discover import (arxiv_by_id, cached, parse_arxiv_id, related_papers, s2_key_for, search_arxiv, search_europepmc,
                       search_openalex, search_semantic_scholar, search_uk_caselaw)
-from fetch import UnsafeUrl, fetch_pdf
+from fetch import UnsafeUrl, fetch_pdf, stream_pdf
 from payments import verify_google_pay_token
 from security import (
     check_body_size,
@@ -219,6 +219,12 @@ def create_app(config: Config | None = None) -> Flask:
                 resp.cache_control.public = True
                 resp.cache_control.max_age = 600
                 return resp
+            if source == "history":
+                result = sources.search_history(q, limit, sort, open_access=request.args.get("oa") == "1")
+                resp = jsonify(result)
+                resp.cache_control.public = True
+                resp.cache_control.max_age = 600
+                return resp
             if source == "semantic_scholar":
                 papers = cached(("s2", q, limit), lambda: search_semantic_scholar(q, limit))
             elif source == "openalex":
@@ -300,13 +306,16 @@ def create_app(config: Config | None = None) -> Flask:
         if not url.startswith(("https://", "http://")):
             return jsonify(error="Provide a PDF link."), 400
         try:
-            data = fetch_pdf(url)
+            chunks, length = stream_pdf(url)
         except UnsafeUrl as e:
             return jsonify(error=str(e)), 400
         except Exception as e:  # noqa: BLE001
             logger.info("PDF view failed for %s: %s", url, e)
-            return jsonify(error="Could not open that PDF. The publisher may not allow it."), 502
-        resp = Response(data, mimetype="application/pdf")
+            msg = "That PDF is too large to open here." if "too large" in str(e) else "Could not open that PDF. The publisher may not allow it."
+            return jsonify(error=msg), 502
+        resp = Response(chunks, mimetype="application/pdf", direct_passthrough=True)
+        if length:
+            resp.headers["Content-Length"] = str(length)
         resp.headers["Cache-Control"] = "private, max-age=86400"
         resp.headers["Content-Disposition"] = "inline"
         return resp

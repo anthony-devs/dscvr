@@ -68,6 +68,9 @@ class Paper {
         'zenodo' => 'Zenodo',
         'plos' => 'PLOS',
         'core' => 'CORE',
+        'internet_archive' => 'Internet Archive',
+        'loc' => 'Library of Congress',
+        'europeana' => 'Europeana',
         _ => s,
       };
 

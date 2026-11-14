@@ -729,11 +729,81 @@ def test_search_all_survives_a_failing_source():
 
 
 def test_pdf_view_streams_pdf_and_blocks_private_urls(client):
-    with mock.patch("app.fetch_pdf", return_value=b"%PDF-1.7 hello"):
+    with mock.patch("app.stream_pdf", return_value=(iter([b"%PDF-1.7 ", b"hello"]), 15)):
         r = client.get("/pdf/view?url=https://arxiv.org/pdf/1706.03762", headers=AUTH)
     assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data.startswith(b"%PDF")
     assert client.get("/pdf/view?url=http://127.0.0.1/x.pdf", headers=AUTH).status_code == 400
     assert client.get("/pdf/view?url=https://arxiv.org/x.pdf").status_code == 401
+
+
+def test_stream_pdf_checks_header_and_streams_big_scans():
+    class Resp:
+        status_code = 200
+        is_redirect = False
+        closed = False
+        def __init__(self, chunks, length):
+            self.chunks, self.headers = chunks, {"Content-Length": str(length)}
+        def iter_content(self, n):
+            yield from self.chunks
+        def close(self):
+            Resp.closed = True
+
+    big = 180 * 1024 * 1024  # a scanned book: over the old 30 MB limit
+    with mock.patch.object(fetch, "_check_host"), mock.patch.object(fetch.requests, "get", return_value=Resp([b"%PDF-1.4", b"x" * 10], big)):
+        chunks, length = fetch.stream_pdf("https://archive.org/download/x/x.pdf")
+        assert length == big and b"".join(chunks) == b"%PDF-1.4" + b"x" * 10
+    with mock.patch.object(fetch, "_check_host"), mock.patch.object(fetch.requests, "get", return_value=Resp([b"<html>"], 6)):
+        with pytest.raises(ValueError, match="not a PDF"):
+            fetch.stream_pdf("https://example.com/x")
+    with mock.patch.object(fetch, "_check_host"), mock.patch.object(fetch.requests, "get", return_value=Resp([b"%PDF"], 10**10)):
+        with pytest.raises(ValueError, match="too large"):
+            fetch.stream_pdf("https://example.com/x")
+
+
+def test_fetch_accepts_any_type_so_zenodo_answers():
+    seen = {}
+    class Resp:
+        status_code, is_redirect, headers = 200, False, {}
+        def iter_content(self, n):
+            yield b"%PDF-1.7"
+        def close(self):
+            pass
+    def get(url, **kw):
+        seen.update(kw["headers"])
+        return Resp()
+    with mock.patch.object(fetch, "_check_host"), mock.patch.object(fetch.requests, "get", get):
+        fetch.fetch_pdf("https://zenodo.org/records/1/files/a.pdf")
+    assert "*/*" in seen["Accept"]
+
+
+def test_history_search_uses_archives_and_drops_off_topic_journals(client):
+    import sources
+    ia = {"title": "A General History of the Yoruba Country", "source": "internet_archive", "pdfUrl": "https://archive.org/download/a/a.pdf", "summary": ""}
+    loc = {"title": "Dahomey", "source": "loc", "pdfUrl": "https://tile.loc.gov/a.pdf", "summary": ""}
+    good = {"title": "Trade in the Yoruba country before 1900", "source": "doaj", "summary": "history"}
+    bad = {"title": "Dental health in Lagos", "source": "doaj", "summary": "teeth"}
+    seen = {}
+    def doaj(q, n):
+        seen["doaj"] = q
+        return [good, bad]
+    fake = {"internet_archive": lambda q, n: [ia], "loc": lambda q, n: [loc], "europeana": lambda q, n: [],
+            "openalex": lambda q, n: [], "doaj": doaj, "zenodo": lambda q, n: [], "core": lambda q, n: [],
+            "crossref": lambda q, n: [{"title": "Should not be asked", "source": "crossref"}]}
+    with mock.patch.dict(sources.SOURCES, fake, clear=True), mock.patch.object(discover, "cached", lambda k, f: f()):
+        r = client.get("/discover?source=history&q=yoruba+country")
+    titles = [p["title"] for p in r.get_json()["papers"]]
+    assert r.status_code == 200 and seen["doaj"] == "yoruba country history"
+    assert ia["title"] in titles and "Dahomey" in titles and good["title"] in titles
+    assert bad["title"] not in titles and "Should not be asked" not in titles
+
+
+def test_all_sources_leaves_out_archives():
+    import sources
+    called = []
+    fake = {"openalex": lambda q, n: called.append("openalex") or [], "internet_archive": lambda q, n: called.append("ia") or []}
+    with mock.patch.dict(sources.SOURCES, fake, clear=True), mock.patch.object(discover, "cached", lambda k, f: f()):
+        sources.search_all("x", 10)
+    assert called == ["openalex"]
 
 
 # ── Shared collections ───────────────────────────────────────────────

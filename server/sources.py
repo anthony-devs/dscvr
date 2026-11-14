@@ -15,6 +15,13 @@ skipped, never fatal.
     plos              PLOS journals (all open access)
     core              open access full texts from repositories (needs CORE_API_KEY)
 
+History & archives (search_history) adds digitised books, documents and
+newspapers that are free to read:
+
+    internet_archive  millions of scanned public-domain books (no lending-only items)
+    loc               Library of Congress digital collections with PDFs
+    europeana         Europe's libraries and archives (EUROPEANA_API_KEY, or the public demo key)
+
 find_pdf() uses Unpaywall to find a legal, free PDF for a DOI.
 """
 from __future__ import annotations
@@ -38,6 +45,7 @@ _WAIT = 8  # the whole search never waits longer than this; late sources are dro
 LABELS = {
     "arxiv": "arXiv", "semantic_scholar": "Semantic Scholar", "openalex": "OpenAlex", "europepmc": "Europe PMC",
     "crossref": "Crossref", "doaj": "DOAJ", "zenodo": "Zenodo", "plos": "PLOS", "core": "CORE", "uk_caselaw": "Find Case Law",
+    "internet_archive": "Internet Archive", "loc": "Library of Congress", "europeana": "Europeana",
 }
 
 
@@ -46,7 +54,7 @@ def _clean(t: str | None) -> str:
 
 
 def _year(v: Any) -> int | None:
-    m = re.search(r"(19|20)\d{2}", str(v or ""))
+    m = re.search(r"(1[4-9]|20)\d{2}", str(v or ""))
     return int(m.group(0)) if m else None
 
 
@@ -191,6 +199,135 @@ def _openalex(q: str, n: int) -> list[dict[str, Any]]:
     return out
 
 
+# ── History & archives ─────────────────────────────────────────────
+
+def _first(v: Any) -> str:
+    if isinstance(v, list):
+        v = v[0] if v else ""
+    return str(v or "")
+
+
+def _ia_pdf(identifier: str) -> str | None:
+    """The PDF in an Internet Archive item, or None (some items are images only)."""
+    try:
+        r = requests.get(f"https://archive.org/metadata/{identifier}/files", timeout=3, headers=_UA)
+        r.raise_for_status()
+        files = [f.get("name", "") for f in r.json().get("result") or []]
+    except (requests.RequestException, ValueError):
+        return None
+    pdfs = [f for f in files if f.lower().endswith(".pdf")]
+    # Prefer the full-colour scan over the black-and-white copy.
+    pdfs.sort(key=lambda f: ("_bw" in f, "_text" in f, len(f)))
+    return f"https://archive.org/download/{identifier}/{requests.utils.quote(pdfs[0])}" if pdfs else None
+
+
+_STOP = {"the", "and", "for", "from", "with", "history", "histories", "historical", "of", "in", "on", "a", "an"}
+
+
+def _words(q: str) -> list[str]:
+    return [w for w in re.findall(r"[^\W_]+", q.lower()) if len(w) > 2 and w not in _STOP]
+
+
+def _relevant(q: str, papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Archives match loosely (any word, anywhere in a scanned page), so keep items
+    whose title, subjects or summary mention most of what was asked."""
+    words = _words(q)
+    if not words:
+        return papers
+    need = max(1, math.ceil(len(words) * 0.6))
+    def hits(p: dict[str, Any]) -> int:
+        text = " ".join([p.get("title") or "", " ".join(p.get("subjects") or []), (p.get("summary") or "")[:600]]).lower()
+        return sum(w in text for w in words)
+    return [p for p in papers if hits(p) >= need]
+
+
+def _ia_query(words: list[str], op: str) -> str:
+    terms = f" {op} ".join(words)
+    return (f"(title:({terms}) OR subject:({terms}) OR description:({terms})) AND mediatype:texts "
+            "AND NOT collection:(inlibrary OR printdisabled OR lendinglibrary OR ciareadingroom OR usgovernmentmirrors "
+            "OR wikipediapdfs OR wikicollections OR christian-tracts-literature-society) "
+            "AND NOT access-restricted-item:true AND format:(*PDF*)")
+
+
+def internet_archive(q: str, n: int) -> list[dict[str, Any]]:
+    # Matches titles, subjects and descriptions (full-text matches are mostly noise),
+    # only items anyone can download (no lending-library copies), and only with a PDF.
+    words = [re.sub(r"[^\w]", "", w) for w in _words(q)] or [re.sub(r"[^\w ]", "", q)]
+
+    def ask(op: str) -> list[dict[str, Any]]:
+        r = requests.get("https://archive.org/advancedsearch.php", timeout=_T, headers=_UA, params={
+            "q": _ia_query(words, op), "rows": n * 2, "output": "json",
+            "fl[]": ["identifier", "title", "creator", "date", "description", "subject", "publisher", "collection"]})
+        r.raise_for_status()
+        return (r.json().get("response") or {}).get("docs") or []
+    docs = ask("AND")
+    if len(docs) < 3 and len(words) > 1:
+        docs += [d for d in ask("OR") if d["identifier"] not in {x["identifier"] for x in docs}]
+    # Library scans before community uploads, which are a mixed bag.
+    docs.sort(key=lambda d: "opensource" in (d.get("collection") if isinstance(d.get("collection"), list) else [d.get("collection")]))
+    docs = docs[:n * 2]
+    with cf.ThreadPoolExecutor(max_workers=8) as pool:
+        pdfs = list(pool.map(lambda d: _ia_pdf(d["identifier"]) or f"https://archive.org/download/{d['identifier']}/{d['identifier']}.pdf", docs))
+    out = []
+    for d, pdf in zip(docs, pdfs):
+        creators = d.get("creator") or []
+        creators = creators if isinstance(creators, list) else [creators]
+        subjects = d.get("subject") or []
+        subjects = subjects if isinstance(subjects, list) else [subjects]
+        out.append({
+            "id": d["identifier"], "title": _clean(_first(d.get("title"))), "source": "internet_archive",
+            "authors": [_clean(c) for c in creators][:8], "year": _year(d.get("date")),
+            "summary": _clean(_first(d.get("description")))[:2000],
+            "url": f"https://archive.org/details/{d['identifier']}", "pdfUrl": pdf,
+            "venue": _clean(_first(d.get("publisher"))) or "Internet Archive", "doi": None,
+            "openAccess": True, "subjects": [_clean(x) for x in subjects][:6], "kind": "book",
+        })
+    return _relevant(q, [p for p in out if p["title"]])[:n]
+
+
+def loc(q: str, n: int) -> list[dict[str, Any]]:
+    r = requests.get("https://www.loc.gov/books/", timeout=_T, headers=_UA,
+                     params={"q": q, "fo": "json", "c": n + 4, "fa": "online-format:pdf"})
+    r.raise_for_status()
+    out = []
+    for d in r.json().get("results") or []:
+        pdf = next((res.get("pdf") for res in d.get("resources") or [] if res.get("pdf")), None)
+        out.append({
+            "id": str(d.get("id") or d.get("url") or ""), "title": _clean(d.get("title")), "source": "loc",
+            "authors": [c.title() for c in (d.get("contributor") or [])][:8], "year": _year(d.get("date")),
+            "summary": _clean(" ".join(d.get("description") or []))[:2000],
+            "url": d.get("url") or d.get("id"), "pdfUrl": pdf, "venue": "Library of Congress", "doi": None,
+            "openAccess": True, "subjects": [str(x) for x in (d.get("subject") or [])][:6], "kind": "book",
+        })
+    return _relevant(q, [p for p in out if p["title"]])
+
+
+def europeana(q: str, n: int) -> list[dict[str, Any]]:
+    r = requests.get("https://api.europeana.eu/record/v2/search.json", timeout=_T, headers=_UA, params={
+        "wskey": os.getenv("EUROPEANA_API_KEY") or "api2demo", "query": q, "rows": n,
+        "qf": "TYPE:TEXT", "reusability": "open", "profile": "rich"})
+    r.raise_for_status()
+    out = []
+    for d in r.json().get("items") or []:
+        shown = _first(d.get("edmIsShownBy"))
+        out.append({
+            "id": str(d.get("id")), "title": _clean(_first(d.get("title"))), "source": "europeana",
+            "authors": [_clean(c) for c in (d.get("dcCreator") or [])][:8], "year": _year(_first(d.get("year"))),
+            "summary": _clean(" ".join(d.get("dcDescription") or []))[:2000],
+            "url": _first(d.get("edmIsShownAt")) or str(d.get("guid") or "").split("?")[0],
+            "pdfUrl": shown if shown.lower().split("?")[0].endswith(".pdf") else None,
+            "venue": _first(d.get("dataProvider")) or "Europeana", "doi": None,
+            "openAccess": True, "subjects": [], "kind": "document",
+        })
+    # Archive catalogues often hold placeholder titles like "- arkivdokument -".
+    return [p for p in out if len(re.sub(r"[^\w]", "", p["title"])) >= 6 and not p["title"].startswith("-")]
+
+
+HISTORY = {"internet_archive": internet_archive, "loc": loc, "europeana": europeana}
+# Scholarly sources that also carry history journals and theses.
+HISTORY_SCHOLARLY = ["openalex", "doaj", "zenodo", "core"]
+
+
 SOURCES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "openalex": _openalex,
     "semantic_scholar": _s2,
@@ -201,11 +338,16 @@ SOURCES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "plos": plos,
     "zenodo": zenodo,
     "core": core,
+    **HISTORY,
 }
+
+# Searched only in History & archives, never in "All sources".
+EXTRA = set(HISTORY)
 
 # How much a top result from each source counts when ranking the merged list.
 WEIGHT = {"openalex": 1.0, "semantic_scholar": 1.0, "europepmc": 0.95, "arxiv": 0.9, "crossref": 0.8,
-          "doaj": 0.85, "plos": 0.85, "core": 0.8, "zenodo": 0.6}
+          "doaj": 0.85, "plos": 0.85, "core": 0.8, "zenodo": 0.6,
+          "internet_archive": 1.0, "loc": 1.0, "europeana": 0.5}
 
 
 def _key(p: dict[str, Any]) -> str:
@@ -271,14 +413,14 @@ def _cached(source: str, q: str, n: int) -> list[dict[str, Any]]:
 
 
 def search_all(q: str, limit: int = 30, sort: str = "relevance", only: list[str] | None = None,
-               open_access: bool = False) -> dict[str, Any]:
+               open_access: bool = False, queries: dict[str, str] | None = None) -> dict[str, Any]:
     """Every source at once. Returns {papers, sources: {name: count or "error"}}."""
-    names = [s for s in SOURCES if not only or s in only]
+    names = [s for s in SOURCES if (s in only if only else s not in EXTRA)]
     per = max(6, min(15, limit // 2))
     results: dict[str, list[dict[str, Any]]] = {}
     status: dict[str, Any] = {}
     pool = cf.ThreadPoolExecutor(max_workers=len(names))
-    futures = {pool.submit(_cached, s, q, per): s for s in names}
+    futures = {pool.submit(_cached, s, (queries or {}).get(s, q), per): s for s in names}
     done, pending = cf.wait(futures, timeout=_WAIT)
     pool.shutdown(wait=False, cancel_futures=True)  # don't hold the answer for a slow source
     for f in pending:
@@ -297,6 +439,17 @@ def search_all(q: str, limit: int = 30, sort: str = "relevance", only: list[str]
     if open_access:
         papers = [p for p in papers if p.get("pdfUrl") or p.get("openAccess")]
     return {"papers": papers[:limit], "sources": status}
+
+
+def search_history(q: str, limit: int = 30, sort: str = "relevance", open_access: bool = False) -> dict[str, Any]:
+    """Digitised books and archives first, plus history scholarship."""
+    # Journals cover every field, so steer them to history; the archives are history already.
+    scholarly = q if re.search(r"histor", q, re.I) else f"{q} history"
+    result = search_all(q, limit * 2, sort, list(HISTORY) + HISTORY_SCHOLARLY, open_access,
+                        queries={s: scholarly for s in HISTORY_SCHOLARLY})
+    keep = {id(p) for p in _relevant(q, result["papers"])}
+    result["papers"] = [p for p in result["papers"] if p["source"] in HISTORY or id(p) in keep][:limit]
+    return result
 
 
 # ── Free PDFs ────────────────────────────────────────────────────────

@@ -14,13 +14,14 @@ enum PaperSource {
   all('All sources', 'all', 'arXiv, Semantic Scholar, OpenAlex, Europe PMC, Crossref, DOAJ, PLOS, Zenodo and more'),
   europePmc('Health & clinical', 'europepmc', 'PubMed, PMC and clinical guidelines'),
   ukCaseLaw('UK case law', 'uk_caselaw', 'Judgments from UK courts (Find Case Law)'),
+  history('History & archives', 'history', 'Free scanned books and documents from the Internet Archive, Library of Congress and Europeana, plus history journals'),
   // Used for subject feeds; not offered as separate search choices.
   openAlex('OpenAlex', 'openalex', 'Journals and books in every discipline'),
   arxiv('arXiv', 'arxiv', 'Preprints in science, maths and computing'),
   semanticScholar('Semantic Scholar', 'semantic_scholar', 'Papers with citation counts');
 
   /// What the search box offers.
-  static const searchable = [all, europePmc, ukCaseLaw];
+  static const searchable = [all, history, europePmc, ukCaseLaw];
 
   const PaperSource(this.label, this.key, this.blurb);
   final String label;

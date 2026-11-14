@@ -196,7 +196,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             onSubmitted: (_) => _search(),
             style: AppTheme.sans(fontSize: 15, color: c.ink),
             decoration: InputDecoration(
-              hintText: 'Search papers, authors or ideas',
+              hintText: _source == PaperSource.history ? 'Search books, archives and history journals' : 'Search papers, authors or ideas',
               prefixIcon: const Icon(Ic.search, size: 18),
               contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 12),
               suffixIcon: AppIconButton(onPressed: _search, icon: const Icon(Ic.arrowRight, size: 18), tooltip: 'Search'),
@@ -292,7 +292,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             : 'Results',
         count: _loading ? null : _papers.length,
       )),
-      if (!_loading && _subject == null && _source == PaperSource.all && context.services.discover.lastSources.isNotEmpty)
+      if (!_loading && _subject == null && (_source == PaperSource.all || _source == PaperSource.history) && context.services.discover.lastSources.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(_searchedLine(context.services.discover.lastSources), style: context.text.labelSmall),
