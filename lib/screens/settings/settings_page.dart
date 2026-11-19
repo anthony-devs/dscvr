@@ -1,3 +1,5 @@
+import 'package:url_launcher/url_launcher.dart';
+import 'package:dscvr/widgets/extension_bridge/extension_bridge.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dscvr/screens/growth/growth.dart';
 import 'package:dscvr/screens/tour/page_tour.dart';
@@ -341,8 +343,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   _Row(
                     label: 'Browser extension',
                     description: 'Save pages and papers from any site, find free PDFs and ask Pinda about what you are reading. '
-                        'Install the DSCVR extension, then connect it to this account.',
-                    child: AppButton.secondary(onPressed: () => context.push('/connect-extension'), child: const Text('Connect')),
+                        '${Env.chromeExtensionUrl.isEmpty && !extensionInstalled ? 'Coming soon to the Chrome Web Store.' : 'Install the DSCVR extension, then connect it to this account.'}',
+                    child: Env.chromeExtensionUrl.isNotEmpty && !extensionInstalled
+                        ? AppButton.secondary(
+                            onPressed: () => launchUrl(Uri.parse(Env.chromeExtensionUrl), webOnlyWindowName: '_blank'),
+                            child: const Text('Install'),
+                          )
+                        : AppButton.secondary(
+                            onPressed: Env.chromeExtensionUrl.isEmpty && !extensionInstalled ? null : () => context.push('/connect-extension'),
+                            child: Text(Env.chromeExtensionUrl.isEmpty && !extensionInstalled ? 'Soon' : 'Connect'),
+                          ),
                   ),
                 const _Row(
                   label: 'Offline',

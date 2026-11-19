@@ -8,3 +8,7 @@ export const SITE_NAME = "DSCVR";
 export const TAGLINE = "Research, answered.";
 export const DESCRIPTION =
   "DSCVR searches papers, clinical guidelines and case law from free scholarly sources at once, lets you read PDFs with Pinda, an AI research assistant that answers from your own library, and turns what you read into flashcards, case briefs and cited reports. Free for students and researchers.";
+
+// Chrome Web Store link for the DSCVR extension. Empty until the listing is
+// approved: the site then shows "Coming soon" instead of "Add to Chrome".
+export const CHROME_EXTENSION_URL = "";

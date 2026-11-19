@@ -5,6 +5,7 @@ import { Problem } from "@/components/problem";
 import { Features } from "@/components/features";
 import { HowItWorks } from "@/components/how-it-works";
 import { Pinda } from "@/components/pinda";
+import { ChromeExtension } from "@/components/chrome-extension";
 import { Editions } from "@/components/editions";
 import { Pricing } from "@/components/pricing";
 import { CTA } from "@/components/cta";
@@ -50,6 +51,7 @@ export default function Home() {
       <Features />
       <HowItWorks />
       <Pinda />
+      <ChromeExtension />
       <Editions />
       <Pricing />
       <CTA />

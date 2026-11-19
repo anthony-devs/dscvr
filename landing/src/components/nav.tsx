@@ -7,6 +7,7 @@ import { LOGIN_URL, SIGNUP_URL } from "@/lib/site";
 const links = [
   ["Product", "/#features"],
   ["Pinda", "/#pinda"],
+  ["Chrome", "/#chrome"],
   ["Pricing", "/#pricing"],
   ["Blog", "/blog"],
 ];

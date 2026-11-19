@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SUPPORT_EMAIL } from "@/lib/site";
 
 const columns: [string, [string, string][]][] = [
-  ["Product", [["Features", "/#features"], ["Pinda", "/#pinda"], ["Pricing", "/#pricing"], ["Editions", "/#editions"]]],
+  ["Product", [["Features", "/#features"], ["Pinda", "/#pinda"], ["Chrome extension", "/#chrome"], ["Pricing", "/#pricing"], ["Editions", "/#editions"]]],
   ["Learn", [["Blog", "/blog"], ["Support", "/support"]]],
   ["Legal", [["Privacy", "/privacy"], ["Terms", "/terms"]]],
 ];

@@ -5,7 +5,9 @@ import 'package:dscvr/ui/ui.dart';
 import 'package:dscvr/theme/tokens.dart';
 import 'package:dscvr/widgets/extension_bridge/extension_bridge.dart';
 import 'package:dscvr/widgets/icons.dart';
+import 'package:dscvr/config/env.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
 
 /// /connect-extension: signs the DSCVR browser extension in with this account.
@@ -53,7 +55,13 @@ class _ConnectExtensionPageState extends State<ConnectExtensionPage> {
     final user = context.services.session.user;
     final (IconData icon, String title, String message) = switch (_stage) {
       _Stage.connected => (Ic.check, 'Extension connected', 'You can close this tab. Open DSCVR from the puzzle-piece menu in your browser toolbar, or pin it for one-click saving.'),
-      _Stage.noExtension => (Ic.warning, "Couldn't find the extension", 'Install the DSCVR extension in this browser, then reload this page and try again.'),
+      _Stage.noExtension => (
+          Ic.warning,
+          "Couldn't find the extension",
+          Env.chromeExtensionUrl.isEmpty
+              ? 'The DSCVR extension is coming soon to the Chrome Web Store. Once it is installed in this browser, come back here and press Try again.'
+              : 'Install the DSCVR extension in this browser, then come back here and press Try again.',
+        ),
       _Stage.failed => (Ic.warning, "Couldn't connect", _error ?? 'Try again in a moment.'),
       _ => (Ic.globe, 'Connect the DSCVR extension', 'Save pages and papers to your library, find free PDFs and ask Pinda about what you are reading, from any site.'),
     };
@@ -83,6 +91,13 @@ class _ConnectExtensionPageState extends State<ConnectExtensionPage> {
                   loading: _stage == _Stage.connecting,
                   child: Text(_stage == _Stage.ready || _stage == _Stage.connecting ? 'Connect' : 'Try again'),
                 ),
+              if (_stage == _Stage.noExtension && Env.chromeExtensionUrl.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                AppButton.secondary(
+                  onPressed: () => launchUrl(Uri.parse(Env.chromeExtensionUrl), webOnlyWindowName: '_blank'),
+                  child: const Text('Get the extension'),
+                ),
+              ],
               const SizedBox(height: 12),
               Text('The extension can save to your library and use Pinda. It cannot change your plan, billing or account.',
                   textAlign: TextAlign.center, style: AppTheme.sans(fontSize: 12, color: c.inkMuted, height: 1.45)),

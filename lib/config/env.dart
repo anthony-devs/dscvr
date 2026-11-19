@@ -7,6 +7,10 @@
 class Env {
   Env._();
 
+  /// Chrome Web Store page for the DSCVR extension. Empty until the listing is
+  /// live; the app then says "coming soon" instead of linking to it.
+  static const String chromeExtensionUrl = String.fromEnvironment('DSCVR_CHROME_EXTENSION_URL');
+
   /// Runs the app against an in-memory sample library with no Firebase.
   /// Useful for design reviews, screenshots and portfolio demos.
   static const bool demo = bool.fromEnvironment('DSCVR_DEMO');
