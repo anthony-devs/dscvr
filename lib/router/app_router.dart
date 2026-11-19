@@ -16,6 +16,7 @@ import 'package:dscvr/screens/sessions/room_page.dart';
 import 'package:dscvr/screens/sessions/sessions_page.dart';
 import 'package:dscvr/screens/team/team_page.dart';
 import 'package:dscvr/screens/plans/plans_page.dart';
+import 'package:dscvr/screens/settings/connect_extension_page.dart';
 import 'package:dscvr/screens/settings/settings_page.dart';
 import 'package:dscvr/screens/signup.dart';
 import 'package:dscvr/screens/shell/app_shell.dart';
@@ -42,7 +43,7 @@ GoRouter buildRouter(SessionController session) {
     redirect: (context, state) {
       final loc = state.subloc;
       // A share link opened while signed out survives login, sign-up and onboarding.
-      if (loc.startsWith('/s/') && session.status != SessionStatus.ready) _pendingLink = state.location;
+      if ((loc.startsWith('/s/') || loc == '/connect-extension') && session.status != SessionStatus.ready) _pendingLink = state.location;
       // Remember deep links (e.g. a shared /m/abc URL) across the auth check.
       final from = state.queryParams['from'];
       String hold(String target) =>
@@ -86,6 +87,11 @@ GoRouter buildRouter(SessionController session) {
         path: '/s/:id',
         parentNavigatorKey: _rootKey,
         pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: SharedPage(linkId: s.params['id']!)),
+      ),
+      GoRoute(
+        path: '/connect-extension',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (_, s) => MaterialPage(key: s.pageKey, child: const ConnectExtensionPage()),
       ),
       GoRoute(
         path: '/read',

@@ -53,6 +53,9 @@ def delete_everything(uid: str, db, bucket, auth, cancel_subscription=None, deta
         files += 1
     done["files"] = files
 
+    for t in db.collection("extension_tokens").where("uid", "==", uid).get():
+        t.reference.delete()
+
     db.recursive_delete(db.document(f"users/{uid}"))
     auth.delete_user(uid)
     log.info("account deleted: %s", {k: v for k, v in done.items()})

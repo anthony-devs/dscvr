@@ -55,13 +55,24 @@ def get_firestore_client():
 # ── Firebase Auth verification ───────────────────────────────────────
 
 def verify_token(token: str) -> dict[str, Any] | None:
-    """Verify a Firebase ID token. Returns decoded claims or None."""
+    """Verify a Firebase ID token (or a browser-extension token). Returns decoded claims or None."""
+    if token.startswith("dx_"):
+        import extension
+        try:
+            return extension.claims(token)
+        except Exception:  # noqa: BLE001
+            return None
     try:
         return fb_auth.verify_id_token(token)
     except Exception as e:  # noqa: BLE001
         import logging
         logging.getLogger("auth").warning("token rejected: %s: %s", type(e).__name__, str(e)[:300])
         return None
+
+
+# What a browser-extension token may call. Everything else (billing, account
+# deletion, teams, admin) needs the user's real sign-in in the app.
+EXTENSION_PATHS = ("/extension/", "/pinda", "/pdf/find", "/pdf/view", "/billing/me")
 
 
 def require_auth(f: Callable) -> Callable:
@@ -75,6 +86,8 @@ def require_auth(f: Callable) -> Callable:
         claims = verify_token(match.group(1))
         if claims is None:
             return jsonify(error="Invalid or expired token."), 401
+        if claims.get("extension") and not request.path.startswith(EXTENSION_PATHS):
+            return jsonify(error="Open DSCVR to do that."), 403
         g.uid = claims["uid"]
         g.email = claims.get("email")
         g.email_verified = bool(claims.get("email_verified"))
@@ -143,6 +156,8 @@ LIMITS = {
     "study":      {"per_min": 6,  "per_hour": 60},
     "alerts":     {"per_min": 2,  "per_hour": 6},
     "import":     {"per_min": 10, "per_hour": 120},
+    "ext_token":  {"per_min": 5,  "per_hour": 20},
+    "ext_save":   {"per_min": 20, "per_hour": 300},
     "pdfview":    {"per_min": 20, "per_hour": 300},
     "rate":       {"per_min": 30, "per_hour": 300},
     "orgs":       {"per_min": 5,  "per_hour": 30},

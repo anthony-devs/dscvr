@@ -1,4 +1,4 @@
-Effective 11 November 2026.
+Effective 19 November 2026.
 
 This policy explains what DSCVR collects, why, who it is shared with, and the choices you have. DSCVR ("we", "us") is operated by Anthony Ude. If anything here is unclear, write to [mail@askpinda.com](mailto:mail@askpinda.com).
 
@@ -21,6 +21,8 @@ This policy explains what DSCVR collects, why, who it is shared with, and the ch
 **Community ratings.** When you rate a published paper, we store your rating against your account and show other readers only the average and the number of ratings, never who rated.
 
 **Devices.** For each signed-in device we store a label (for example "Chrome on Mac"), the platform and when it was last active, so you can see your devices and sign them out.
+
+**Browser extension.** If you install the DSCVR extension, it reads a page only when you ask it to: when you open its panel on that page, save it, cite it or ask Pinda about it (or on every site, if you choose to allow that). What it reads (the page's address, title, authors, publication details, text and any text you highlight) is sent to DSCVR only to save the page to your library or answer your question. The extension doesn't record your browsing history. It keeps a sign-in token in your browser, which you can revoke by signing out of the extension or deleting your account.
 
 **Usage and billing.** How much of your Pinda allowance you have used, which features used it, and token counts. If you buy a plan, your plan, its status, renewal date and the customer and subscription references from our payment provider. We never see or store your full card number.
 

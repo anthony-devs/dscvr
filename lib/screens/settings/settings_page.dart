@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dscvr/screens/growth/growth.dart';
 import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/config/env.dart';
@@ -336,6 +337,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   description: 'Fewer results per page, no pictures, nothing loads until you ask. Good on slow or costly connections.',
                   child: AppSwitch(value: settings.lowData, onChanged: settings.setLowData, label: 'Low data mode'),
                 ),
+                if (kIsWeb)
+                  _Row(
+                    label: 'Browser extension',
+                    description: 'Save pages and papers from any site, find free PDFs and ask Pinda about what you are reading. '
+                        'Install the DSCVR extension, then connect it to this account.',
+                    child: AppButton.secondary(onPressed: () => context.push('/connect-extension'), child: const Text('Connect')),
+                  ),
                 const _Row(
                   label: 'Offline',
                   description:

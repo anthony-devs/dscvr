@@ -74,6 +74,7 @@ import shares
 import blog
 import referrals
 import mailer
+import extension
 from admin import make_admin
 from devapi import make_devapi
 from metrics import metrics
@@ -96,7 +97,7 @@ from security import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SCOPES = {"general", "category", "topic", "material", "selection"}
+SCOPES = {"general", "category", "topic", "material", "selection", "page"}
 AI_PATHS = {"/pinda", "/reports/draft", "/sessions/summary", "/parliament"}
 # Paths that keep working during maintenance: staff tools, and signals that cost nothing.
 MAINTENANCE_OPEN = ("/admin", "/internal/dev", "/health", "/healthz", "/pricing", "/activity", "/billing/paystack", "/alerts/run")
@@ -373,7 +374,13 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify(error="Unknown context"), 400
         uid = g.uid
         try:
-            context = ai.build_context(uid, scope, sanitize(ctx.get("id") or "", 64) or None, _ids(ctx.get("itemIds")))
+            if scope == "page":
+                page = ctx.get("page") if isinstance(ctx.get("page"), dict) else {}
+                pdf = page.get("pdfUrl")
+                block = ai._pdf_block(uid, {"pdfUrl": pdf, "title": page.get("title")}) if isinstance(pdf, str) and pdf.startswith("https://") else None
+                context = extension.page_context(page, block)
+            else:
+                context = ai.build_context(uid, scope, sanitize(ctx.get("id") or "", 64) or None, _ids(ctx.get("itemIds")))
         except Exception:  # noqa: BLE001
             logger.exception("pinda context failed")
             return jsonify(error="Could not load your library for Pinda."), 500
@@ -395,6 +402,53 @@ def create_app(config: Config | None = None) -> Flask:
             orgs.record_usage(uid, "voice" if voice else "pinda", usage.get("input", 0), usage.get("output", 0), model)
 
         return _sse_response(run())
+
+    # ── Browser extension ────────────────────────────────────────────
+
+    @app.errorhandler(extension.ExtensionError)
+    def extension_error(e: extension.ExtensionError):
+        return jsonify(error=str(e)), e.status
+
+    @app.route("/extension/token", methods=["POST"])
+    @require_auth
+    def extension_token():
+        """Called from app.askpinda.com/connect-extension with the user's normal
+        sign-in; returns a token the extension keeps."""
+        if (r := limited("ext_token")):
+            return r
+        if str(request.headers.get("Authorization", "")).startswith("Bearer dx_"):
+            return jsonify(error="Connect from the DSCVR web app."), 403
+        token = extension.issue(g.uid, g.get("email"), bool(g.get("email_verified")),
+                                request.headers.get("User-Agent", ""))
+        return jsonify(token=token, email=g.get("email"), days=extension.TOKEN_DAYS)
+
+    @app.route("/extension/me")
+    @require_auth
+    def extension_me():
+        profile = orgs.user_profile(g.uid)
+        return jsonify(uid=g.uid, email=g.get("email") or profile.get("email"),
+                       name=profile.get("displayName") or "", plan=plans.plan_of(profile),
+                       appUrl=extension.app_url(), **extension.library(g.uid))
+
+    @app.route("/extension/save", methods=["POST"])
+    @require_auth
+    def extension_save():
+        if (r := limited("ext_save")):
+            return r
+        if check_body_size(256 * 1024):
+            return jsonify(error="That page is too large to save."), 413
+        out = extension.save(g.uid, request.get_json(silent=True) or {})
+        if not out["existing"]:
+            log_usage(g.uid, "extension_save")
+        return jsonify(**out, open=f"{extension.app_url()}/m/{out['id']}")
+
+    @app.route("/extension/signout", methods=["POST"])
+    @require_auth
+    def extension_signout():
+        header = str(request.headers.get("Authorization", ""))
+        if header.startswith("Bearer dx_"):
+            extension.revoke(header[len("Bearer "):])
+        return jsonify(ok=True)
 
     @app.route("/reports/draft", methods=["POST"])
     @require_auth

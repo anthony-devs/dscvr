@@ -901,7 +901,9 @@ def test_account_delete_removes_everything():
     share = mock.Mock()
     db = mock.Mock()
     db.document.return_value.get.return_value.to_dict.return_value = profile
-    db.collection.return_value.where.return_value.get.return_value = [share]
+    token = mock.Mock()
+    cols = {"shares": [share], "extension_tokens": [token]}
+    db.collection.side_effect = lambda name: mock.Mock(where=mock.Mock(return_value=mock.Mock(get=mock.Mock(return_value=cols[name]))))
     db.collection_group.return_value.where.return_value.get.return_value = [rating]
     blob = mock.Mock()
     bucket = mock.Mock(list_blobs=mock.Mock(return_value=[blob, blob]))
@@ -911,6 +913,7 @@ def test_account_delete_removes_everything():
                                     detach_org=lambda org, uid: calls.append(("detach", org)))
     assert calls == ["cancel", ("detach", "o1")]
     share.reference.delete.assert_called_once()
+    token.reference.delete.assert_called_once()
     rating_paper.set.assert_called_once_with({"count": 2, "sum": 7}, merge=True)
     assert blob.delete.call_count == 2
     db.recursive_delete.assert_called_once()
