@@ -2,6 +2,7 @@
 # Runs DSCVR's server and landing site on Google Cloud Run, in the Firebase
 # project. Run from the repo root on your Mac.
 #
+#   ./scripts/gcp.sh all               everything below, in order, stopping at the first problem
 #   ./scripts/gcp.sh setup             one-time: APIs, service account, secrets copied from Railway
 #   ./scripts/gcp.sh deploy server     build and deploy the Flask server
 #   ./scripts/gcp.sh deploy landing    build and deploy the Next.js site
@@ -31,6 +32,16 @@ mkdir -p "$STATE"
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
 g() { gcloud --project "$PROJECT" --quiet "$@"; }
+# Newly enabled Google APIs take a few minutes to start working: retry until they do.
+retry() {
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    "$@" && return 0
+    echo "  Google is still switching that on, trying again in 20 seconds ($i/12)..."
+    sleep 20
+  done
+  return 1
+}
 TMP_VARS=""
 # Never leave copied variable values on disk, even if something fails.
 trap 'rm -f "$TMP_VARS" "$STATE"/.val-* 2>/dev/null' EXIT
@@ -69,11 +80,12 @@ setup() {
 
   say "Container registry"
   g artifacts repositories describe "$REPO" --location "$r" >/dev/null 2>&1 || \
-    g artifacts repositories create "$REPO" --repository-format docker --location "$r" --description "DSCVR images"
+    retry g artifacts repositories create "$REPO" --repository-format docker --location "$r" --description "DSCVR images" || \
+    die "The Artifact Registry API still isn't on. Check billing is enabled for $PROJECT, wait a few minutes, then run setup again."
 
   say "Service account for the server (replaces the service-account JSON key)"
   g iam service-accounts describe "$SA" >/dev/null 2>&1 || \
-    g iam service-accounts create "$SA_NAME" --display-name "DSCVR server"
+    retry g iam service-accounts create "$SA_NAME" --display-name "DSCVR server"
   for role in roles/datastore.user roles/firebaseauth.admin roles/storage.objectAdmin \
               roles/secretmanager.secretAccessor roles/logging.logWriter; do
     g projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
@@ -205,6 +217,7 @@ domains() {
   local r; r="$(region)"
   for pair in "dscvr-server:$API_DOMAIN" "dscvr-landing:$WWW_DOMAIN"; do
     local svc="${pair%%:*}" dom="${pair#*:}"
+    g run services describe "$svc" --region "$r" >/dev/null 2>&1 || die "$svc isn't deployed yet. Run: ./scripts/gcp.sh deploy all"
     g beta run domain-mappings describe --domain "$dom" --region "$r" >/dev/null 2>&1 || \
       g beta run domain-mappings create --service "$svc" --domain "$dom" --region "$r" >/dev/null || \
       die "Couldn't map $dom. Your Google account must be a verified owner of askpinda.com in Search Console."
@@ -241,6 +254,7 @@ set_secret() {
 
 case "${1:-}" in
   setup) setup ;;
+  all) setup; deploy_server; deploy_landing; schedule; domains ;;
   deploy)
     case "${2:-all}" in
       server) deploy_server ;;
@@ -252,5 +266,5 @@ case "${1:-}" in
   domains) domains ;;
   status) status ;;
   secret) set_secret "${2:-}" "${3:-server}" ;;
-  *) sed -n '2,16p' "$0"; exit 1 ;;
+  *) sed -n '2,17p' "$0"; exit 1 ;;
 esac
