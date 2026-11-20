@@ -1057,3 +1057,21 @@ def test_history_filters_reach_the_archives_and_pick_sources():
         r = sources.search_history("trade", 20, region="africa", kind="articles")
         assert set(seen) == {"doaj"} and seen["doaj"] == "trade history Africa"
         assert [p["title"] for p in r["papers"]] == ["Trade in Africa"]
+
+
+def test_pdf_view_streams_without_content_length(client):
+    # Cloud Run caps responses that declare a length at 32 MiB; big scans must stream.
+    with mock.patch("app.stream_pdf", return_value=(iter([b"%PDF-1.7 ", b"x" * 10]), 60 * 1024 * 1024)):
+        r = client.get("/pdf/view?url=https://archive.org/download/a/a.pdf", headers=AUTH)
+    assert r.status_code == 200 and "Content-Length" not in r.headers
+    assert r.headers["X-Pdf-Size"] == str(60 * 1024 * 1024)
+
+
+def test_pinda_reads_internet_archive_books_as_ocr_text():
+    import ai
+    with mock.patch("ai.fetch_text", return_value="CHAPTER I.\n\n\n\nThe   kingdom of Benin") as ft, \
+         mock.patch("ai.fetch_pdf") as fp:
+        block = ai._pdf_block("u1", {"pdfUrl": "https://archive.org/download/benin00/benin00.pdf", "title": "Benin"})
+    fp.assert_not_called()
+    assert ft.call_args[0][0] == "https://archive.org/download/benin00/benin00_djvu.txt"
+    assert block["type"] == "text" and "The kingdom of Benin" in block["text"] and "\n\n\n" not in block["text"]

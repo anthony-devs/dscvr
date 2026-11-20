@@ -175,9 +175,16 @@ class _DscvrPdfViewerState extends State<DscvrPdfViewer> {
                         const Spinner(size: 22),
                         const SizedBox(height: 10),
                         Text(
-                          total != null && total > 0 ? 'Opening PDF ${(got * 100 / total).round()}%' : 'Opening PDF…',
+                          total != null && total > 0
+                              ? 'Opening PDF ${(got * 100 / total).round()}%'
+                              : 'Opening PDF${got > 0 ? ': ${(got / 1048576).toStringAsFixed(got < 10485760 ? 1 : 0)} MB so far' : '…'}',
                           style: AppTheme.sans(fontSize: 13, color: c.inkMuted),
                         ),
+                        if (total == null || total == 0) ...[
+                          const SizedBox(height: 4),
+                          Text('Scanned books can be 50 MB or more, so this may take a minute.',
+                              style: AppTheme.sans(fontSize: 12, color: c.inkMuted)),
+                        ],
                       ]),
                     ),
                     errorBannerBuilder: (context, error, stack, ref) => Center(

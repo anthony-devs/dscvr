@@ -92,6 +92,26 @@ def _open(url: str, max_bytes: int) -> requests.Response:
     raise ValueError("Too many redirects.")
 
 
+def archive_org_text_url(url: str) -> str | None:
+    """The OCR text of an Internet Archive item, from one of its download links."""
+    m = re.match(r"^https://archive\.org/download/([^/]+)/", url or "")
+    return f"https://archive.org/download/{m.group(1)}/{m.group(1)}_djvu.txt" if m else None
+
+
+def fetch_text(url: str, max_chars: int = 400_000) -> str:
+    """Downloads a public plain-text file (with the same private-network guard)."""
+    resp = _open(url, 20 * MB)
+    out: list[bytes] = []
+    total = 0
+    for chunk in resp.iter_content(256 * 1024):
+        out.append(chunk)
+        total += len(chunk)
+        if total > max_chars * 4:
+            break
+    resp.close()
+    return b"".join(out).decode("utf-8", "replace")[:max_chars]
+
+
 def fetch_pdf(url: str, max_bytes: int = IMPORT_MAX) -> bytes:
     """Downloads a PDF from a public URL. Raises UnsafeUrl or ValueError."""
     resp = _open(url, max_bytes)

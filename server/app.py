@@ -321,8 +321,10 @@ def create_app(config: Config | None = None) -> Flask:
             msg = "That PDF is too large to open here." if "too large" in str(e) else "Could not open that PDF. The publisher may not allow it."
             return jsonify(error=msg), 502
         resp = Response(chunks, mimetype="application/pdf", direct_passthrough=True)
+        # No Content-Length on purpose: Cloud Run caps responses with a length at 32 MiB,
+        # while streamed (chunked) responses have no cap. Scanned books are often 50 MB+.
         if length:
-            resp.headers["Content-Length"] = str(length)
+            resp.headers["X-Pdf-Size"] = str(length)
         resp.headers["Cache-Control"] = "private, max-age=86400"
         resp.headers["Content-Disposition"] = "inline"
         return resp

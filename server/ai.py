@@ -11,11 +11,12 @@ import base64
 import json
 import logging
 import os
+import re
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from fetch import UnsafeUrl, fetch_pdf
+from fetch import UnsafeUrl, archive_org_text_url, fetch_pdf, fetch_text
 from security import get_firestore_client
 
 from metrics import metrics  # noqa: E402
@@ -28,6 +29,7 @@ FAST_MODEL = os.getenv("PINDA_FAST_MODEL", "claude-haiku-5-5")
 MAX_MATERIAL_CHARS = 120_000
 MAX_COLLECTION_CHARS = 90_000
 MAX_PDF_BYTES = 25 * 1024 * 1024
+IA_TEXT_CHARS = 200_000  # about 50k tokens: most of a long book, within one request
 
 # Who Pinda is. Shared by every prompt so Pinda answers the same way
 # everywhere: chat, voice, reports, study tools.
@@ -153,6 +155,16 @@ def _pdf_block(uid: str, item: dict[str, Any]) -> dict[str, Any] | None:
                 return None
             data = blob.download_as_bytes()
         elif item.get("pdfUrl"):
+            text_url = archive_org_text_url(str(item["pdfUrl"]))
+            if text_url:
+                # Internet Archive scans are often hundreds of pages and 50 MB+, past what
+                # Pinda can take as a PDF. Read the archive's own OCR text instead.
+                text = re.sub(r"[ \t]+", " ", fetch_text(text_url, IA_TEXT_CHARS))
+                text = re.sub(r"\n{3,}", "\n\n", text).strip()
+                if not text:
+                    return None
+                return {"type": "text", "cache_control": {"type": "ephemeral"},
+                        "text": f'<document title="{str(item.get("title") or "Document")[:200]}" kind="OCR text of a scanned book">\n{text}\n</document>'}
             data = fetch_pdf(str(item["pdfUrl"]), max_bytes=MAX_PDF_BYTES)
         if not data or not data.startswith(b"%PDF"):
             return None
