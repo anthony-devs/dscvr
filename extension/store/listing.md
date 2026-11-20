@@ -56,7 +56,7 @@ Save web pages and research papers to the user's DSCVR library, and help them re
 - `sidePanel`: shows DSCVR in Chrome's side panel next to the page.
 - `storage`: keeps the user's sign-in token, last-used category and preferred citation style on their device.
 - `contextMenus`: adds "Save page to DSCVR" and "Ask Pinda about the selection" to the right-click menu.
-- Host permission (dscvr-server-production.up.railway.app): the DSCVR server, used to save items to the library, look up free PDFs and answer questions.
+- Host permission (api.askpinda.com): the DSCVR server, used to save items to the library, look up free PDFs and answer questions.
 - Optional host permission (all sites): only requested if the user chooses "Allow on all sites", so DSCVR can read pages without the toolbar button being clicked first on each one.
 - Remote code: No, all code is in the package.
 

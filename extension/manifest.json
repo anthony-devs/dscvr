@@ -13,7 +13,7 @@
   "side_panel": { "default_path": "src/panel.html" },
   "background": { "service_worker": "src/background.js", "type": "module" },
   "permissions": ["sidePanel", "activeTab", "scripting", "storage", "contextMenus"],
-  "host_permissions": ["https://dscvr-server-production.up.railway.app/*"],
+  "host_permissions": ["https://api.askpinda.com/*"],
   "optional_host_permissions": ["<all_urls>"],
   "content_scripts": [
     {

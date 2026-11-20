@@ -3,7 +3,7 @@
 /// Pass values with --dart-define, for example:
 ///   flutter run -d chrome --dart-define=DSCVR_DEMO=true
 ///   flutter build web --dart-define=DSCVR_FUNCTIONS_URL=https://...
-///   flutter build web --dart-define=DSCVR_SERVER_URL=https://dscvr-server-production.up.railway.app
+///   flutter build web --dart-define=DSCVR_SERVER_URL=https://api.askpinda.com
 class Env {
   Env._();
 
@@ -23,7 +23,7 @@ class Env {
 
   /// Base URL of the dedicated Flask server (discover proxy, payments).
   /// This server handles CORS for web and provides added security.
-  static const String _defaultServerUrl = 'https://dscvr-server-production.up.railway.app';
+  static const String _defaultServerUrl = 'https://api.askpinda.com';
   static const String _serverUrlDefine = String.fromEnvironment('DSCVR_SERVER_URL');
 
   /// A typo'd --dart-define (e.g. "dscvr-https://…") silently broke Discover

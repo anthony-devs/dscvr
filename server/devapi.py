@@ -101,7 +101,7 @@ def make_devapi(staff) -> Blueprint:
             "adminEnabled": staff.enabled,
             "adminTotpSet": staff.enabled, "adminKeySet": staff.enabled, "adminKeyStrong": staff.enabled,
             "sessionSecretStrong": staff.secret_strong, "adminPasswordHashed": staff.password_hashed,
-            "serviceAccountSet": bool(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")) or not cloud,
+            "serviceAccountSet": bool(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")) or not cloud or bool(os.getenv("K_SERVICE")),
             "paymentsMode": "simulated",
             "devIpAllowlist": bool(os.getenv("DEV_ALLOWED_IPS")),
         }

@@ -1,7 +1,7 @@
 // Where the extension talks to. For local testing you can point it elsewhere
 // from the panel's console:  chrome.storage.local.set({serverUrl: "http://localhost:8080"})
 export const DEFAULTS = {
-  serverUrl: "https://dscvr-server-production.up.railway.app",
+  serverUrl: "https://api.askpinda.com",
   appUrl: "https://app.askpinda.com",
 };
 

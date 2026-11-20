@@ -85,7 +85,7 @@ def recipients(db=None) -> list[dict[str, Any]]:
 
 
 def _server_url() -> str:
-    return os.getenv("SERVER_URL", "https://dscvr-server-production.up.railway.app").rstrip("/")
+    return os.getenv("SERVER_URL", "https://api.askpinda.com").rstrip("/")
 
 
 def send(subject: str, body: str, to: list[dict[str, Any]]) -> dict[str, int]:

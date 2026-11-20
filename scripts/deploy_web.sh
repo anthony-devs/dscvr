@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SERVER_URL="${DSCVR_SERVER_URL:-https://dscvr-server-production.up.railway.app}"
+SERVER_URL="${DSCVR_SERVER_URL:-https://api.askpinda.com}"
 SERVER_URL="${SERVER_URL%/}"
 
 # 1. Refuse obviously broken URLs (this is what broke Discover before).

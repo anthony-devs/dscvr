@@ -60,3 +60,6 @@ Desktop.ini
 /test/coverage/
 coverage.json
 lcov.info
+
+# Google Cloud deploy state (names only; values live in Secret Manager)
+.gcp/

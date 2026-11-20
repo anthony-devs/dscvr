@@ -17,7 +17,7 @@ type Meta = Omit<Post, "body" | "readingMinutes"> & { readingMinutes?: number };
 
 const DIR = path.join(process.cwd(), "content", "blog");
 /** Posts written in the admin console come from the DSCVR server. */
-const API = (process.env.BLOG_API_URL || "https://dscvr-server-production.up.railway.app").replace(/\/+$/, "");
+const API = (process.env.BLOG_API_URL || "https://api.askpinda.com").replace(/\/+$/, "");
 export const BLOG_REVALIDATE = 300;
 
 function minutes(body: string) {

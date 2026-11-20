@@ -1,0 +1,11 @@
+# Files Cloud Build never uploads (keys stay on your Mac).
+.gcloudignore
+.git
+__pycache__/
+*.pyc
+tests/
+.env*
+.venv/
+venv/
+*firebase-adminsdk*.json
+service-account*.json
