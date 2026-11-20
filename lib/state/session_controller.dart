@@ -100,6 +100,7 @@ class SessionController extends ChangeNotifier {
               Feed.europepmc => 'europepmc',
               Feed.caselaw => 'uk_caselaw',
               Feed.openalex => 'openalex',
+              Feed.history => 'history',
             },
             'query': s.searchText,
           };

@@ -227,7 +227,8 @@ def create_app(config: Config | None = None) -> Flask:
             oa = request.args.get("oa") == "1"
             if source in ("all", "history"):
                 only = [x for x in sanitize(request.args.get("only", ""), 200).split(",") if x] or None
-                pool = sources.search_pool(source, q, sort, only if source == "all" else None, oa)
+                history = {k: sanitize(request.args.get(k, ""), 20) for k in ("region", "written", "kind")} if source == "history" else None
+                pool = sources.search_pool(source, q, sort, only if source == "all" else None, oa, history)
                 return ok({**sources.page(pool["papers"], offset, limit), "sources": pool.get("sources", {})})
             # One provider: fetch a block of results once (50, then 100 for later pages)
             # and serve "load more" pages from it.

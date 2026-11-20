@@ -27,6 +27,7 @@ find_pdf() uses Unpaywall to find a legal, free PDF for a DOI.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import functools
 import logging
 import math
 import os
@@ -207,20 +208,6 @@ def _first(v: Any) -> str:
     return str(v or "")
 
 
-def _ia_pdf(identifier: str) -> str | None:
-    """The PDF in an Internet Archive item, or None (some items are images only)."""
-    try:
-        r = requests.get(f"https://archive.org/metadata/{identifier}/files", timeout=3, headers=_UA)
-        r.raise_for_status()
-        files = [f.get("name", "") for f in r.json().get("result") or []]
-    except (requests.RequestException, ValueError):
-        return None
-    pdfs = [f for f in files if f.lower().endswith(".pdf")]
-    # Prefer the full-colour scan over the black-and-white copy.
-    pdfs.sort(key=lambda f: ("_bw" in f, "_text" in f, len(f)))
-    return f"https://archive.org/download/{identifier}/{requests.utils.quote(pdfs[0])}" if pdfs else None
-
-
 _STOP = {"the", "and", "for", "from", "with", "history", "histories", "historical", "of", "in", "on", "a", "an"}
 
 
@@ -241,33 +228,70 @@ def _relevant(q: str, papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [p for p in papers if hits(p) >= need]
 
 
-def _ia_query(words: list[str], op: str) -> str:
+REGIONS: dict[str, tuple[str, list[str]]] = {
+    # code: (word added to journal searches, words any of which an archive item must mention)
+    "africa": ("Africa", ["Africa", "African", "Nigeria", "Ghana", "Kenya", "Ethiopia", "Egypt", "Congo", "Benin",
+                          "Yoruba", "Igbo", "Hausa", "Zulu", "Sudan", "Senegal", "Mali", "Dahomey", "Abyssinia"]),
+    "europe": ("Europe", ["Europe", "European", "England", "Britain", "France", "Germany", "Italy", "Spain", "Rome",
+                          "Greece", "Russia", "Netherlands", "Portugal"]),
+    "asia": ("Asia", ["Asia", "Asian", "China", "India", "Japan", "Korea", "Vietnam", "Siam", "Burma", "Indonesia"]),
+    "middle_east": ("Middle East", ["Ottoman", "Arab", "Arabia", "Persia", "Palestine", "Syria", "Iraq", "Turkey",
+                                    "Mesopotamia", "Levant"]),
+    "americas": ("Americas", ["America", "American", "Mexico", "Brazil", "Caribbean", "Canada", "Peru", "Argentina",
+                              "Jamaica", "Haiti"]),
+    "oceania": ("Oceania", ["Australia", "Zealand", "Pacific", "Oceania", "Polynesia", "Fiji", "Hawaii"]),
+}
+
+# When the source itself was written: primary sources from a period.
+WRITTEN: dict[str, tuple[int, int]] = {
+    "pre1800": (1400, 1799), "1800s": (1800, 1899), "1900-1949": (1900, 1949), "since1950": (1950, 2100),
+}
+
+
+def _ia_query(words: list[str], op: str, region: list[str] | None = None, years: tuple[int, int] | None = None) -> str:
     terms = f" {op} ".join(words)
-    return (f"(title:({terms}) OR subject:({terms}) OR description:({terms})) AND mediatype:texts "
-            "AND NOT collection:(inlibrary OR printdisabled OR lendinglibrary OR ciareadingroom OR usgovernmentmirrors "
+    extra = ""
+    if region:
+        any_of = " OR ".join(f'"{w}"' if " " in w else w for w in region)
+        extra += f" AND (title:({any_of}) OR subject:({any_of}) OR description:({any_of}))"
+    if years:
+        extra += f" AND date:[{years[0]}-01-01 TO {years[1]}-12-31]"
+    return (f"(title:({terms}) OR subject:({terms}) OR description:({terms})){extra} AND mediatype:texts "
+            "AND NOT collection:(inlibrary OR printdisabled OR lendinglibrary OR ciareadingroom OR usgovernmentmirrors OR opensource OR community OR folkscanomy* "
             "OR wikipediapdfs OR wikicollections OR christian-tracts-literature-society) "
             "AND NOT access-restricted-item:true AND format:(*PDF*)")
 
 
-def internet_archive(q: str, n: int) -> list[dict[str, Any]]:
+def internet_archive(q: str, n: int, region: list[str] | None = None,
+                     years: tuple[int, int] | None = None) -> list[dict[str, Any]]:
     # Matches titles, subjects and descriptions (full-text matches are mostly noise),
     # only items anyone can download (no lending-library copies), and only with a PDF.
     words = [re.sub(r"[^\w]", "", w) for w in _words(q)] or [re.sub(r"[^\w ]", "", q)]
 
+    broad = len(words) == 1
+    # "History" alone must not mean natural history.
+    not_natural = " AND NOT title:(\"natural history\")" if any("histor" in w.lower() for w in words) else ""
+
     def ask(op: str) -> list[dict[str, Any]]:
-        r = requests.get("https://archive.org/advancedsearch.php", timeout=_T, headers=_UA, params={
-            "q": _ia_query(words, op), "rows": n * 2, "output": "json",
-            "fl[]": ["identifier", "title", "creator", "date", "description", "subject", "publisher", "collection"]})
+        params: dict[str, Any] = {
+            "q": _ia_query(words, op, region, years) + not_natural, "rows": n * 2, "output": "json",
+            "fl[]": ["identifier", "title", "creator", "date", "description", "subject", "publisher", "collection"]}
+        if broad and not years:
+            # A one-word search ("History"): the most-read public-domain books.
+            params["q"] += " AND date:[1500-01-01 TO 1929-12-31]"
+            params["sort[]"] = "downloads desc"
+        r = requests.get("https://archive.org/advancedsearch.php", timeout=_T, headers=_UA, params=params)
         r.raise_for_status()
         return (r.json().get("response") or {}).get("docs") or []
     docs = ask("AND")
     if len(docs) < 3 and len(words) > 1:
         docs += [d for d in ask("OR") if d["identifier"] not in {x["identifier"] for x in docs}]
-    # Library scans before community uploads, which are a mixed bag.
-    docs.sort(key=lambda d: "opensource" in (d.get("collection") if isinstance(d.get("collection"), list) else [d.get("collection")]))
+    # Community uploads (opensource, community, folkscanomy) are left out above: too many
+    # are copyrighted books uploaded without permission. Library scans are public domain.
     docs = docs[:n * 2]
-    with cf.ThreadPoolExecutor(max_workers=8) as pool:
-        pdfs = list(pool.map(lambda d: _ia_pdf(d["identifier"]) or f"https://archive.org/download/{d['identifier']}/{d['identifier']}.pdf", docs))
+    # Most items keep their scan at <id>/<id>.pdf. When one doesn't, fetch.py looks the
+    # real file name up when the PDF is opened, so search stays fast.
+    pdfs = [f"https://archive.org/download/{d['identifier']}/{d['identifier']}.pdf" for d in docs]
     out = []
     for d, pdf in zip(docs, pdfs):
         creators = d.get("creator") or []
@@ -285,9 +309,12 @@ def internet_archive(q: str, n: int) -> list[dict[str, Any]]:
     return _relevant(q, [p for p in out if p["title"]])[:n]
 
 
-def loc(q: str, n: int) -> list[dict[str, Any]]:
-    r = requests.get("https://www.loc.gov/books/", timeout=_T, headers=_UA,
-                     params={"q": q, "fo": "json", "c": n + 4, "fa": "online-format:pdf"})
+def loc(q: str, n: int, region: list[str] | None = None,
+        years: tuple[int, int] | None = None) -> list[dict[str, Any]]:
+    params = {"q": f"{q} {region[0]}" if region else q, "fo": "json", "c": n + 4, "fa": "online-format:pdf"}
+    if years:
+        params["dates"] = f"{years[0]}/{years[1]}"
+    r = requests.get("https://www.loc.gov/books/", timeout=_T, headers=_UA, params=params)
     r.raise_for_status()
     out = []
     for d in r.json().get("results") or []:
@@ -302,10 +329,13 @@ def loc(q: str, n: int) -> list[dict[str, Any]]:
     return _relevant(q, [p for p in out if p["title"]])
 
 
-def europeana(q: str, n: int) -> list[dict[str, Any]]:
+def europeana(q: str, n: int, region: list[str] | None = None,
+              years: tuple[int, int] | None = None) -> list[dict[str, Any]]:
+    qf = ["TYPE:TEXT"] + ([f"YEAR:[{years[0]} TO {min(years[1], 2100)}]"] if years else [])
     r = requests.get("https://api.europeana.eu/record/v2/search.json", timeout=_T, headers=_UA, params={
-        "wskey": os.getenv("EUROPEANA_API_KEY") or "api2demo", "query": q, "rows": n,
-        "qf": "TYPE:TEXT", "reusability": "open", "profile": "rich"})
+        "wskey": os.getenv("EUROPEANA_API_KEY") or "api2demo",
+        "query": (f"{q} {region[0]}" if region else q) + (' NOT "natural history"' if re.search(r"histor", q, re.I) else ""),
+        "rows": n, "qf": qf, "reusability": "open", "profile": "rich"})
     r.raise_for_status()
     out = []
     for d in r.json().get("items") or []:
@@ -408,19 +438,21 @@ def rank(results: dict[str, list[dict[str, Any]]], q: str, sort: str = "relevanc
     return [p for _, p in items]
 
 
-def _cached(source: str, q: str, n: int) -> list[dict[str, Any]]:
-    return discover.cached(("src", source, q, n), lambda: SOURCES[source](q, n))
+def _cached(source: str, q: str, n: int, fetch: Callable | None = None, key: tuple = ()) -> list[dict[str, Any]]:
+    fn = fetch or SOURCES[source]
+    return discover.cached(("src", source, q, n, *key), lambda: fn(q, n))
 
 
 def search_all(q: str, limit: int = 30, sort: str = "relevance", only: list[str] | None = None,
-               open_access: bool = False, queries: dict[str, str] | None = None, per: int | None = None) -> dict[str, Any]:
+               open_access: bool = False, queries: dict[str, str] | None = None, per: int | None = None,
+               fetchers: dict[str, Callable] | None = None, key: tuple = ()) -> dict[str, Any]:
     """Every source at once. Returns {papers, sources: {name: count or "error"}}."""
     names = [s for s in SOURCES if (s in only if only else s not in EXTRA)]
     per = per or max(6, min(15, limit // 2))
     results: dict[str, list[dict[str, Any]]] = {}
     status: dict[str, Any] = {}
     pool = cf.ThreadPoolExecutor(max_workers=len(names))
-    futures = {pool.submit(_cached, s, (queries or {}).get(s, q), per): s for s in names}
+    futures = {pool.submit(_cached, s, (queries or {}).get(s, q), per, (fetchers or {}).get(s), key): s for s in names}
     done, pending = cf.wait(futures, timeout=_WAIT)
     pool.shutdown(wait=False, cancel_futures=True)  # don't hold the answer for a slow source
     for f in pending:
@@ -442,14 +474,37 @@ def search_all(q: str, limit: int = 30, sort: str = "relevance", only: list[str]
 
 
 def search_history(q: str, limit: int = 30, sort: str = "relevance", open_access: bool = False,
-                   per: int | None = None) -> dict[str, Any]:
-    """Digitised books and archives first, plus history scholarship."""
+                   per: int | None = None, region: str | None = None, written: str | None = None,
+                   kind: str = "all") -> dict[str, Any]:
+    """Digitised books and archives first, plus history scholarship.
+
+    region: a REGIONS code. written: a WRITTEN code (when the source was written,
+    so older periods mean primary sources). kind: all, books (archives only) or
+    articles (journals only)."""
+    reg = REGIONS.get(region or "")
+    years = WRITTEN.get(written or "")
+    archives = ({name: functools.partial(SOURCES[name], region=reg[1] if reg else None, years=years) for name in HISTORY}
+                if reg or years else None)
+    # Journals are modern: a period before 1950 means primary sources, so archives only.
+    use_journals = kind != "books" and not (years and years[1] < 1950)
+    names = ([] if kind == "articles" else list(HISTORY)) + (HISTORY_SCHOLARLY if use_journals else [])
     # Journals cover every field, so steer them to history; the archives are history already.
     scholarly = q if re.search(r"histor", q, re.I) else f"{q} history"
-    result = search_all(q, limit * 2, sort, list(HISTORY) + HISTORY_SCHOLARLY, open_access,
-                        queries={s: scholarly for s in HISTORY_SCHOLARLY}, per=per)
-    keep = {id(p) for p in _relevant(q, result["papers"])}
-    result["papers"] = [p for p in result["papers"] if p["source"] in HISTORY or id(p) in keep][:limit]
+    if reg:
+        scholarly = f"{scholarly} {reg[0]}"
+    result = search_all(q, limit * 2, sort, names, open_access,
+                        queries={s: scholarly for s in HISTORY_SCHOLARLY}, per=per,
+                        fetchers=archives, key=(region or "", written or ""))
+    # Keep journal results only when they're about what was asked (and the region).
+    wanted = f"{q} {reg[0]}" if reg else q
+    keep = {id(p) for p in _relevant(wanted, result["papers"])} if _words(wanted) else set()
+    out, titles = [], set()
+    for p in result["papers"]:
+        t = re.sub(r"[^a-z0-9]", "", (p.get("title") or "").lower())[:80]
+        if (p["source"] in HISTORY or id(p) in keep) and t not in titles:
+            titles.add(t)
+            out.append(p)
+    result["papers"] = out[:limit]
     return result
 
 
@@ -460,15 +515,18 @@ POOL_MAX = 200
 
 
 def search_pool(kind: str, q: str, sort: str = "relevance", only: list[str] | None = None,
-                open_access: bool = False) -> dict[str, Any]:
+                open_access: bool = False, history: dict[str, str] | None = None) -> dict[str, Any]:
     """One ranked list of everything the sources returned for this search,
     cached so "load more" pages come from the same order without asking again."""
-    key = ("pool", kind, q, sort, tuple(only or ()), open_access)
+    history = history or {}
+    key = ("pool", kind, q, sort, tuple(only or ()), open_access, tuple(sorted(history.items())))
     box: dict[str, Any] = {}
 
     def fetch() -> list[dict[str, Any]]:
         if kind == "history":
-            box["r"] = search_history(q, POOL_MAX, sort, open_access, per=POOL_PER_SOURCE)
+            box["r"] = search_history(q, POOL_MAX, sort, open_access, per=POOL_PER_SOURCE,
+                                      region=history.get("region"), written=history.get("written"),
+                                      kind=history.get("kind") or "all")
         else:
             box["r"] = search_all(q, POOL_MAX, sort, only, open_access, per=POOL_PER_SOURCE)
         return [box["r"]] if box["r"]["papers"] else []

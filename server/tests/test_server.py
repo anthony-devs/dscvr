@@ -1031,3 +1031,29 @@ def test_single_source_pages_grow_to_100(client):
     assert sizes == [50, 100]
     assert p1["hasMore"] and [p["id"] for p in p3["papers"]][0] == "40"
     assert len(p5["papers"]) == 20 and not p5["hasMore"]
+
+
+def test_history_filters_reach_the_archives_and_pick_sources():
+    import sources
+    seen = {}
+
+    def archive(name):
+        def fn(q, n, region=None, years=None):
+            seen[name] = (q, region and region[0], years)
+            return [{"title": f"{name} book about trade", "source": name, "id": name, "pdfUrl": "https://x/y.pdf"}]
+        return fn
+
+    def journal(q, n):
+        seen["doaj"] = q
+        return [{"title": "Trade in Africa", "source": "doaj", "id": "j", "summary": "africa trade"}]
+    fake = {"internet_archive": archive("internet_archive"), "loc": archive("loc"), "europeana": archive("europeana"),
+            "openalex": lambda q, n: [], "doaj": journal, "zenodo": lambda q, n: [], "core": lambda q, n: []}
+    with mock.patch.dict(sources.SOURCES, fake, clear=True), mock.patch.object(discover, "_cache", {}):
+        r = sources.search_history("trade", 20, region="africa", written="1800s")
+        assert seen["internet_archive"] == ("trade", "Africa", (1800, 1899))
+        assert "doaj" not in seen  # a period before 1950 means primary sources only
+        assert {p["source"] for p in r["papers"]} == {"internet_archive", "loc", "europeana"}
+        seen.clear()
+        r = sources.search_history("trade", 20, region="africa", kind="articles")
+        assert set(seen) == {"doaj"} and seen["doaj"] == "trade history Africa"
+        assert [p["title"] for p in r["papers"]] == ["Trade in Africa"]

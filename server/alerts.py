@@ -41,6 +41,7 @@ SOURCES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "openalex": lambda q, n: discover.search_openalex(q, n, "date"),
     "europepmc": lambda q, n: discover.search_europepmc(q, n, "date"),
     "uk_caselaw": lambda q, n: discover.search_uk_caselaw(q, n),
+    "history": lambda q, n: __import__("sources").search_history(q, n)["papers"],
 }
 
 

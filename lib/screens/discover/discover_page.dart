@@ -33,6 +33,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   PaperSource _source = PaperSource.all;
   bool _freeOnly = false;
   bool _guidelines = false;
+  HistoryFilters _history = const HistoryFilters();
   Subject? _subject;
   List<Paper> _papers = const [];
   TopicSummary? _summary;
@@ -151,9 +152,38 @@ class _DiscoverPageState extends State<DiscoverPage> {
             limit: _limit,
             offset: offset,
             guidelines: _guidelines && _source == PaperSource.europePmc,
-            openAccess: _freeOnly),
+            openAccess: _freeOnly,
+            history: _history),
         summary: _lowData || _source == PaperSource.ukCaseLaw ? null : svc.summary(q));
   }
+
+  /// Re-runs whatever is on screen (a search or a subject) after a filter changes,
+  /// so every toggle takes effect at once.
+  void _reload() {
+    if (_q.text.trim().isNotEmpty) {
+      _search();
+    } else if (_source == PaperSource.history && _subject?.feed != Feed.history) {
+      _loadSubject(Subject.lookup('History')!);
+    } else if (_subject != null) {
+      _loadSubject(_subject!);
+    }
+  }
+
+  /// History filters show for History & archives searches and history subjects.
+  bool get _historyMode => _q.text.trim().isNotEmpty ? _source == PaperSource.history : _subject?.feed == Feed.history;
+
+  Widget _historySelect(Map<String, String> options, String value, ValueChanged<String> onChanged, {double width = 200}) =>
+      SizedBox(
+        width: width,
+        child: AppSelect<String>(
+          options: [for (final e in options.entries) SelectOption(e.key, e.value)],
+          value: value,
+          onChanged: (v) {
+            onChanged(v);
+            _reload();
+          },
+        ),
+      );
 
   /// Subjects picked here this visit, on top of the user's own.
   final List<Subject> _picked = [];
@@ -205,7 +235,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
             source: PaperSource.all, limit: _limit, offset: offset, openAccess: _freeOnly);
       } else {
         page = await svc.latestPage(s,
-            limit: _limit, offset: offset, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc));
+            limit: _limit,
+            offset: offset,
+            guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc),
+            openAccess: _freeOnly,
+            history: _history);
       }
       if (!_freeOnly) return page;
       return PaperPage([for (final p in page.papers) if (p.pdfUrl != null || p.openAccess) p],
@@ -264,7 +298,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             value: _source,
             onChanged: (s) {
               setState(() => _source = s);
-              if (_q.text.trim().isNotEmpty) _search();
+              _reload();
             },
           ),
         ),
@@ -274,7 +308,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             selected: _freeOnly,
             onTap: () {
               setState(() => _freeOnly = !_freeOnly);
-              if (_q.text.trim().isNotEmpty) _search();
+              _reload();
             },
           ),
         if (_source == PaperSource.europePmc || (_subject?.feed == Feed.europepmc))
@@ -283,11 +317,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             selected: _guidelines,
             onTap: () {
               setState(() => _guidelines = !_guidelines);
-              if (_q.text.trim().isNotEmpty) {
-                _search();
-              } else if (_subject != null) {
-                _loadSubject(_subject!);
-              }
+              _reload();
             },
           ),
         AppButton.ghost(
@@ -300,6 +330,29 @@ class _DiscoverPageState extends State<DiscoverPage> {
           label: const Text('Open in Google Scholar'),
         ),
       ])),
+      if (_historyMode) ...[
+        const SizedBox(height: 10),
+        Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          _historySelect(HistoryFilters.regions, _history.region,
+              (v) => setState(() => _history = _history.copyWith(region: v)), width: 170),
+          _historySelect(HistoryFilters.periods, _history.written,
+              (v) => setState(() => _history = _history.copyWith(written: v)), width: 210),
+          _historySelect(HistoryFilters.kinds, _history.kind,
+              (v) => setState(() => _history = _history.copyWith(kind: v)), width: 250),
+          if (!_history.isEmpty)
+            AppButton.ghost(
+              size: BtnSize.sm,
+              onPressed: () {
+                setState(() => _history = const HistoryFilters());
+                _reload();
+              },
+              label: const Text('Clear'),
+            ),
+        ]),
+        const SizedBox(height: 6),
+        Text('Older periods search scanned books, letters and reports from that time (primary sources), all free to read.',
+            style: context.text.labelSmall),
+      ],
       const SizedBox(height: 22),
       SectionLabel('Latest in your subjects'),
       const SizedBox(height: 12),
@@ -339,11 +392,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     ? 'Latest UK judgments in ${_subject!.label}'
                     : 'Open-access legal research on ${_country.name} law',
                 Feed.openalex => 'New in ${_subject!.label} across journals',
+                Feed.history => '${_subject!.label}: books, documents and journals',
               }
             : 'Results',
         count: _loading ? null : _papers.length,
       )),
-      if (!_loading && _subject == null && (_source == PaperSource.all || _source == PaperSource.history) && context.services.discover.lastSources.isNotEmpty)
+      if (!_loading && (_subject == null ? (_source == PaperSource.all || _source == PaperSource.history) : _subject!.feed == Feed.history) && context.services.discover.lastSources.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(_searchedLine(context.services.discover.lastSources), style: context.text.labelSmall),

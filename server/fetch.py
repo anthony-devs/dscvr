@@ -6,9 +6,10 @@ resolution and on every redirect), a size cap, and a timeout.
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 from typing import Iterator
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 
@@ -42,6 +43,25 @@ VIEW_MAX = 250 * MB
 IMPORT_MAX = 120 * MB
 
 
+_IA_GUESS = re.compile(r"^https://archive\.org/download/([^/]+)/\1\.pdf$")
+
+
+def _archive_org_pdf(url: str) -> str | None:
+    """Internet Archive search results link <id>/<id>.pdf. Some items name the scan
+    differently; find the real PDF in the item's file list."""
+    m = _IA_GUESS.match(url)
+    if not m:
+        return None
+    try:
+        r = requests.get(f"https://archive.org/metadata/{m.group(1)}/files", timeout=TIMEOUT,
+                         headers={"User-Agent": "DSCVR/1.0 (research library)"})
+        files = [f.get("name", "") for f in r.json().get("result") or []]
+    except (requests.RequestException, ValueError):
+        return None
+    pdfs = sorted((f for f in files if f.lower().endswith(".pdf")), key=lambda f: ("_bw" in f, "_text" in f, len(f)))
+    return f"https://archive.org/download/{m.group(1)}/{quote(pdfs[0])}" if pdfs else None
+
+
 def _open(url: str, max_bytes: int) -> requests.Response:
     """Follows redirects safely and returns an open 200 response."""
     current = url
@@ -57,6 +77,10 @@ def _open(url: str, max_bytes: int) -> requests.Response:
             if not location:
                 raise ValueError("Broken redirect.")
             current = urljoin(current, location)
+            continue
+        if resp.status_code == 404 and current == url and (alt := _archive_org_pdf(url)):
+            resp.close()
+            current = alt
             continue
         if resp.status_code != 200:
             resp.close()

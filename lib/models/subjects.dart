@@ -3,7 +3,8 @@ enum Feed {
   arxiv('arXiv'),
   openalex('journals'),
   europepmc('Europe PMC'),
-  caselaw('UK case law');
+  caselaw('UK case law'),
+  history('archives');
 
   const Feed(this.label);
   final String label;
@@ -36,7 +37,18 @@ class Subject {
   /// A subject made from free text (a user's own category name or a typed search).
   factory Subject.custom(String label) => lookup(label) ?? Subject(label.trim(), field: 'Your subjects');
 
-  Feed get feed => source ?? (arxiv != null ? Feed.arxiv : field == 'Health & Medicine' ? Feed.europepmc : Feed.openalex);
+  Feed get feed =>
+      source ??
+      (arxiv != null
+          ? Feed.arxiv
+          : field == 'Health & Medicine'
+              ? Feed.europepmc
+              : _historyLike.hasMatch(label)
+                  ? Feed.history
+                  : Feed.openalex);
+
+  /// History subjects read archives (scanned books and documents) as well as journals.
+  static final _historyLike = RegExp(r'histor|archaeolog|antiquit|heritage|classics|medieval|colonial', caseSensitive: false);
 
   bool get usesArxiv => feed == Feed.arxiv;
   bool get isLaw => field == 'Law & Government' && feed == Feed.caselaw;

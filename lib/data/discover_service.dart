@@ -35,6 +35,7 @@ enum PaperSource {
         Feed.europepmc => europePmc,
         Feed.caselaw => ukCaseLaw,
         Feed.openalex => openAlex,
+        Feed.history => history,
       };
 }
 
@@ -173,6 +174,31 @@ class LawCountry {
 /// On the web these APIs do not send CORS headers, so requests go through
 /// the `discover` Cloud Function. On iOS/Android we call them directly and
 /// only fall back to the function if that fails.
+/// History & archives filters. Empty strings mean "any".
+class HistoryFilters {
+  const HistoryFilters({this.region = '', this.written = '', this.kind = ''});
+  final String region; // africa, europe, asia, middle_east, americas, oceania
+  final String written; // pre1800, 1800s, 1900-1949, since1950: when the source was written
+  final String kind; // books (archives only), articles (journals only)
+
+  static const regions = {'': 'Any region', 'africa': 'Africa', 'europe': 'Europe', 'asia': 'Asia',
+      'middle_east': 'Middle East', 'americas': 'The Americas', 'oceania': 'Oceania'};
+  static const periods = {'': 'Written any time', 'pre1800': 'Written before 1800', '1800s': 'Written in the 1800s',
+      '1900-1949': 'Written 1900 to 1949', 'since1950': 'Written since 1950'};
+  static const kinds = {'': 'Books, documents and articles', 'books': 'Books and documents', 'articles': 'Journal articles'};
+
+  bool get isEmpty => region.isEmpty && written.isEmpty && kind.isEmpty;
+  HistoryFilters copyWith({String? region, String? written, String? kind}) =>
+      HistoryFilters(region: region ?? this.region, written: written ?? this.written, kind: kind ?? this.kind);
+  Map<String, String> get params => {
+        if (region.isNotEmpty) 'region': region,
+        if (written.isNotEmpty) 'written': written,
+        if (kind.isNotEmpty) 'kind': kind,
+      };
+  @override
+  String toString() => '$region/$written/$kind';
+}
+
 /// One page of results. [consumed] is how many results the server sent before
 /// any filtering here, so the next page starts after them.
 class PaperPage {
@@ -193,9 +219,15 @@ class DiscoverService {
 
   /// One page of search results; ask again with offset = items shown so far for the next page.
   Future<PaperPage> searchPage(String query,
-      {PaperSource source = PaperSource.all, int limit = 20, int offset = 0, bool guidelines = false, bool openAccess = false}) {
+      {PaperSource source = PaperSource.all,
+      int limit = 20,
+      int offset = 0,
+      bool guidelines = false,
+      bool openAccess = false,
+      HistoryFilters history = const HistoryFilters()}) {
     final q = source == PaperSource.arxiv ? 'all:${query.trim()}' : query.trim();
-    return _fetch(source, q, sortByDate: false, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess);
+    return _fetch(source, q,
+        sortByDate: false, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess, history: history);
   }
 
   /// Which sources answered the last combined search ({name: count | "busy"}).
@@ -206,9 +238,16 @@ class DiscoverService {
   Future<List<Paper>> latest(Subject subject, {int limit = 20, bool? guidelines}) async =>
       (await latestPage(subject, limit: limit, guidelines: guidelines)).papers;
 
-  Future<PaperPage> latestPage(Subject subject, {int limit = 20, int offset = 0, bool? guidelines}) =>
+  Future<PaperPage> latestPage(Subject subject,
+          {int limit = 20, int offset = 0, bool? guidelines, bool openAccess = false, HistoryFilters history = const HistoryFilters()}) =>
       _fetch(PaperSource.forFeed(subject.feed), subject.searchText,
-          sortByDate: true, limit: limit, offset: offset, guidelines: guidelines ?? subject.guidelines);
+          // History isn't about what's newest: archives come back in relevance order.
+          sortByDate: subject.feed != Feed.history,
+          limit: limit,
+          offset: offset,
+          guidelines: guidelines ?? subject.guidelines,
+          openAccess: openAccess && subject.feed == Feed.history,
+          history: history);
 
   /// Results are cached for 10 minutes so switching subjects back and forth
   /// is instant and we stay well inside the providers' rate limits.
@@ -216,22 +255,32 @@ class DiscoverService {
   final _cache = <String, (DateTime, PaperPage)>{};
 
   Future<PaperPage> _fetch(PaperSource source, String q,
-      {required bool sortByDate, required int limit, int offset = 0, bool guidelines = false, bool openAccess = false}) async {
+      {required bool sortByDate,
+      required int limit,
+      int offset = 0,
+      bool guidelines = false,
+      bool openAccess = false,
+      HistoryFilters history = const HistoryFilters()}) async {
     if (Env.demo) return PaperPage(offset == 0 ? _demoPapers(q) : const [], hasMore: false);
 
-    final key = '${source.key}|$q|$sortByDate|$limit|$offset|$guidelines|$openAccess';
+    final key = '${source.key}|$q|$sortByDate|$limit|$offset|$guidelines|$openAccess|$history';
     final hit = _cache[key];
     if (hit != null && DateTime.now().difference(hit.$1) < _ttl) return hit.$2;
 
     final page = await _fetchUncached(source, q,
-        sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess);
+        sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess, history: history);
     if (_cache.length > 200) _cache.remove(_cache.keys.first);
     _cache[key] = (DateTime.now(), page);
     return page;
   }
 
   Future<PaperPage> _fetchUncached(PaperSource source, String q,
-      {required bool sortByDate, required int limit, int offset = 0, bool guidelines = false, bool openAccess = false}) async {
+      {required bool sortByDate,
+      required int limit,
+      int offset = 0,
+      bool guidelines = false,
+      bool openAccess = false,
+      HistoryFilters history = const HistoryFilters()}) async {
     // Browsers block direct calls to arXiv and Semantic Scholar (no CORS
     // headers, plus shared rate limits), so the web build always goes through
     // the DSCVR server. Native apps try the provider first and fall back.
@@ -243,11 +292,17 @@ class DiscoverService {
         // Fall through to the server.
       }
     }
-    return _viaServer(source, q, sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess);
+    return _viaServer(source, q,
+        sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess, history: history);
   }
 
   Future<PaperPage> _viaServer(PaperSource source, String q,
-      {required bool sortByDate, required int limit, int offset = 0, bool guidelines = false, bool openAccess = false}) async {
+      {required bool sortByDate,
+      required int limit,
+      int offset = 0,
+      bool guidelines = false,
+      bool openAccess = false,
+      HistoryFilters history = const HistoryFilters()}) async {
     final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
       'source': source.key,
       'q': q,
@@ -256,6 +311,7 @@ class DiscoverService {
       if (offset > 0) 'offset': '$offset',
       if (guidelines) 'type': 'guidelines',
       if (openAccess) 'oa': '1',
+      if (source == PaperSource.history) ...history.params,
     });
     final http.Response res;
     try {
@@ -275,7 +331,7 @@ class DiscoverService {
     if (data['sources'] is Map && offset == 0) lastSources = (data['sources'] as Map).cast<String, Object?>();
     var papers = (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
     final received = papers.length;
-    if (openAccess && source != PaperSource.all) papers = [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p];
+    if (openAccess && source != PaperSource.all && source != PaperSource.history) papers = [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p];
     // Older servers don't send hasMore: a full page probably means there is more.
     final hasMore = data['hasMore'] as bool? ?? received >= limit;
     return PaperPage(papers, hasMore: hasMore, consumed: received);
