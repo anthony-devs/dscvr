@@ -88,7 +88,8 @@ setup() {
     retry g iam service-accounts create "$SA_NAME" --display-name "DSCVR server"
   for role in roles/datastore.user roles/firebaseauth.admin roles/storage.objectAdmin \
               roles/secretmanager.secretAccessor roles/logging.logWriter; do
-    g projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
+    # A just-created service account can take a minute to be visible to IAM.
+    retry g projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
   done
   # Cloud Build needs to push images and deploy.
   local num; num="$(g projects describe "$PROJECT" --format='value(projectNumber)')"
