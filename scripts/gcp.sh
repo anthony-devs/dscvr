@@ -102,6 +102,14 @@ setup() {
   say "Copying the landing site's variables from Railway"
   import_vars landing "$RAILWAY_LANDING_SERVICE"
 
+  # The daily alerts job proves itself with CRON_SECRET. Make one if Railway had none.
+  if ! grep -qx CRON_SECRET "$STATE/server.secrets" 2>/dev/null; then
+    say "Creating CRON_SECRET for the daily alerts job"
+    g secrets describe server-CRON_SECRET >/dev/null 2>&1 || g secrets create server-CRON_SECRET --replication-policy automatic >/dev/null
+    python3 -c 'import secrets; print(secrets.token_urlsafe(32), end="")' | g secrets versions add server-CRON_SECRET --data-file=- >/dev/null
+    echo CRON_SECRET >> "$STATE/server.secrets"
+  fi
+
   say "Setup done. Next: ./scripts/gcp.sh deploy all"
 }
 
@@ -148,7 +156,7 @@ PY
     [[ -z "$k" ]] && continue
     local id="${which}-${k}" f="$STATE/.val-${which}-${k}"
     g secrets describe "$id" >/dev/null 2>&1 || g secrets create "$id" --replication-policy automatic >/dev/null
-    g secrets add-version "$id" --data-file "$f" >/dev/null
+    g secrets versions add "$id" --data-file="$f" >/dev/null
     rm -f "$f"
     echo "  stored $id"
   done < "$STATE/${which}.secrets"
@@ -248,7 +256,7 @@ set_secret() {
   read -r -s -p "Value for ${name} (hidden): " val; echo
   [[ -n "$val" ]] || die "Nothing entered."
   g secrets describe "$id" >/dev/null 2>&1 || g secrets create "$id" --replication-policy automatic >/dev/null
-  printf '%s' "$val" | g secrets add-version "$id" --data-file=- >/dev/null
+  printf '%s' "$val" | g secrets versions add "$id" --data-file=- >/dev/null
   grep -qx "$name" "$STATE/${which}.secrets" 2>/dev/null || echo "$name" >> "$STATE/${which}.secrets"
   echo "Saved. Redeploy to use it: ./scripts/gcp.sh deploy ${which}"
 }
