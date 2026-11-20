@@ -210,38 +210,43 @@ def create_app(config: Config | None = None) -> Flask:
             limit = min(max(int(request.args.get("limit", 20)), 1), 50)
         except (ValueError, TypeError):
             limit = 20
+        try:
+            offset = min(max(int(request.args.get("offset", 0)), 0), sources.POOL_MAX)
+        except (ValueError, TypeError):
+            offset = 0
         if not q:
             return jsonify(error="Provide q"), 400
-        try:
-            if source == "all":
-                only = [x for x in sanitize(request.args.get("only", ""), 200).split(",") if x] or None
-                result = sources.search_all(q, limit, sort, only, open_access=request.args.get("oa") == "1")
-                resp = jsonify(result)
-                resp.cache_control.public = True
-                resp.cache_control.max_age = 600
-                return resp
-            if source == "history":
-                result = sources.search_history(q, limit, sort, open_access=request.args.get("oa") == "1")
-                resp = jsonify(result)
-                resp.cache_control.public = True
-                resp.cache_control.max_age = 600
-                return resp
-            if source == "semantic_scholar":
-                papers = cached(("s2", q, limit), lambda: search_semantic_scholar(q, limit))
-            elif source == "openalex":
-                papers = cached(("oa", q, sort, limit), lambda: search_openalex(q, limit, sort))
-            elif source == "europepmc":
-                guidelines = request.args.get("type") == "guidelines"
-                papers = cached(("pmc", q, sort, limit, guidelines), lambda: search_europepmc(q, limit, sort, guidelines))
-            elif source == "uk_caselaw":
-                court = sanitize(request.args.get("court", ""), 20)
-                papers = cached(("ukcl", q, limit, court), lambda: search_uk_caselaw(q, limit, court))
-            else:
-                papers = cached(("arxiv", q, sort, limit), lambda: search_arxiv(q, sort, limit))
-            resp = jsonify(papers=papers)
+
+        def ok(body: dict):
+            resp = jsonify(body)
             resp.cache_control.public = True
             resp.cache_control.max_age = 600
             return resp
+
+        try:
+            oa = request.args.get("oa") == "1"
+            if source in ("all", "history"):
+                only = [x for x in sanitize(request.args.get("only", ""), 200).split(",") if x] or None
+                pool = sources.search_pool(source, q, sort, only if source == "all" else None, oa)
+                return ok({**sources.page(pool["papers"], offset, limit), "sources": pool.get("sources", {})})
+            # One provider: fetch a block of results once (50, then 100 for later pages)
+            # and serve "load more" pages from it.
+            need = offset + limit
+            size = 50 if need <= 50 else 100
+            if source == "semantic_scholar":
+                papers = cached(("s2", q, size), lambda: search_semantic_scholar(q, size))
+            elif source == "openalex":
+                papers = cached(("oa", q, sort, size), lambda: search_openalex(q, size, sort))
+            elif source == "europepmc":
+                guidelines = request.args.get("type") == "guidelines"
+                papers = cached(("pmc", q, sort, size, guidelines), lambda: search_europepmc(q, size, sort, guidelines))
+            elif source == "uk_caselaw":
+                court = sanitize(request.args.get("court", ""), 20)
+                size = 50  # the National Archives API returns at most 50
+                papers = cached(("ukcl", q, size, court), lambda: search_uk_caselaw(q, size, court))
+            else:
+                papers = cached(("arxiv", q, sort, size), lambda: search_arxiv(q, sort, size))
+            return ok(sources.page(papers, offset, limit, more_upstream=size < 100 and source != "uk_caselaw"))
         except Exception as e:  # noqa: BLE001
             logger.warning("Discover failed: %s", e)
             return jsonify(error="Search provider unavailable"), 502

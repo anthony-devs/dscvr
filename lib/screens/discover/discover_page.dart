@@ -2,7 +2,6 @@ import 'package:dscvr/screens/tour/page_tour.dart';
 import 'package:dscvr/data/discover_service.dart';
 import 'package:dscvr/models/paper.dart';
 import 'package:dscvr/screens/add/add_material_sheet.dart';
-import 'package:dscvr/screens/library/shelf_page.dart';
 import 'package:dscvr/state/services.dart';
 import 'package:dscvr/theme/app_theme.dart';
 import 'package:dscvr/theme/tokens.dart';
@@ -41,9 +40,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
   String? _error;
   int _request = 0;
 
+  // Paging: more results load as you scroll near the end.
+  final _scroll = ScrollController();
+  Future<PaperPage> Function(int offset)? _pager;
+  int _offset = 0;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  String? _moreError;
+
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     final q = widget.initialQuery?.trim();
     if (q != null && q.isNotEmpty) {
       _q.text = q;
@@ -56,27 +64,35 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   void dispose() {
+    _scroll.dispose();
     _q.dispose();
     super.dispose();
   }
 
-  Future<void> _run(Future<List<Paper>> Function() fetch, {Future<TopicSummary?>? summary}) async {
+  Future<void> _run(Future<PaperPage> Function(int offset) fetch, {Future<TopicSummary?>? summary}) async {
     final id = ++_request;
     setState(() {
       _loading = true;
       _error = null;
       _summary = null;
+      _pager = fetch;
+      _hasMore = false;
+      _loadingMore = false;
+      _moreError = null;
     });
+    if (_scroll.hasClients) _scroll.jumpTo(0);
     try {
-      final results = await fetch();
+      final page = await fetch(0);
       final s = await summary;
       if (!mounted || id != _request) return;
       setState(() {
-        _papers = results;
+        _papers = page.papers;
+        _offset = page.consumed;
+        _hasMore = page.hasMore && page.consumed > 0;
         _summary = s;
         _ratings = const {};
       });
-      _loadRatings(results, id);
+      _loadRatings(page.papers, id);
     } catch (e) {
       if (!mounted || id != _request) return;
       setState(() {
@@ -88,11 +104,38 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
   }
 
+  void _onScroll() {
+    if (_scroll.hasClients && _scroll.position.extentAfter < 900) _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    final pager = _pager;
+    if (pager == null || !_hasMore || _loading || _loadingMore || _moreError != null) return;
+    final id = _request;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await pager(_offset);
+      if (!mounted || id != _request) return;
+      final seen = {for (final p in _papers) ResearchService.paperKey(p)};
+      final fresh = [for (final p in page.papers) if (seen.add(ResearchService.paperKey(p))) p];
+      setState(() {
+        _papers = [..._papers, ...fresh];
+        _offset += page.consumed;
+        _hasMore = page.hasMore && page.consumed > 0;
+      });
+      _loadRatings(fresh, id);
+    } catch (e) {
+      if (mounted && id == _request) setState(() => _moreError = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted && id == _request) setState(() => _loadingMore = false);
+    }
+  }
+
   Map<String, PaperRating> _ratings = const {};
 
   Future<void> _loadRatings(List<Paper> papers, int id) async {
     final r = await context.services.research.ratings([for (final p in papers) ResearchService.paperKey(p)]);
-    if (mounted && id == _request) setState(() => _ratings = r);
+    if (mounted && id == _request) setState(() => _ratings = {..._ratings, ...r});
   }
 
   bool get _lowData => context.services.settings.lowData;
@@ -103,8 +146,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (q.isEmpty) return;
     setState(() => _subject = null);
     final svc = context.services.discover;
-    _run(() => svc.search(q,
-            source: _source, limit: _limit, guidelines: _guidelines && _source == PaperSource.europePmc, openAccess: _freeOnly),
+    _run((offset) => svc.searchPage(q,
+            source: _source,
+            limit: _limit,
+            offset: offset,
+            guidelines: _guidelines && _source == PaperSource.europePmc,
+            openAccess: _freeOnly),
         summary: _lowData || _source == PaperSource.ukCaseLaw ? null : svc.summary(q));
   }
 
@@ -150,15 +197,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _q.clear();
     });
     final svc = context.services.discover;
-    _run(() async {
-      final List<Paper> papers;
+    _run((offset) async {
+      final PaperPage page;
       if (_lawResearchFor(s)) {
         final extra = s.label.toLowerCase() == 'law' ? '' : ' ${s.label}';
-        papers = await svc.search('${_country.scholarQuery}$extra', source: PaperSource.all, limit: _limit, openAccess: _freeOnly);
+        page = await svc.searchPage('${_country.scholarQuery}$extra',
+            source: PaperSource.all, limit: _limit, offset: offset, openAccess: _freeOnly);
       } else {
-        papers = await svc.latest(s, limit: _limit, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc));
+        page = await svc.latestPage(s,
+            limit: _limit, offset: offset, guidelines: s.guidelines || (_guidelines && s.feed == Feed.europepmc));
       }
-      return _freeOnly ? [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p] : papers;
+      if (!_freeOnly) return page;
+      return PaperPage([for (final p in page.papers) if (p.pdfUrl != null || p.openAccess) p],
+          hasMore: page.hasMore, consumed: page.consumed);
     });
   }
 
@@ -182,7 +233,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return PageBody(maxWidth: 940, children: [
+    final header = <Widget>[
       PageTitle('Discover'),
       const SizedBox(height: 8),
       Text('Search open research and save what matters to your library.',
@@ -304,14 +355,94 @@ class _DiscoverPageState extends State<DiscoverPage> {
         EmptyState(icon: Ic.warning, title: 'Search unavailable', message: _error)
       else if (_papers.isEmpty)
         const EmptyState(icon: Ic.discover, title: 'No papers found', message: 'Try different words or another source.')
-      else
-        for (final p in _papers)
-          _PaperRow(
-            paper: p,
-            rating: _ratings[ResearchService.paperKey(p)],
-            onRated: (r) => setState(() => _ratings = {..._ratings, ResearchService.paperKey(p): r}),
+    ];
+    final showList = !_loading && _error == null && _papers.isNotEmpty;
+    return _DiscoverScroll(
+      controller: _scroll,
+      maxWidth: 940,
+      header: header,
+      itemCount: showList ? _papers.length : 0,
+      itemBuilder: (context, i) {
+        final p = _papers[i];
+        return _PaperRow(
+          key: ValueKey(ResearchService.paperKey(p)),
+          paper: p,
+          rating: _ratings[ResearchService.paperKey(p)],
+          onRated: (r) => setState(() => _ratings = {..._ratings, ResearchService.paperKey(p): r}),
+        );
+      },
+      footer: showList ? _footer() : null,
+    );
+  }
+
+  Widget _footer() {
+    final c = context.colors;
+    final Widget child;
+    if (_loadingMore) {
+      child = const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2));
+    } else if (_moreError != null) {
+      child = Column(children: [
+        Text(_moreError!, textAlign: TextAlign.center, style: AppTheme.sans(fontSize: 13, color: c.inkMuted)),
+        const SizedBox(height: 8),
+        AppButton.secondary(
+          size: BtnSize.sm,
+          onPressed: () {
+            setState(() => _moreError = null);
+            _loadMore();
+          },
+          child: const Text('Try again'),
+        ),
+      ]);
+    } else if (_hasMore) {
+      child = AppButton.secondary(size: BtnSize.sm, onPressed: _loadMore, child: const Text('Load more'));
+    } else {
+      child = Text(
+        _papers.length == 1 ? 'That\'s the only result.' : 'That\'s all ${_papers.length} results.',
+        style: context.text.labelSmall,
+      );
+    }
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 22), child: Center(child: child));
+  }
+}
+
+/// The Discover page's scroll view. Only the result rows on screen are built,
+/// so long result lists stay smooth.
+class _DiscoverScroll extends StatelessWidget {
+  const _DiscoverScroll({
+    required this.controller,
+    required this.maxWidth,
+    required this.header,
+    required this.itemCount,
+    required this.itemBuilder,
+    this.footer,
+  });
+  final ScrollController controller;
+  final double maxWidth;
+  final List<Widget> header;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  final Widget? footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = context.isCompact ? 16.0 : 32.0;
+    return CustomScrollView(
+      controller: controller,
+      slivers: [
+        SliverPadding(
+          // Matches PageBody: bottom padding clears the floating tab bar on phones.
+          padding: EdgeInsets.fromLTRB(pad, context.isCompact ? 12 : 8, pad, 48 + MediaQuery.paddingOf(context).bottom),
+          sliver: SliverConstrainedCrossAxis(
+            maxExtent: maxWidth,
+            sliver: SliverMainAxisGroup(slivers: [
+              SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: header)),
+              SliverList.builder(itemCount: itemCount, itemBuilder: itemBuilder),
+              if (footer != null) SliverToBoxAdapter(child: footer),
+            ]),
           ),
-    ]);
+        ),
+      ],
+    );
   }
 }
 
@@ -417,7 +548,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _PaperRow extends StatefulWidget {
-  const _PaperRow({required this.paper, this.rating, required this.onRated});
+  const _PaperRow({super.key, required this.paper, this.rating, required this.onRated});
   final Paper paper;
   final PaperRating? rating;
   final ValueChanged<PaperRating> onRated;

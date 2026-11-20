@@ -173,14 +173,29 @@ class LawCountry {
 /// On the web these APIs do not send CORS headers, so requests go through
 /// the `discover` Cloud Function. On iOS/Android we call them directly and
 /// only fall back to the function if that fails.
+/// One page of results. [consumed] is how many results the server sent before
+/// any filtering here, so the next page starts after them.
+class PaperPage {
+  const PaperPage(this.papers, {required this.hasMore, int? consumed}) : _consumed = consumed;
+  final List<Paper> papers;
+  final bool hasMore;
+  final int? _consumed;
+  int get consumed => _consumed ?? papers.length;
+}
+
 class DiscoverService {
   DiscoverService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
   Future<List<Paper>> search(String query,
-      {PaperSource source = PaperSource.all, int limit = 20, bool guidelines = false, bool openAccess = false}) {
+          {PaperSource source = PaperSource.all, int limit = 20, bool guidelines = false, bool openAccess = false}) async =>
+      (await searchPage(query, source: source, limit: limit, guidelines: guidelines, openAccess: openAccess)).papers;
+
+  /// One page of search results; ask again with offset = items shown so far for the next page.
+  Future<PaperPage> searchPage(String query,
+      {PaperSource source = PaperSource.all, int limit = 20, int offset = 0, bool guidelines = false, bool openAccess = false}) {
     final q = source == PaperSource.arxiv ? 'all:${query.trim()}' : query.trim();
-    return _fetch(source, q, sortByDate: false, limit: limit, guidelines: guidelines, openAccess: openAccess);
+    return _fetch(source, q, sortByDate: false, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess);
   }
 
   /// Which sources answered the last combined search ({name: count | "busy"}).
@@ -188,51 +203,57 @@ class DiscoverService {
 
   /// Newest items in a subject from the subject's feed: arXiv preprints,
   /// Europe PMC for health, UK judgments for law, OpenAlex for the rest.
-  Future<List<Paper>> latest(Subject subject, {int limit = 20, bool? guidelines}) =>
+  Future<List<Paper>> latest(Subject subject, {int limit = 20, bool? guidelines}) async =>
+      (await latestPage(subject, limit: limit, guidelines: guidelines)).papers;
+
+  Future<PaperPage> latestPage(Subject subject, {int limit = 20, int offset = 0, bool? guidelines}) =>
       _fetch(PaperSource.forFeed(subject.feed), subject.searchText,
-          sortByDate: true, limit: limit, guidelines: guidelines ?? subject.guidelines);
+          sortByDate: true, limit: limit, offset: offset, guidelines: guidelines ?? subject.guidelines);
 
   /// Results are cached for 10 minutes so switching subjects back and forth
   /// is instant and we stay well inside the providers' rate limits.
   static const _ttl = Duration(minutes: 10);
-  final _cache = <String, (DateTime, List<Paper>)>{};
+  final _cache = <String, (DateTime, PaperPage)>{};
 
-  Future<List<Paper>> _fetch(PaperSource source, String q,
-      {required bool sortByDate, required int limit, bool guidelines = false, bool openAccess = false}) async {
-    if (Env.demo) return _demoPapers(q);
+  Future<PaperPage> _fetch(PaperSource source, String q,
+      {required bool sortByDate, required int limit, int offset = 0, bool guidelines = false, bool openAccess = false}) async {
+    if (Env.demo) return PaperPage(offset == 0 ? _demoPapers(q) : const [], hasMore: false);
 
-    final key = '${source.key}|$q|$sortByDate|$limit|$guidelines|$openAccess';
+    final key = '${source.key}|$q|$sortByDate|$limit|$offset|$guidelines|$openAccess';
     final hit = _cache[key];
     if (hit != null && DateTime.now().difference(hit.$1) < _ttl) return hit.$2;
 
-    final papers = await _fetchUncached(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines, openAccess: openAccess);
-    if (_cache.length > 100) _cache.remove(_cache.keys.first);
-    _cache[key] = (DateTime.now(), papers);
-    return papers;
+    final page = await _fetchUncached(source, q,
+        sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess);
+    if (_cache.length > 200) _cache.remove(_cache.keys.first);
+    _cache[key] = (DateTime.now(), page);
+    return page;
   }
 
-  Future<List<Paper>> _fetchUncached(PaperSource source, String q,
-      {required bool sortByDate, required int limit, bool guidelines = false, bool openAccess = false}) async {
+  Future<PaperPage> _fetchUncached(PaperSource source, String q,
+      {required bool sortByDate, required int limit, int offset = 0, bool guidelines = false, bool openAccess = false}) async {
     // Browsers block direct calls to arXiv and Semantic Scholar (no CORS
     // headers, plus shared rate limits), so the web build always goes through
     // the DSCVR server. Native apps try the provider first and fall back.
     if (!kIsWeb && (source == PaperSource.arxiv || source == PaperSource.semanticScholar)) {
       try {
-        return await _direct(source, q, sortByDate: sortByDate, limit: limit);
+        final papers = await _direct(source, q, sortByDate: sortByDate, limit: limit, offset: offset);
+        return PaperPage(papers, hasMore: papers.length >= limit && offset + limit < 100);
       } catch (_) {
         // Fall through to the server.
       }
     }
-    return _viaServer(source, q, sortByDate: sortByDate, limit: limit, guidelines: guidelines, openAccess: openAccess);
+    return _viaServer(source, q, sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess);
   }
 
-  Future<List<Paper>> _viaServer(PaperSource source, String q,
-      {required bool sortByDate, required int limit, bool guidelines = false, bool openAccess = false}) async {
+  Future<PaperPage> _viaServer(PaperSource source, String q,
+      {required bool sortByDate, required int limit, int offset = 0, bool guidelines = false, bool openAccess = false}) async {
     final uri = Uri.parse('${Env.serverUrl}/discover').replace(queryParameters: {
       'source': source.key,
       'q': q,
       'sort': sortByDate ? 'date' : 'relevance',
       'limit': '$limit',
+      if (offset > 0) 'offset': '$offset',
       if (guidelines) 'type': 'guidelines',
       if (openAccess) 'oa': '1',
     });
@@ -251,17 +272,20 @@ class DiscoverService {
       throw Exception('${source.label} is not responding right now. Try again shortly, or switch source.');
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    if (data['sources'] is Map) lastSources = (data['sources'] as Map).cast<String, Object?>();
+    if (data['sources'] is Map && offset == 0) lastSources = (data['sources'] as Map).cast<String, Object?>();
     var papers = (data['papers'] as List).map((e) => Paper.fromMap((e as Map).cast<String, dynamic>())).toList();
+    final received = papers.length;
     if (openAccess && source != PaperSource.all) papers = [for (final p in papers) if (p.pdfUrl != null || p.openAccess) p];
-    return papers;
+    // Older servers don't send hasMore: a full page probably means there is more.
+    final hasMore = data['hasMore'] as bool? ?? received >= limit;
+    return PaperPage(papers, hasMore: hasMore, consumed: received);
   }
 
-  Future<List<Paper>> _direct(PaperSource source, String q, {required bool sortByDate, required int limit}) async {
+  Future<List<Paper>> _direct(PaperSource source, String q, {required bool sortByDate, required int limit, int offset = 0}) async {
     if (source == PaperSource.arxiv) {
       final uri = Uri.https('export.arxiv.org', '/api/query', {
         'search_query': q,
-        'start': '0',
+        'start': '$offset',
         'max_results': '$limit',
         'sortBy': sortByDate ? 'submittedDate' : 'relevance',
         'sortOrder': 'descending',
@@ -273,6 +297,7 @@ class DiscoverService {
     final uri = Uri.https('api.semanticscholar.org', '/graph/v1/paper/search', {
       'query': q,
       'limit': '$limit',
+      if (offset > 0) 'offset': '$offset',
       'fields': 'title,authors,year,abstract,url,openAccessPdf,venue,citationCount,externalIds',
     });
     final res = await _client.get(uri).timeout(const Duration(seconds: 15));

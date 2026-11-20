@@ -997,3 +997,37 @@ def test_update_email_renders_markdown_and_unsubscribe():
     import mailer
     html_out = mailer.render("Hi", "## New\n\n- one\n- two\n\nSee [DSCVR](https://www.askpinda.com) **now**.", "Ada Lovelace", "https://x/unsub")
     assert "Hi Ada," in html_out and "<li" in html_out and "<strong>now</strong>" in html_out and "https://x/unsub" in html_out
+
+
+def test_discover_pages_come_from_one_ranked_pool(client):
+    import sources
+    calls = []
+
+    def fake(q, n):
+        calls.append(n)
+        return [{"title": f"Paper {i} about cells", "source": "openalex", "id": str(i), "summary": "x"} for i in range(n)]
+    fake_sources = {"openalex": fake}
+    with mock.patch.dict(sources.SOURCES, fake_sources, clear=True), mock.patch.object(discover, "_cache", {}):
+        first = client.get("/discover?source=all&q=cells&limit=20").get_json()
+        second = client.get("/discover?source=all&q=cells&limit=20&offset=20").get_json()
+    assert calls == [sources.POOL_PER_SOURCE]  # the second page didn't search again
+    assert len(first["papers"]) == 20 and first["hasMore"] and first["offset"] == 0
+    assert first["sources"] == {"openalex": sources.POOL_PER_SOURCE}
+    assert len(second["papers"]) == 5 and not second["hasMore"]
+    ids = [p["id"] for p in first["papers"] + second["papers"]]
+    assert len(set(ids)) == 25
+
+
+def test_single_source_pages_grow_to_100(client):
+    sizes = []
+
+    def fake(q, sort, n):
+        sizes.append(n)
+        return [{"title": f"t{i}", "source": "arxiv", "id": str(i)} for i in range(n)]
+    with mock.patch("app.search_arxiv", side_effect=fake), mock.patch.object(discover, "_cache", {}):
+        p1 = client.get("/discover?source=arxiv&q=x&limit=20").get_json()
+        p3 = client.get("/discover?source=arxiv&q=x&limit=20&offset=40").get_json()
+        p5 = client.get("/discover?source=arxiv&q=x&limit=20&offset=80").get_json()
+    assert sizes == [50, 100]
+    assert p1["hasMore"] and [p["id"] for p in p3["papers"]][0] == "40"
+    assert len(p5["papers"]) == 20 and not p5["hasMore"]

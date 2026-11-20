@@ -413,10 +413,10 @@ def _cached(source: str, q: str, n: int) -> list[dict[str, Any]]:
 
 
 def search_all(q: str, limit: int = 30, sort: str = "relevance", only: list[str] | None = None,
-               open_access: bool = False, queries: dict[str, str] | None = None) -> dict[str, Any]:
+               open_access: bool = False, queries: dict[str, str] | None = None, per: int | None = None) -> dict[str, Any]:
     """Every source at once. Returns {papers, sources: {name: count or "error"}}."""
     names = [s for s in SOURCES if (s in only if only else s not in EXTRA)]
-    per = max(6, min(15, limit // 2))
+    per = per or max(6, min(15, limit // 2))
     results: dict[str, list[dict[str, Any]]] = {}
     status: dict[str, Any] = {}
     pool = cf.ThreadPoolExecutor(max_workers=len(names))
@@ -441,15 +441,46 @@ def search_all(q: str, limit: int = 30, sort: str = "relevance", only: list[str]
     return {"papers": papers[:limit], "sources": status}
 
 
-def search_history(q: str, limit: int = 30, sort: str = "relevance", open_access: bool = False) -> dict[str, Any]:
+def search_history(q: str, limit: int = 30, sort: str = "relevance", open_access: bool = False,
+                   per: int | None = None) -> dict[str, Any]:
     """Digitised books and archives first, plus history scholarship."""
     # Journals cover every field, so steer them to history; the archives are history already.
     scholarly = q if re.search(r"histor", q, re.I) else f"{q} history"
     result = search_all(q, limit * 2, sort, list(HISTORY) + HISTORY_SCHOLARLY, open_access,
-                        queries={s: scholarly for s in HISTORY_SCHOLARLY})
+                        queries={s: scholarly for s in HISTORY_SCHOLARLY}, per=per)
     keep = {id(p) for p in _relevant(q, result["papers"])}
     result["papers"] = [p for p in result["papers"] if p["source"] in HISTORY or id(p) in keep][:limit]
     return result
+
+
+# ── Paging ───────────────────────────────────────────────────────────
+
+POOL_PER_SOURCE = 25   # each source answers in one call, so asking for 25 costs about the same as 10
+POOL_MAX = 200
+
+
+def search_pool(kind: str, q: str, sort: str = "relevance", only: list[str] | None = None,
+                open_access: bool = False) -> dict[str, Any]:
+    """One ranked list of everything the sources returned for this search,
+    cached so "load more" pages come from the same order without asking again."""
+    key = ("pool", kind, q, sort, tuple(only or ()), open_access)
+    box: dict[str, Any] = {}
+
+    def fetch() -> list[dict[str, Any]]:
+        if kind == "history":
+            box["r"] = search_history(q, POOL_MAX, sort, open_access, per=POOL_PER_SOURCE)
+        else:
+            box["r"] = search_all(q, POOL_MAX, sort, only, open_access, per=POOL_PER_SOURCE)
+        return [box["r"]] if box["r"]["papers"] else []
+
+    hit = discover.cached(key, fetch)
+    return hit[0] if hit else box.get("r", {"papers": [], "sources": {}})
+
+
+def page(papers: list[dict[str, Any]], offset: int, limit: int, more_upstream: bool = False) -> dict[str, Any]:
+    chunk = papers[offset:offset + limit]
+    return {"papers": chunk, "offset": offset, "total": len(papers),
+            "hasMore": offset + limit < len(papers) or (more_upstream and len(chunk) == limit)}
 
 
 # ── Free PDFs ────────────────────────────────────────────────────────
