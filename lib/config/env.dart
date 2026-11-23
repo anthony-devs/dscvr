@@ -12,8 +12,18 @@ class Env {
   static const String chromeExtensionUrl = String.fromEnvironment('DSCVR_CHROME_EXTENSION_URL');
 
   /// Runs the app against an in-memory sample library with no Firebase.
-  /// Useful for design reviews, screenshots and portfolio demos.
-  static const bool demo = bool.fromEnvironment('DSCVR_DEMO');
+  /// On by build flag (DSCVR_DEMO=true) or by opening the app with ?demo=true,
+  /// which is what the landing page's "Try the demo" button does.
+  static final bool demo = const bool.fromEnvironment('DSCVR_DEMO') || _demoFromUrl();
+
+  static bool _demoFromUrl() {
+    try {
+      final q = Uri.base.queryParameters['demo'];
+      return q == 'true' || q == '1';
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Base URL of the deployed Cloud Functions (pinda, unfurl, parliament).
   static const String functionsUrl = String.fromEnvironment(

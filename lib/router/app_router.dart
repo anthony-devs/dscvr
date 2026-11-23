@@ -52,7 +52,7 @@ GoRouter buildRouter(SessionController session) {
         case SessionStatus.unknown:
           return loc == '/splash' ? null : hold('/splash');
         case SessionStatus.signedOut:
-          return (loc == '/login' || loc == '/signup') ? null : '/login';
+          return (loc == '/login' || loc == '/signup') ? null : '/signup';
         case SessionStatus.onboarding:
           return loc == '/onboarding' ? null : '/onboarding';
         case SessionStatus.ready:

@@ -70,7 +70,7 @@ class _SignupPageState extends State<SignupPage> {
   Widget build(BuildContext context) {
     return AuthScaffold(
       title: 'Create your library',
-      subtitle: 'Free forever. Your materials stay private unless you share them.',
+      subtitle: 'Free to start. Your materials stay private unless you share them.',
       form: Form(
         key: _formKey,
         child: AutofillGroup(

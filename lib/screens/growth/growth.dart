@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Email verification, invites (referrals) and "Rate DSCVR".
 class Growth {
@@ -127,6 +128,7 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
 
   @override
   Widget build(BuildContext context) {
+    if (Env.demo) return const _DemoBanner();
     if (_hidden || !Growth.needsVerification(_user)) return const SizedBox.shrink();
     final c = context.colors;
     final email = _user?.email ?? 'your email';
@@ -148,6 +150,39 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
               ),
               AppButton.ghost(size: BtnSize.sm, onPressed: _busy ? null : _resend, child: const Text('Resend')),
               AppButton.secondary(size: BtnSize.sm, onPressed: _busy ? null : _check, child: const Text("I've verified")),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown across the top of the app in demo mode: sample data, and a way to sign up.
+class _DemoBanner extends StatelessWidget {
+  const _DemoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: c.surfaceMuted,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 10,
+            runSpacing: 6,
+            children: [
+              Icon(Ic.info, size: 16, color: c.inkMuted),
+              Text("You're exploring a demo library. Nothing you do here is saved.", style: AppTheme.sans(fontSize: 13, color: c.ink)),
+              AppButton.secondary(
+                size: BtnSize.sm,
+                onPressed: () => launchUrl(Uri.parse('https://app.askpinda.com/signup'), webOnlyWindowName: '_self'),
+                child: const Text('Create your free library'),
+              ),
             ],
           ),
         ),

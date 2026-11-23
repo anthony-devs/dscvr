@@ -19,7 +19,7 @@ class SessionController extends ChangeNotifier {
     if (Env.demo) {
       _user = DSCVRUser(
         id: 'demo',
-        displayName: 'Anthony Ude',
+        displayName: 'Guest',
         email: 'demo@dscvr.app',
         role: 'Researcher',
         onboarded: true,

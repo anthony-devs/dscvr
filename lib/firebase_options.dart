@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     appId: '1:889846550832:web:b764da4e6c16cbd183b8f5',
     messagingSenderId: '889846550832',
     projectId: 'dscvr-9d362',
-    authDomain: 'dscvr-9d362.firebaseapp.com',
+    authDomain: 'app.askpinda.com',
     storageBucket: 'dscvr-9d362.firebasestorage.app',
     measurementId: 'G-P5RQNH9NHV',
   );

@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    // The app's address is app.askpinda.com; older links to dscvr.askpinda.com still work.
+    if (location.hostname === 'dscvr.askpinda.com') {
+      location.replace('https://app.askpinda.com' + location.pathname + location.search + location.hash);
+    }
+  </script>
   <!-- Replaced by `flutter build web --base-href`. Keep "/" for Firebase Hosting. -->
   <base href="$FLUTTER_BASE_HREF">
 

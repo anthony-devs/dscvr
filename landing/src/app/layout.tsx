@@ -5,7 +5,7 @@ import { DESCRIPTION, SITE_URL } from "@/lib/site";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Ask Pinda by DSCVR: AI Research Assistant for Papers, PDFs and Study",
+    default: "DSCVR by AskPinda: AI Research Assistant for Papers, PDFs and Study",
     template: "%s | DSCVR",
   },
   description: DESCRIPTION,
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE_URL,
     siteName: "DSCVR",
-    title: "Ask Pinda by DSCVR: research, answered",
+    title: "DSCVR by AskPinda: research, answered",
     description: "Find the research, read it with Pinda, and write it up. For students, researchers, clinicians and lawyers. Free to start.",
   },
   twitter: {

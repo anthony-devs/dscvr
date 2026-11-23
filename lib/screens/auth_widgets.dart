@@ -136,7 +136,7 @@ class _Showcase extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        Text('Free forever. Supported by readers.', style: context.text.labelMedium),
+        Text('Free to start. Upgrade when you need more.', style: context.text.labelMedium),
       ]),
     );
   }
