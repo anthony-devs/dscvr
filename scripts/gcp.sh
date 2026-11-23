@@ -20,6 +20,7 @@ set -euo pipefail
 PROJECT="${GCP_PROJECT:-dscvr-9d362}"
 API_DOMAIN="${API_DOMAIN:-api.askpinda.com}"
 WWW_DOMAIN="${WWW_DOMAIN:-www.askpinda.com}"
+APEX_DOMAIN="${APEX_DOMAIN:-askpinda.com}"
 RAILWAY_SERVER_SERVICE="${RAILWAY_SERVER_SERVICE:-dscvr-server}"
 RAILWAY_LANDING_SERVICE="${RAILWAY_LANDING_SERVICE:-dscvr}"
 SA_NAME="dscvr-server"
@@ -224,7 +225,7 @@ schedule() {
 # ── custom domains ─────────────────────────────────────────────────────
 domains() {
   local r; r="$(region)"
-  for pair in "dscvr-server:$API_DOMAIN" "dscvr-landing:$WWW_DOMAIN"; do
+  for pair in "dscvr-server:$API_DOMAIN" "dscvr-landing:$WWW_DOMAIN" "dscvr-landing:$APEX_DOMAIN"; do
     local svc="${pair%%:*}" dom="${pair#*:}"
     g run services describe "$svc" --region "$r" >/dev/null 2>&1 || die "$svc isn't deployed yet. Run: ./scripts/gcp.sh deploy all"
     g beta run domain-mappings describe --domain "$dom" --region "$r" >/dev/null 2>&1 || \
@@ -232,7 +233,7 @@ domains() {
       die "Couldn't map $dom. Your Google account must be a verified owner of askpinda.com in Search Console."
   done
   say "Add these records in OpenSRS (DNS for askpinda.com):"
-  for dom in "$API_DOMAIN" "$WWW_DOMAIN"; do
+  for dom in "$API_DOMAIN" "$WWW_DOMAIN" "$APEX_DOMAIN"; do
     g beta run domain-mappings describe --domain "$dom" --region "$r" \
       --format='table[box](metadata.name:label=DOMAIN,status.resourceRecords[].type:label=TYPE,status.resourceRecords[].rrdata:label=VALUE)'
   done
