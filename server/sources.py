@@ -37,6 +37,7 @@ from typing import Any, Callable
 import requests
 
 import discover
+import learn
 
 log = logging.getLogger("sources")
 _UA = {"User-Agent": "DSCVR/1.1 (research library; mailto:%s)" % (os.getenv("CONTACT_EMAIL") or "hello@dscvr.app")}
@@ -47,6 +48,7 @@ LABELS = {
     "arxiv": "arXiv", "semantic_scholar": "Semantic Scholar", "openalex": "OpenAlex", "europepmc": "Europe PMC",
     "crossref": "Crossref", "doaj": "DOAJ", "zenodo": "Zenodo", "plos": "PLOS", "core": "CORE", "uk_caselaw": "Find Case Law",
     "internet_archive": "Internet Archive", "loc": "Library of Congress", "europeana": "Europeana",
+    "open_textbooks": "Open Textbook Library", "openstax": "OpenStax", "wikibooks": "Wikibooks", "openlibrary": "Open Library",
 }
 
 
@@ -358,6 +360,46 @@ HISTORY = {"internet_archive": internet_archive, "loc": loc, "europeana": europe
 HISTORY_SCHOLARLY = ["openalex", "doaj", "zenodo", "core"]
 
 
+# What students type for the subject they are taking.
+ACRONYMS = {
+    "dbms": "database management systems", "rdbms": "relational database", "sql": "sql database", "dsa": "data structures and algorithms",
+    "oop": "object oriented programming", "hci": "human computer interaction", "nlp": "natural language processing",
+    "ml": "machine learning", "ai": "artificial intelligence", "os": "operating systems", "cn": "computer networks",
+    "daa": "design and analysis of algorithms", "toc": "theory of computation", "se": "software engineering",
+    "dbms notes": "database management systems", "cs": "computer science", "ece": "electronics engineering",
+}
+
+
+def expand(q: str) -> str:
+    """"DBMS" -> "database management systems" for the textbook sources, which match by words."""
+    t = q.strip().lower()
+    if t in ACRONYMS:
+        return ACRONYMS[t]
+    return " ".join(ACRONYMS.get(w, w) if len(q.split()) == 1 else w for w in t.split()) if len(q.split()) == 1 else q
+
+
+def _about(q: str, papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Textbook searches match loosely, so keep only what names the topic in its title, subjects or book."""
+    words = _words(q)
+    if not words:
+        return papers
+    need = max(1, math.ceil(len(words) * 0.6))
+    def hits(p: dict[str, Any]) -> int:
+        text = " ".join([p.get("title") or "", " ".join(p.get("subjects") or []), p.get("venue") or ""]).lower()
+        return sum(w in text for w in words)
+    return [p for p in papers if hits(p) >= need]
+
+
+def _learn(fn: Callable[[str, int], list[dict[str, Any]]]) -> Callable[[str, int], list[dict[str, Any]]]:
+    def run(q: str, n: int) -> list[dict[str, Any]]:
+        asked = expand(q)
+        return _about(asked, fn(asked, n))
+    return run
+
+
+LEARN = {"open_textbooks": _learn(learn.open_textbooks), "openstax": _learn(learn.openstax),
+         "wikibooks": _learn(learn.wikibooks), "openlibrary": _learn(learn.openlibrary)}
+
 SOURCES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "openalex": _openalex,
     "semantic_scholar": _s2,
@@ -368,16 +410,18 @@ SOURCES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "plos": plos,
     "zenodo": zenodo,
     "core": core,
+    **LEARN,
     **HISTORY,
 }
 
 # Searched only in History & archives, never in "All sources".
-EXTRA = set(HISTORY)
+EXTRA = set(HISTORY) | {"openlibrary"}
 
 # How much a top result from each source counts when ranking the merged list.
 WEIGHT = {"openalex": 1.0, "semantic_scholar": 1.0, "europepmc": 0.95, "arxiv": 0.9, "crossref": 0.8,
           "doaj": 0.85, "plos": 0.85, "core": 0.8, "zenodo": 0.6,
-          "internet_archive": 1.0, "loc": 1.0, "europeana": 0.5}
+          "internet_archive": 1.0, "loc": 1.0, "europeana": 0.5,
+          "open_textbooks": 1.0, "openstax": 1.0, "wikibooks": 0.9, "openlibrary": 0.6}
 
 
 def _key(p: dict[str, Any]) -> str:
@@ -427,6 +471,9 @@ def rank(results: dict[str, list[dict[str, Any]]], q: str, sort: str = "relevanc
         title = (p.get("title") or "").lower()
         if words:
             score[k] += 0.6 * sum(w in title for w in words) / len(words)
+            # Someone searching a plain subject ("calculus") wants the textbook before the preprints.
+            if p.get("kind") in ("textbook", "study guide") and len(words) <= 3 and all(w in title for w in words):
+                score[k] += 0.5
         score[k] += 0.12 if p.get("summary") else -0.1
         score[k] += 0.08 if p.get("pdfUrl") else 0
         score[k] += 0.05 * math.log10(1 + (p.get("citations") or 0))
@@ -508,6 +555,17 @@ def search_history(q: str, limit: int = 30, sort: str = "relevance", open_access
     return result
 
 
+def search_learn(q: str, limit: int = 30, sort: str = "relevance", open_access: bool = False,
+                 per: int | None = None) -> dict[str, Any]:
+    """Free textbooks, study guides and course notes first, then journal reviews and surveys on the topic."""
+    result = search_all(q, limit * 2, sort, list(LEARN) + ["doaj", "openalex"], open_access,
+                        queries={"doaj": f"{q} introduction", "openalex": f"{q} introduction textbook"}, per=per)
+    texts = [p for p in result["papers"] if p["source"] in LEARN]
+    rest = [p for p in result["papers"] if p["source"] not in LEARN]
+    result["papers"] = (texts + rest)[:limit]
+    return result
+
+
 # ── Paging ───────────────────────────────────────────────────────────
 
 POOL_PER_SOURCE = 25   # each source answers in one call, so asking for 25 costs about the same as 10
@@ -523,7 +581,9 @@ def search_pool(kind: str, q: str, sort: str = "relevance", only: list[str] | No
     box: dict[str, Any] = {}
 
     def fetch() -> list[dict[str, Any]]:
-        if kind == "history":
+        if kind == "learn":
+            box["r"] = search_learn(q, POOL_MAX, sort, open_access, per=POOL_PER_SOURCE)
+        elif kind == "history":
             box["r"] = search_history(q, POOL_MAX, sort, open_access, per=POOL_PER_SOURCE,
                                       region=history.get("region"), written=history.get("written"),
                                       kind=history.get("kind") or "all")

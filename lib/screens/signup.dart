@@ -1,4 +1,10 @@
+import 'dart:async';
+
+import 'package:dscvr/data/api.dart';
 import 'package:dscvr/models/auth.dart';
+import 'package:dscvr/screens/consent.dart';
+import 'package:dscvr/screens/growth/growth.dart';
+import 'package:dscvr/state/services.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +25,9 @@ class _SignupPageState extends State<SignupPage> {
   final DSCVRAuth _auth = DSCVRAuth();
   bool _obscure = true;
   bool _loading = false;
+  bool _terms = false;
+  bool _updates = false;
+  bool _tried = false;
 
   @override
   void dispose() {
@@ -28,8 +37,26 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
+  /// Runs after the account exists, even if the page has already moved on:
+  /// records the consent choices, then sends the branded verification email.
+  static Future<void> _afterSignup(DscvrApi api, bool updates) async {
+    try {
+      await api.post('/me/consent', {'terms': true, 'updates': updates});
+    } catch (_) {
+      // The terms prompt asks again on first open if this didn't reach the server.
+    }
+    try {
+      await Growth.sendVerification(api);
+    } catch (_) {
+      // The banner in the app offers "Resend".
+    }
+  }
+
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _tried = true);
+    if (!(_formKey.currentState?.validate() ?? false) || !_terms) return;
+    final api = context.services.api;
+    final updates = _updates;
     setState(() => _loading = true);
     try {
       await _auth.registerWithEmail(
@@ -37,6 +64,7 @@ class _SignupPageState extends State<SignupPage> {
         password: _passCtrl.text.trim(),
         displayName: _nameCtrl.text.trim(),
       );
+      unawaited(_afterSignup(api, updates));
       if (!mounted) return;
       Toasts.success(context, 'Account created successfully');
       // The router redirects to onboarding once the session updates.
@@ -108,7 +136,15 @@ class _SignupPageState extends State<SignupPage> {
               onSuffixTap: () => setState(() => _obscure = !_obscure),
               validator: (v) => (v?.length ?? 0) < 6 ? 'Password must be 6+ characters' : null,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            ConsentChecks(
+              terms: _terms,
+              updates: _updates,
+              onTerms: (v) => setState(() => _terms = v),
+              onUpdates: (v) => setState(() => _updates = v),
+              showError: _tried,
+            ),
+            const SizedBox(height: 16),
             AuthButton(label: 'Create account', loading: _loading, onTap: _submit),
             const SizedBox(height: 18),
             const OrDivider(),
@@ -116,7 +152,7 @@ class _SignupPageState extends State<SignupPage> {
             GoogleButton(loading: _loading, onTap: _googleSignIn),
             const SizedBox(height: 18),
             Text(
-              "By signing up you agree to DSCVR's Terms and Privacy Policy.",
+              "Continuing with Google means you agree to DSCVR's Terms and Privacy Policy.",
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

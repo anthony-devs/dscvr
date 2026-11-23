@@ -166,6 +166,9 @@ LIMITS = {
     "account":    {"per_min": 3, "per_hour": 10},
     "referrals":  {"per_min": 5, "per_hour": 30},
     "feedback":   {"per_min": 5, "per_hour": 20},
+    "email_send":  {"per_min": 2, "per_hour": 6},
+    "email_reset": {"per_min": 3, "per_hour": 10},
+    "consent":     {"per_min": 10, "per_hour": 60},
 }
 
 

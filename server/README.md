@@ -23,7 +23,7 @@ plus two private tools:
 | `PAYSTACK_SECRET_KEY`, `PAYSTACK_PLAN_*`, `PAYSTACK_CALLBACK_URL` | Plus and Max subscriptions (see `billing.py`) |
 | `CONTACT_EMAIL` | Sent to OpenAlex and Europe PMC so they give steadier service |
 | `CRON_SECRET` | Lets the daily scheduler call `POST /alerts/run` (header `X-Cron-Secret`). Without it the route is off |
-| `RESEND_API_KEY`, `ALERTS_FROM_EMAIL` | Optional: email digests for alerts, sent through Resend from e.g. `DSCVR <alerts@yourdomain>` |
+| `SMTP_USER`, `SMTP_PASSWORD` | Email: the Zoho mailbox to send from (e.g. `mail@askpinda.com`) and an app-specific password. Sends confirm-your-email, welcome, password reset, product updates and alert digests. Optional: `SMTP_HOST` (default `smtp.zoho.com`), `MAIL_FROM` (default `AskPinda <SMTP_USER>`), `MAIL_REPLY_TO`. `RESEND_API_KEY` + `MAIL_FROM` still work as a fallback |
 | `APP_URL` | Link used in alert emails (default `https://app.askpinda.com`) |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | Founder sign-in. Make the hash with `python manage.py hash-password` |
 | `ADMIN_TOTP_SECRET` | Second step: the 6-digit authenticator code. Make it with `python manage.py totp-setup` and add it to Google Authenticator |

@@ -1,5 +1,7 @@
+import 'package:dscvr/data/api.dart';
 import 'package:dscvr/models/auth.dart';
 import 'package:dscvr/screens/auth_widgets.dart';
+import 'package:dscvr/state/services.dart';
 import 'package:dscvr/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -74,11 +76,18 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
     try {
-      // Fix: was _auth.sendPasswordReset — correct name is sendPasswordResetEmail
-      await _auth.sendPasswordResetEmail(email);
+      try {
+        await context.services.api.post('/email/password-reset', {'email': email});
+      } on ApiException catch (e) {
+        if (e.status == 429) rethrow;
+        await _auth.sendPasswordResetEmail(email); // our email isn't available: use Firebase's
+      }
       if (!mounted) return;
       Toasts.success(context, 'Password reset email sent');
     } on DSCVRAuthException catch (e) {
+      if (!mounted) return;
+      Toasts.error(context, e.message);
+    } on ApiException catch (e) {
       if (!mounted) return;
       Toasts.error(context, e.message);
     } catch (_) {

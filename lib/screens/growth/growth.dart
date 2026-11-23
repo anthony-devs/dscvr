@@ -37,6 +37,20 @@ class Growth {
     } catch (_) {}
   }
 
+  /// Sends the branded "confirm your email" message from our server; if that
+  /// isn't available, falls back to Firebase's own email. Returns false when
+  /// the person has to wait before asking again.
+  static Future<bool> sendVerification(DscvrApi api) async {
+    try {
+      await api.post('/email/verification');
+      return true;
+    } on ApiException catch (e) {
+      if (e.status == 429) rethrow;
+    } catch (_) {}
+    await FirebaseAuth.instance.currentUser?.sendEmailVerification();
+    return true;
+  }
+
   /// True for accounts that signed up with email and haven't clicked the link yet.
   static bool needsVerification(User? u) =>
       u != null && !u.emailVerified && u.providerData.any((p) => p.providerId == 'password');
@@ -94,11 +108,13 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
   Future<void> _resend() async {
     setState(() => _busy = true);
     try {
-      await _user?.sendEmailVerification();
+      await Growth.sendVerification(context.services.api);
       if (mounted) {
         setState(() => _sent = true);
         toast(context, 'Verification email sent', description: 'Check your inbox and spam folder.');
       }
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.status == 429 ? 'Please wait a minute before trying again.' : e.message);
     } on FirebaseAuthException catch (e) {
       if (mounted) toast(context, e.code == 'too-many-requests' ? 'Please wait a minute before trying again.' : (e.message ?? 'Could not send the email.'));
     } finally {

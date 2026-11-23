@@ -463,11 +463,8 @@ class DSCVRAuth {
 
     await result.user!
         .updateDisplayName(displayName);
-    try {
-      await result.user!.sendEmailVerification();
-    } catch (_) {
-      // The banner in the app offers "Resend" if this didn't go out.
-    }
+    // The verification email is sent by the DSCVR server right after sign-up
+    // (see Growth.sendVerification); the banner in the app offers "Resend".
 
     final user = DSCVRUser(
       id: result.user!.uid,

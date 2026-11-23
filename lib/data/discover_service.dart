@@ -14,6 +14,7 @@ enum PaperSource {
   all('All sources', 'all', 'arXiv, Semantic Scholar, OpenAlex, Europe PMC, Crossref, DOAJ, PLOS, Zenodo and more'),
   europePmc('Health & clinical', 'europepmc', 'PubMed, PMC and clinical guidelines'),
   ukCaseLaw('UK case law', 'uk_caselaw', 'Judgments from UK courts (Find Case Law)'),
+  learn('Textbooks & notes', 'learn', 'Free textbooks, study guides and course notes from OpenStax, Open Textbook Library and Wikibooks, then reviews and overviews'),
   history('History & archives', 'history', 'Free scanned books and documents from the Internet Archive, Library of Congress and Europeana, plus history journals'),
   // Used for subject feeds; not offered as separate search choices.
   openAlex('OpenAlex', 'openalex', 'Journals and books in every discipline'),
@@ -21,7 +22,7 @@ enum PaperSource {
   semanticScholar('Semantic Scholar', 'semantic_scholar', 'Papers with citation counts');
 
   /// What the search box offers.
-  static const searchable = [all, history, europePmc, ukCaseLaw];
+  static const searchable = [all, learn, history, europePmc, ukCaseLaw];
 
   const PaperSource(this.label, this.key, this.blurb);
   final String label;
@@ -261,14 +262,19 @@ class DiscoverService {
       bool guidelines = false,
       bool openAccess = false,
       HistoryFilters history = const HistoryFilters()}) async {
-    if (Env.demo) return PaperPage(offset == 0 ? _demoPapers(q) : const [], hasMore: false);
-
     final key = '${source.key}|$q|$sortByDate|$limit|$offset|$guidelines|$openAccess|$history';
     final hit = _cache[key];
     if (hit != null && DateTime.now().difference(hit.$1) < _ttl) return hit.$2;
 
-    final page = await _fetchUncached(source, q,
-        sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess, history: history);
+    final PaperPage page;
+    try {
+      page = await _fetchUncached(source, q,
+          sortByDate: sortByDate, limit: limit, offset: offset, guidelines: guidelines, openAccess: openAccess, history: history);
+    } catch (_) {
+      // The guest demo still works offline, with a few sample papers.
+      if (Env.demo) return PaperPage(offset == 0 ? _demoPapers(q) : const [], hasMore: false);
+      rethrow;
+    }
     if (_cache.length > 200) _cache.remove(_cache.keys.first);
     _cache[key] = (DateTime.now(), page);
     return page;
@@ -402,7 +408,7 @@ class DiscoverService {
 
   /// Short encyclopedia summary for a search term (Wikipedia allows CORS).
   Future<TopicSummary?> summary(String term) async {
-    if (Env.demo || term.trim().isEmpty) return null;
+    if (term.trim().isEmpty) return null;
     try {
       final title = Uri.encodeComponent(term.trim().replaceAll(' ', '_'));
       final res = await _client

@@ -11,7 +11,11 @@ Endpoints:
   GET   /arxiv?ref=                  One arXiv paper by id or URL
   POST  /account/delete              Delete the caller's account and all their data
   GET   /blog/posts[/<slug>]         Published blog posts (public)
-  POST  /me/sync, /me/email-updates  Email verified state; product update emails on/off
+  POST  /me/sync, /me/email-updates  Email verified state (sends the welcome email once); product update emails on/off
+  GET/POST /me/consent               Terms and Privacy accepted (with version); choice on product updates
+  POST  /email/verification          Branded 'confirm your email' message (needs sign-in)
+  POST  /email/password-reset        Branded reset link (always answers ok)
+  GET/POST /email/unsubscribe        Signed link: GET asks, POST unsubscribes (also the mail apps' one-click)
   GET   /referrals/me, POST /referrals/redeem
   GET/POST /feedback/rating          Rate DSCVR (1-5 stars)
   GET   /shares/<id>                 Read-only copy of a shared category or topic
@@ -54,6 +58,7 @@ All endpoints that touch user data require a Firebase Bearer token.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 import os
 import uuid
@@ -189,7 +194,7 @@ def create_app(config: Config | None = None) -> Flask:
     @app.route("/healthz")
     def health():
         return jsonify(ok=True, status="ok", service="dscvr-server", ai=bool(os.getenv("ANTHROPIC_API_KEY")),
-                       alertsEmail=bool(os.getenv("RESEND_API_KEY") and os.getenv("ALERTS_FROM_EMAIL")))
+                       alertsEmail=mailer.configured())
 
     @app.route("/pricing")
     @app.route("/payments/pricing")
@@ -225,7 +230,7 @@ def create_app(config: Config | None = None) -> Flask:
 
         try:
             oa = request.args.get("oa") == "1"
-            if source in ("all", "history"):
+            if source in ("all", "history", "learn"):
                 only = [x for x in sanitize(request.args.get("only", ""), 200).split(",") if x] or None
                 history = {k: sanitize(request.args.get(k, ""), 20) for k in ("region", "written", "kind")} if source == "history" else None
                 pool = sources.search_pool(source, q, sort, only if source == "all" else None, oa, history)
@@ -749,12 +754,26 @@ def create_app(config: Config | None = None) -> Flask:
     @app.route("/me/sync", methods=["POST"])
     @require_auth
     def me_sync():
-        """Records whether the user's email is verified (from their sign-in token)."""
+        """Records whether the user's email is verified (from their sign-in token) and sends the welcome email once."""
         from firebase_admin import firestore as fs
-        fs.client().document(f"users/{g.uid}").set(
-            {"emailVerified": bool(g.get("email_verified")), **({"email": g.email} if g.get("email") else {})}, merge=True)
+        verified = bool(g.get("email_verified"))
+        ref = fs.client().document(f"users/{g.uid}")
+        ref.set({"emailVerified": verified, **({"email": g.email} if g.get("email") else {})}, merge=True)
         orgs._forget(g.uid)
-        return jsonify(ok=True, emailVerified=bool(g.get("email_verified")))
+        if verified and g.get("email") and mailer.configured():
+            try:
+                doc = ref.get().to_dict() or {}
+                if not doc.get("welcomeSentAt"):
+                    # Claim it first, so two tabs can't both send it.
+                    ref.set({"welcomeSentAt": fs.SERVER_TIMESTAMP}, merge=True)
+                    try:
+                        mailer.send_welcome(g.uid, g.email, doc.get("displayName") or doc.get("name"))
+                    except Exception:  # noqa: BLE001
+                        ref.update({"welcomeSentAt": fs.DELETE_FIELD})
+                        raise
+            except Exception as e:  # noqa: BLE001
+                logger.warning("welcome email failed: %s", e)
+        return jsonify(ok=True, emailVerified=verified)
 
     @app.route("/me/email-updates", methods=["POST"])
     @require_auth
@@ -762,19 +781,112 @@ def create_app(config: Config | None = None) -> Flask:
         body = request.get_json(silent=True) or {}
         on = bool(body.get("on"))
         from firebase_admin import firestore as fs
-        fs.client().document(f"users/{g.uid}").set({"emailUpdates": on}, merge=True)
+        data = {"emailUpdates": on}
+        if on:
+            data["updatesConsentAt"] = fs.SERVER_TIMESTAMP
+        fs.client().document(f"users/{g.uid}").set(data, merge=True)
         orgs._forget(g.uid)
         return jsonify(ok=True, emailUpdates=on)
 
+    @app.route("/me/consent", methods=["GET", "POST"])
+    @require_auth
+    def me_consent():
+        """Whether this person accepted the current Terms and Privacy Policy, and what they chose about updates."""
+        if (r := limited("consent")):
+            return r
+        if request.method == "GET":
+            return jsonify(mailer.consent_status(g.uid))
+        body = request.get_json(silent=True) or {}
+        try:
+            out = mailer.record_consent(g.uid, body.get("terms") is True, body.get("updates") if isinstance(body.get("updates"), bool) else None)
+        except mailer.MailError as e:
+            return jsonify(error=str(e)), e.status
+        orgs._forget(g.uid)
+        return jsonify(ok=True, **out)
+
+    # ── Email: verification, password reset, unsubscribe ─────────────
+
+    @app.route("/email/verification", methods=["POST"])
+    @require_auth
+    def email_verification():
+        """Sends our branded 'confirm your email' message (the link itself is made by Firebase)."""
+        if (r := limited("email_send")):
+            return r
+        if g.get("email_verified"):
+            return jsonify(ok=True, alreadyVerified=True)
+        if not g.get("email"):
+            return jsonify(error="This account has no email address."), 400
+        if not mailer.configured():
+            return jsonify(error="Email isn't available right now."), 503
+        from firebase_admin import firestore as fs
+        ref = fs.client().document(f"users/{g.uid}")
+        last = (ref.get().to_dict() or {}).get("verificationSentAt")
+        if last and (datetime.now(timezone.utc) - last).total_seconds() < 45:
+            return jsonify(error="We just sent one. Give it a minute, and check your spam folder."), 429
+        try:
+            mailer.send_verification(g.uid, g.email, (ref.get().to_dict() or {}).get("displayName"))
+        except mailer.MailError as e:
+            return jsonify(error=str(e)), e.status
+        except Exception as e:  # noqa: BLE001
+            logger.warning("verification email failed: %s", e)
+            return jsonify(error="Couldn't send the email. Try again shortly."), 502
+        ref.set({"verificationSentAt": fs.SERVER_TIMESTAMP}, merge=True)
+        return jsonify(ok=True)
+
+    @app.route("/email/password-reset", methods=["POST"])
+    def email_password_reset():
+        """Sends a reset link. Always answers ok, so nobody can use this to find out who has an account."""
+        body = request.get_json(silent=True) or {}
+        email = sanitize(body.get("email", ""), 200).lower()
+        if (r := limited("email_reset", request.remote_addr or "anon")) or (email and (r := limited("email_reset", email))):
+            return r
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            return jsonify(error="Enter a valid email address."), 400
+        if not mailer.configured():
+            return jsonify(error="Email isn't available right now."), 503
+        from firebase_admin import auth as fb_auth
+        try:
+            mailer.send_password_reset(email)
+        except fb_auth.UserNotFoundError:
+            pass
+        except mailer.MailError as e:
+            return jsonify(error=str(e)), e.status
+        except Exception as e:  # noqa: BLE001
+            logger.warning("reset email failed: %s", e)
+            return jsonify(error="Couldn't send the email. Try again shortly."), 502
+        return jsonify(ok=True)
+
+    def _unsub_page(title: str, message: str, form: str = "", status: int = 200):
+        return Response(
+            "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>DSCVR</title>"
+            "<body style='margin:0;background:#F4F4F6;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111'>"
+            "<div style='max-width:460px;margin:12vh auto;padding:0 16px'>"
+            "<div style='letter-spacing:.18em;font-weight:700;margin:0 6px 14px'>DSCVR</div>"
+            f"<div style='background:#fff;border-radius:14px;padding:28px;line-height:1.6'><h2 style='margin:0 0 10px;font-size:20px'>{title}</h2>"
+            f"<p style='margin:0 0 16px'>{message}</p>{form}</div>"
+            "<p style='color:#8a8a93;font-size:12px;margin:14px 6px'>You can change every email setting in DSCVR, Settings.</p></div></body>",
+            mimetype="text/html", status=status)
+
     @app.route("/email/unsubscribe", methods=["GET", "POST"])
     def email_unsubscribe():
+        """GET only asks (mail scanners open links); POST does it. Mail apps' one-click button POSTs here too."""
         uid, token = sanitize(request.args.get("u", ""), 128), sanitize(request.args.get("t", ""), 64)
-        ok = bool(uid) and mailer.unsubscribe(uid, token)
-        msg = ("You're unsubscribed from DSCVR product updates. You can turn them back on in Settings."
-               if ok else "That unsubscribe link isn't valid. Turn updates off in DSCVR, Settings.")
-        return Response(f"<!doctype html><meta name=viewport content='width=device-width'><title>DSCVR</title>"
-                        f"<div style='font-family:system-ui;max-width:460px;margin:80px auto;padding:0 20px;line-height:1.6'>"
-                        f"<h2>DSCVR</h2><p>{msg}</p></div>", mimetype="text/html", status=200 if ok else 400)
+        cat = sanitize(request.args.get("c", "updates"), 12)
+        if cat not in mailer.CATEGORIES or not mailer._valid(uid, token, cat):
+            return _unsub_page("This link isn't valid", "Turn email off in DSCVR, Settings, Email.", status=400)
+        what = mailer.CATEGORIES[cat]
+        action = request.form.get("action", "unsubscribe")
+        if request.method == "GET":
+            return _unsub_page(f"Stop {what}?", f"You'll stop getting {what} from DSCVR. Account emails, such as password resets, still arrive.",
+                               "<form method=post><button style='background:#4F5BFF;color:#fff;border:0;border-radius:10px;padding:12px 20px;font-size:15px;"
+                               "font-weight:600;cursor:pointer'>Unsubscribe</button></form>")
+        if action == "resubscribe":
+            mailer.resubscribe(uid, token, cat)
+            return _unsub_page("You're back on the list", f"You'll get {what} again.")
+        mailer.unsubscribe(uid, token, cat)
+        return _unsub_page("You're unsubscribed", f"You won't get {what} from DSCVR any more.",
+                           "<form method=post><input type=hidden name=action value=resubscribe>"
+                           "<button style='background:none;border:0;color:#4F5BFF;font-size:14px;cursor:pointer;padding:0'>Changed your mind? Resubscribe</button></form>")
 
     # ── Referrals ────────────────────────────────────────────────────
 

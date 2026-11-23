@@ -1,4 +1,4 @@
-Effective 19 November 2026.
+Effective 23 November 2026.
 
 This policy explains what DSCVR collects, why, who it is shared with, and the choices you have. DSCVR ("we", "us") is operated by Anthony Ude. If anything here is unclear, write to [mail@askpinda.com](mailto:mail@askpinda.com).
 
@@ -50,7 +50,7 @@ We use the following service providers to run DSCVR. Each receives only what it 
 | Railway | Hosting our server | Requests to our server and logs |
 | Anthropic | The AI model behind Pinda | Your question and the material you chose for that answer |
 | Paystack | Card payments | Your email and payment details you enter on their page |
-| Resend | Alert digest emails (only if you turn them on) | Your email address and the alert titles |
+| Zoho Mail | Sending our emails: confirming your email, welcome, password resets and, if you choose them, product updates and alert digests | Your name, your email address and the text of the email |
 
 **Scholarly sources.** When you search, our server sends your search words, but not your identity, to the sources Discover covers, such as arXiv, Semantic Scholar, OpenAlex, Europe PMC, Crossref, DOAJ, PLOS, Zenodo, Unpaywall and the UK National Archives' Find Case Law. Topic summaries are fetched from Wikipedia by your browser.
 
@@ -67,6 +67,13 @@ We never sell your personal information.
 ## AI and your content
 
 Pinda answers from the material you choose, which is sent to our AI provider with your question. Under our agreement with that provider, your content is not used to train their models. AI answers can be wrong; check important answers against the source.
+
+## Emails we send
+
+- **Service emails** (confirm your email, welcome, password reset) go to everyone, because the account needs them.
+- **Product updates** are sent only if you tick the box when you sign up or switch them on in Settings. We record when you agreed.
+- **Alert digests** are sent only if you turn on email for your subject alerts.
+- Every update and digest has an unsubscribe link that works in one click, and you can switch both off in Settings at any time. We never sell or rent your address.
 
 ## How long we keep it
 

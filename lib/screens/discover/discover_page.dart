@@ -270,7 +270,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final header = <Widget>[
       PageTitle('Discover'),
       const SizedBox(height: 8),
-      Text('Search open research and save what matters to your library.',
+      Text('Search papers, free textbooks and course notes, and save what matters to your library.',
           style: AppTheme.sans(fontSize: 14.5, color: c.inkMuted)),
       const SizedBox(height: 22),
       TourTarget(id: 'discover.search', child: Row(children: [
@@ -281,7 +281,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
             onSubmitted: (_) => _search(),
             style: AppTheme.sans(fontSize: 15, color: c.ink),
             decoration: InputDecoration(
-              hintText: _source == PaperSource.history ? 'Search books, archives and history journals' : 'Search papers, authors or ideas',
+              hintText: _source == PaperSource.history
+                  ? 'Search books, archives and history journals'
+                  : _source == PaperSource.learn
+                      ? 'Search a course or topic: databases, calculus, microeconomics...'
+                      : 'Search papers, authors, courses or ideas',
               prefixIcon: const Icon(Ic.search, size: 18),
               contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 12),
               suffixIcon: AppIconButton(onPressed: _search, icon: const Icon(Ic.arrowRight, size: 18), tooltip: 'Search'),
@@ -397,7 +401,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             : 'Results',
         count: _loading ? null : _papers.length,
       )),
-      if (!_loading && (_subject == null ? (_source == PaperSource.all || _source == PaperSource.history) : _subject!.feed == Feed.history) && context.services.discover.lastSources.isNotEmpty)
+      if (!_loading && (_subject == null ? (_source == PaperSource.all || _source == PaperSource.history || _source == PaperSource.learn) : _subject!.feed == Feed.history) && context.services.discover.lastSources.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(_searchedLine(context.services.discover.lastSources), style: context.text.labelSmall),

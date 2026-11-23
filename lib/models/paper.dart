@@ -71,6 +71,10 @@ class Paper {
         'internet_archive' => 'Internet Archive',
         'loc' => 'Library of Congress',
         'europeana' => 'Europeana',
+        'open_textbooks' => 'Open Textbooks',
+        'openstax' => 'OpenStax',
+        'wikibooks' => 'Wikibooks',
+        'openlibrary' => 'Open Library',
         _ => s,
       };
 

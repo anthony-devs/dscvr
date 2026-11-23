@@ -13,6 +13,7 @@ import 'package:dscvr/data/research_service.dart';
 import 'package:dscvr/data/session_service.dart';
 import 'package:dscvr/data/voice_service.dart';
 import 'package:dscvr/router/app_router.dart';
+import 'package:dscvr/screens/consent.dart';
 import 'package:dscvr/screens/growth/growth.dart';
 import 'package:dscvr/state/library_controller.dart';
 import 'package:dscvr/state/services.dart';
@@ -97,6 +98,7 @@ class _DscvrAppState extends State<DscvrApp> {
     }
     unawaited(_orgs.pingActivity());
     unawaited(_dailyAlertsCheck(uid));
+    unawaited(Consent.ensure(_api, () => _router.routerDelegate.navigatorKey.currentContext));
     unawaited(Growth.afterSignIn(_api).then((msg) {
       final ctx = _router.routerDelegate.navigatorKey.currentContext;
       if (msg != null && ctx != null && ctx.mounted) Toasts.show(ctx, msg);

@@ -3,14 +3,15 @@ import { SUPPORT_EMAIL } from "@/lib/site";
 
 const columns: [string, [string, string][]][] = [
   ["Product", [["Features", "/#features"], ["Pinda", "/#pinda"], ["Chrome extension", "/#chrome"], ["Pricing", "/#pricing"], ["Editions", "/#editions"]]],
-  ["Learn", [["Blog", "/blog"], ["Support", "/support"]]],
+  ["Learn", [["Blog", "/blog"], ["What's new", "/changelog"], ["Support", "/support"]]],
+  ["Company", [["About", "/about"], ["Security", "/security"], ["Status", "/status"]]],
   ["Legal", [["Privacy", "/privacy"], ["Terms", "/terms"]]],
 ];
 
 export function Footer() {
   return (
     <footer className="border-t border-border">
-      <div className="max-w-6xl mx-auto px-6 md:px-10 py-14 grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+      <div className="max-w-6xl mx-auto px-6 md:px-10 py-14 grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
         <div>
           <Link href="/" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}

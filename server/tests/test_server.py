@@ -999,6 +999,62 @@ def test_update_email_renders_markdown_and_unsubscribe():
     assert "Hi Ada," in html_out and "<li" in html_out and "<strong>now</strong>" in html_out and "https://x/unsub" in html_out
 
 
+def test_unsubscribe_categories_are_separate_and_signed():
+    import mailer
+    with mock.patch.dict(os.environ, {"SESSION_SECRET": "k"}), mock.patch.object(mailer, "get_firestore_client") as db:
+        assert mailer.unsubscribe_token("u1") != mailer.unsubscribe_token("u1", "alerts")
+        assert not mailer.unsubscribe("u1", mailer.unsubscribe_token("u1"), "alerts")  # a token is good for its own list only
+        assert mailer.unsubscribe("u1", mailer.unsubscribe_token("u1", "alerts"), "alerts")
+        db.return_value.document.return_value.set.assert_called_with({"alerts": {"email": False}}, merge=True)
+
+
+def test_unsubscribe_link_only_asks_on_get_and_acts_on_post(client):
+    import mailer
+    with mock.patch.dict(os.environ, {"SESSION_SECRET": "k"}), mock.patch.object(mailer, "get_firestore_client") as db:
+        url = mailer.unsubscribe_url("u1", "updates").replace("https://api.askpinda.com", "")
+        r = client.get(url)  # a mail scanner opening the link must not unsubscribe anyone
+        assert r.status_code == 200 and b"Unsubscribe" in r.data
+        db.return_value.document.return_value.set.assert_not_called()
+        assert client.post(url).status_code == 200  # the mail app's one-click button
+        db.return_value.document.return_value.set.assert_called_with({"emailUpdates": False}, merge=True)
+        assert client.get("/email/unsubscribe?u=u1&t=bad&c=updates").status_code == 400
+
+
+def test_mail_goes_through_smtp_with_unsubscribe_headers():
+    import mailer
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def login(self, *a): pass
+        def send_message(self, m): sent.append(m)
+        def quit(self): pass
+        def close(self): pass
+    env = {"SMTP_USER": "hello@askpinda.com", "SMTP_PASSWORD": "x", "SESSION_SECRET": "k"}
+    with mock.patch.dict(os.environ, env), mock.patch("smtplib.SMTP_SSL", FakeSMTP):
+        out = mailer.send("Big news", "## Hello\n\nThings changed.", [{"uid": "u1", "email": "a@b.co", "name": "Ada"}])
+    assert out == {"sent": 1, "failed": 0}
+    m = sent[0]
+    assert m["To"] == "a@b.co" and "u1" in m["List-Unsubscribe"] and m["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert m.get_body(("plain",)) is not None and "Unsubscribe" in m.get_body(("html",)).get_content()
+
+
+def test_consent_requires_terms_and_records_version(client):
+    with mock.patch("firebase_admin.firestore.client"):
+        assert client.post("/me/consent", headers=AUTH, json={"terms": False}).status_code == 400
+        r = client.post("/me/consent", headers=AUTH, json={"terms": True, "updates": False})
+        assert r.status_code == 200 and r.get_json()["terms"] is True and r.get_json()["emailUpdates"] is False
+
+
+def test_password_reset_does_not_reveal_accounts(client):
+    import mailer
+    from firebase_admin import auth as fb_auth
+    with mock.patch.dict(os.environ, {"SMTP_USER": "a@b.co", "SMTP_PASSWORD": "x"}), \
+         mock.patch.object(mailer, "send_password_reset", side_effect=fb_auth.UserNotFoundError("none")):
+        assert client.post("/email/password-reset", json={"email": "nobody@example.com"}).status_code == 200
+        assert client.post("/email/password-reset", json={"email": "nope"}).status_code == 400
+
+
 def test_discover_pages_come_from_one_ranked_pool(client):
     import sources
     calls = []
@@ -1075,3 +1131,30 @@ def test_pinda_reads_internet_archive_books_as_ocr_text():
     fp.assert_not_called()
     assert ft.call_args[0][0] == "https://archive.org/download/benin00/benin00_djvu.txt"
     assert block["type"] == "text" and "The kingdom of Benin" in block["text"] and "\n\n\n" not in block["text"]
+
+
+def test_textbook_search_understands_what_students_type():
+    import sources
+    assert sources.expand("DBMS") == "database management systems"
+    assert sources.expand("calculus") == "calculus"
+    assert sources.expand("attention is all you need") == "attention is all you need"
+    papers = [{"title": "Database Design: Normalization", "subjects": [], "venue": "Wikibooks"},
+              {"title": "Adventist Adventurer Awards", "subjects": [], "venue": "Wikibooks"}]
+    assert [p["title"] for p in sources._about("database normalization", papers)] == ["Database Design: Normalization"]
+
+
+def test_wikibooks_results_are_one_or_two_pages_per_book_and_skip_printable_versions():
+    import learn
+    hits = [{"title": "DBMS/Introduction", "pageid": 1, "wordcount": 900, "snippet": "A <b>database</b>"},
+            {"title": "DBMS/Printable version", "pageid": 2, "wordcount": 9000, "snippet": ""},
+            {"title": "DBMS/Keys", "pageid": 3, "wordcount": 500, "snippet": "keys"},
+            {"title": "DBMS/Joins", "pageid": 4, "wordcount": 500, "snippet": "joins"},
+            {"title": "Stub/Page", "pageid": 5, "wordcount": 10, "snippet": "tiny"}]
+
+    class R:
+        def raise_for_status(self): pass
+        def json(self): return {"query": {"search": hits}}
+    with mock.patch("requests.get", return_value=R()):
+        out = learn.wikibooks("dbms", 10)
+    assert [p["id"] for p in out] == ["wikibooks-1", "wikibooks-3"]
+    assert out[0]["kind"] == "study guide" and out[0]["openAccess"] is True

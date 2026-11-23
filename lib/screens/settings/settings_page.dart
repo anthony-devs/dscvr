@@ -545,7 +545,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     description: 'We will email you a reset link.',
                     child: AppButton.secondary(
                       onPressed: () async {
-                        await FirebaseAuth.instance.sendPasswordResetEmail(email: user.email);
+                        try {
+                          await s.api.post('/email/password-reset', {'email': user.email});
+                        } catch (_) {
+                          await FirebaseAuth.instance.sendPasswordResetEmail(email: user.email);
+                        }
                         if (context.mounted) {
                           toast(context, 'Reset link sent to ${user.email}');
                         }

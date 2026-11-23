@@ -47,7 +47,7 @@ copied, because the service account replaces it.
 ```bash
 ./scripts/gcp.sh deploy server               # after server changes
 ./scripts/gcp.sh deploy landing              # after landing or blog changes
-./scripts/gcp.sh secret RESEND_API_KEY       # add or change a server secret (asks for the value, hidden)
+./scripts/gcp.sh secret SMTP_PASSWORD        # add or change a server secret (asks for the value, hidden)
 ./scripts/gcp.sh secret REVALIDATE_SECRET landing
 ```
 

@@ -9,8 +9,7 @@ profile:
 A scheduled job calls run() (POST /alerts/run with the CRON_SECRET header, or
 `python manage.py alerts`). For each subject it searches the matching source
 for the newest items, skips anything already sent, and writes the rest to
-users/{uid}/alerts/{key} for the in-app inbox. If RESEND_API_KEY and
-ALERTS_FROM_EMAIL are set and the user opted in, it also emails a digest.
+users/{uid}/alerts/{key} for the in-app inbox. If email is set up (SMTP_USER and SMTP_PASSWORD, see mailer.py) and the user opted in, it also emails a digest.
 
 Run it once a day. Each run makes at most MAX_SUBJECTS searches per user and
 results are cached, so users who follow the same subject share one search.
@@ -100,7 +99,7 @@ def run_for_user(uid: str, profile: dict[str, Any], db=None) -> list[dict[str, A
     batch.set(state_ref, {"seen": seen[:KEEP_SEEN], "lastRun": now, "lastCount": len(fresh)}, merge=True)
     batch.commit()
     if fresh and cfg.get("email"):
-        _email(profile.get("email"), profile.get("name") or profile.get("displayName"), fresh)
+        _email(uid, profile.get("email"), profile.get("name") or profile.get("displayName"), fresh)
     return fresh
 
 
@@ -128,29 +127,11 @@ SOURCE_NAMES = {"arxiv": "arXiv", "openalex": "OpenAlex", "europepmc": "Europe P
                 "semantic_scholar": "Semantic Scholar"}
 
 
-def _email(to: str | None, name: str | None, items: list[dict[str, Any]]) -> None:
-    key, sender = os.getenv("RESEND_API_KEY", ""), os.getenv("ALERTS_FROM_EMAIL", "")
-    if not (key and sender and to):
+def _email(uid: str, to: str | None, name: str | None, items: list[dict[str, Any]]) -> None:
+    import mailer
+    if not (to and mailer.configured()):
         return
-    app_url = os.getenv("APP_URL", "https://app.askpinda.com")
-    rows = []
-    for p in items[:25]:
-        meta = " · ".join(str(x) for x in (p.get("_subject"), SOURCE_NAMES.get(p.get("source"), ""), p.get("venue") or p.get("year")) if x)
-        rows.append(f'<tr><td style="padding:12px 0;border-bottom:1px solid #eee">'
-                    f'<a href="{html.escape(p.get("url") or app_url)}" style="color:#111;font-weight:600;text-decoration:none">'
-                    f'{html.escape(p.get("title") or "Untitled")}</a>'
-                    f'<div style="color:#666;font-size:13px;margin-top:4px">{html.escape(meta)}</div></td></tr>')
-    body = (f'<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:auto">'
-            f'<p>Hi {html.escape((name or "there").split(" ")[0])},</p>'
-            f'<p>{len(items)} new item{"s" if len(items) != 1 else ""} in the subjects you follow on DSCVR.</p>'
-            f'<table style="width:100%;border-collapse:collapse">{"".join(rows)}</table>'
-            f'<p><a href="{app_url}/alerts">Open in DSCVR</a></p>'
-            f'<p style="color:#999;font-size:12px">You get this because alerts by email are on. '
-            f'Turn them off in DSCVR, Settings, Alerts.</p></div>')
     try:
-        r = requests.post("https://api.resend.com/emails", timeout=15, headers={"Authorization": f"Bearer {key}"},
-                          json={"from": sender, "to": [to], "subject": f"New in your subjects ({len(items)})", "html": body})
-        if r.status_code >= 400:
-            log.warning("alert email failed: %s %s", r.status_code, r.text[:200])
-    except requests.RequestException as e:
+        mailer.send_digest(uid, to, name, items, SOURCE_NAMES)
+    except Exception as e:  # noqa: BLE001
         log.warning("alert email failed: %s", e)

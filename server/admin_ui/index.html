@@ -453,7 +453,7 @@ VIEWS.emails = async (view, menu) => {
     try { const out = await api('/admin/api/emails/send', {subject: subject.value, body: bodyEl.value, test, to: to.value, confirm: test ? undefined : 'SEND'}); toast(test ? 'Test sent' : `Sent to ${out.sent}${out.failed ? `, ${out.failed} failed` : ''}`); } catch (e) { toast(e.message, true); }
   };
   put(view, header('Emails', `Product updates go to the ${num(d.recipients)} people who turned them on and verified their email.`, null, menu),
-    !d.configured ? h('div', {class: 'banner'}, 'Email isn\'t set up yet. In Railway, add RESEND_API_KEY and UPDATES_FROM_EMAIL (for example updates@askpinda.com), then redeploy.') : null,
+    !d.configured ? h('div', {class: 'banner'}, 'Email isn\'t set up yet. Add SMTP_USER and SMTP_PASSWORD (a Zoho app password) with ./scripts/gcp.sh secret, then redeploy the server.') : null,
     card(null, h('label', {class: 's'}, 'Subject'), subject, h('label', {class: 's'}, 'Message'), bodyEl,
       h('div', {class: 'row', style: 'margin-top:14px;justify-content:space-between;flex-wrap:wrap;gap:10px'},
         h('div', {class: 'row'}, to, h('button', {class: 'small', onclick: () => send(true)}, 'Send test')),
